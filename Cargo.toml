@@ -1,0 +1,4 @@
+[workspace]
+members = ["crates/arib-caption-worker"]
+exclude = ["fuzz"]
+resolver = "2"

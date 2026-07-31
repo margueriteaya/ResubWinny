@@ -1,0 +1,10 @@
+pub(crate) const PROBE_BYTES: usize = 64 * 1024;
+pub(crate) const PSI_SCAN_BYTES: usize = 4 * 1024 * 1024;
+pub(crate) const PES_BUFFER_LIMIT: usize = 4 * 1024 * 1024;
+pub(crate) const SIGNAL_FRAGMENT_BUFFER_LIMIT: usize = 1024 * 1024;
+pub(crate) const SIGNAL_FRAGMENT_ASSEMBLER_LIMIT: usize = 16;
+pub(crate) const MPU_FRAGMENT_BUFFER_LIMIT: usize = 4 * 1024 * 1024;
+pub(crate) const MPU_FRAGMENT_ASSEMBLER_LIMIT: usize = 8;
+pub(crate) const PROGRESS_INTERVAL: u64 = 64 * 1024 * 1024;
+pub(crate) const MIN_SYNC_HITS: usize = 4;
+pub(crate) const PTS_WRAP_MS: i64 = ((1_i64 << 33) * 1_000) / 90_000;

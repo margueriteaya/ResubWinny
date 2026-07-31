@@ -1,0 +1,26 @@
+[
+  {
+    "start_ms": 1500,
+    "end_ms": 3500,
+    "text": "字幕 漢かん",
+    "x": 192,
+    "y": 864,
+    "width": 1536,
+    "height": 162,
+    "writing_mode": null,
+    "font_size": "72px",
+    "color": "#FFFF00FF"
+  },
+  {
+    "start_ms": 4000,
+    "end_ms": 5000,
+    "text": "縦書き",
+    "x": 1536,
+    "y": 108,
+    "width": 192,
+    "height": 756,
+    "writing_mode": "vertical-rl",
+    "font_size": null,
+    "color": null
+  }
+]

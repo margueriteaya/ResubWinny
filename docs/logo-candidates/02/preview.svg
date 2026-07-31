@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <title>ResubWinny logo candidate 02 preview</title>
+  <rect width="1440" height="900" fill="#F3F5F7"/>
+
+  <g font-family="Segoe UI, Arial, sans-serif" fill="#202833">
+    <text x="72" y="82" font-size="20" font-weight="700">RESUBWINNY / CANDIDATE 02</text>
+    <text x="72" y="122" font-size="15" fill="#66717F">One core mark, platform-specific packaging</text>
+  </g>
+
+  <rect x="72" y="170" width="610" height="570" rx="8" fill="#FFFFFF" stroke="#DDE2E7"/>
+  <g transform="translate(151 235) scale(.44)">
+    <rect x="212" y="343.25" width="600" height="337.5" rx="72" fill="none" stroke="#E64B3C" stroke-width="72"/>
+    <path d="M340 580H684" fill="none" stroke="#202833" stroke-width="76" stroke-linecap="round"/>
+    <circle cx="370" cy="492" r="25" fill="#F2C14E"/>
+  </g>
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <text x="377" y="585" text-anchor="middle" font-size="38" font-weight="700" fill="#202833">ResubWinny</text>
+    <text x="377" y="622" text-anchor="middle" font-size="15" fill="#66717F">BROADCAST CAPTION TOOLKIT</text>
+    <text x="104" y="698" font-size="14" fill="#66717F">CORE MARK / TRANSPARENT BACKGROUND</text>
+  </g>
+
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <text x="736" y="190" font-size="14" font-weight="700" fill="#66717F">APPLE SOURCE COMPOSITE</text>
+    <text x="736" y="214" font-size="12" fill="#8A949F">Unmasked artwork; material is applied in Icon Composer</text>
+  </g>
+  <rect x="736" y="238" width="286" height="286" fill="#E64B3C"/>
+  <g transform="translate(736 238) scale(.279296875)">
+    <rect x="212" y="343.25" width="600" height="337.5" rx="72" fill="none" stroke="#FFFFFF" stroke-width="72"/>
+    <path d="M340 580H684" fill="none" stroke="#FFFFFF" stroke-width="76" stroke-linecap="round"/>
+    <circle cx="370" cy="492" r="25" fill="#F2C14E"/>
+  </g>
+
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <text x="1074" y="190" font-size="14" font-weight="700" fill="#66717F">DESKTOP / UI MARK</text>
+    <text x="1074" y="214" font-size="12" fill="#8A949F">No inherited mobile-app container</text>
+  </g>
+  <rect x="1074" y="238" width="294" height="286" rx="8" fill="#FFFFFF" stroke="#DDE2E7"/>
+  <g transform="translate(1082 246) scale(.271)">
+    <rect x="212" y="343.25" width="600" height="337.5" rx="72" fill="none" stroke="#E64B3C" stroke-width="72"/>
+    <path d="M340 580H684" fill="none" stroke="#202833" stroke-width="76" stroke-linecap="round"/>
+    <circle cx="370" cy="492" r="25" fill="#F2C14E"/>
+  </g>
+
+  <line x1="736" y1="585" x2="1368" y2="585" stroke="#D8DEE4"/>
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <text x="736" y="626" font-size="14" font-weight="700" fill="#66717F">SMALL-SIZE TEST</text>
+    <text x="736" y="652" font-size="12" fill="#8A949F">64 px</text>
+    <text x="850" y="652" font-size="12" fill="#8A949F">32 px</text>
+    <text x="930" y="652" font-size="12" fill="#8A949F">16 px</text>
+  </g>
+  <g transform="translate(712 641) scale(.0625)">
+    <rect x="212" y="343.25" width="600" height="337.5" rx="72" fill="none" stroke="#E64B3C" stroke-width="72"/>
+    <path d="M340 580H684" fill="none" stroke="#202833" stroke-width="76" stroke-linecap="round"/><circle cx="370" cy="492" r="25" fill="#F2C14E"/>
+  </g>
+  <g transform="translate(826 657) scale(.03125)">
+    <rect x="212" y="343.25" width="600" height="337.5" rx="72" fill="none" stroke="#E64B3C" stroke-width="72"/>
+    <path d="M340 580H684" fill="none" stroke="#202833" stroke-width="76" stroke-linecap="round"/><circle cx="370" cy="492" r="25" fill="#F2C14E"/>
+  </g>
+  <g transform="translate(914 665) scale(.015625)">
+    <rect x="212" y="343.25" width="600" height="337.5" rx="72" fill="none" stroke="#202833" stroke-width="100"/>
+    <path d="M340 580H684" fill="none" stroke="#202833" stroke-width="100" stroke-linecap="round"/>
+  </g>
+
+  <g transform="translate(1030 636)">
+    <rect width="338" height="88" rx="8" fill="#202833"/>
+    <g transform="translate(11 -14) scale(.1)">
+      <rect x="212" y="343.25" width="600" height="337.5" rx="72" fill="none" stroke="#FFFFFF" stroke-width="72"/>
+      <path d="M340 580H684" fill="none" stroke="#FFFFFF" stroke-width="76" stroke-linecap="round"/>
+    </g>
+    <text x="117" y="52" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="600" fill="#FFFFFF">Monochrome-ready</text>
+  </g>
+
+  <g font-family="Segoe UI, Arial, sans-serif" fill="#66717F">
+    <text x="72" y="825" font-size="13">Background, glass treatment, mask and shadow remain platform-owned.</text>
+    <text x="1368" y="825" text-anchor="end" font-size="13">DESIGN REVIEW ONLY / NOT APPLIED</text>
+  </g>
+</svg>

@@ -1,0 +1,24 @@
+[package]
+name = "arib-caption-worker"
+version = "0.1.0-alpha.1"
+edition = "2024"
+license = "MPL-2.0"
+links = "arib_caption_bridge"
+build = "build.rs"
+
+[features]
+fuzzing = []
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+encoding_rs = "0.8"
+base64 = "0.22"
+unicode-segmentation = "1.12"
+ttf-parser = "0.25"
+
+[build-dependencies]
+cmake = "0.1"
+
+[dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }

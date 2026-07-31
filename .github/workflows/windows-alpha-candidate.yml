@@ -1,0 +1,82 @@
+name: Windows Alpha candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Test and package Windows x86_64 Alpha
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+          components: rustfmt, clippy
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: studio-tauri/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --prefix studio-tauri
+      - name: Install pinned Windows libmpv runtime
+        shell: pwsh
+        run: ./scripts/setup-libmpv.ps1
+      - name: Verify bundled libmpv hash
+        shell: pwsh
+        run: |
+          $pins = Get-Content -Raw third_party/versions.json | ConvertFrom-Json
+          $expected = $pins.dependencies.libmpvWindowsX86_64.dllSha256
+          $actual = (Get-FileHash third_party/libmpv/windows-x86_64/libmpv-2.dll -Algorithm SHA256).Hash
+          if ($actual -ne $expected) { throw "Bundled libmpv hash does not match third_party/versions.json" }
+          ./scripts/check-upstreams.ps1 -RequireRuntime
+      - name: Verify source, contracts, and licenses
+        shell: pwsh
+        run: |
+          ./scripts/verify-repository.ps1
+          cargo fmt --check
+          cargo test -p arib-caption-worker
+          cargo clippy -p arib-caption-worker --all-targets -- -D warnings
+          cargo build -p arib-caption-worker --release
+          cargo test --manifest-path studio-tauri/src-tauri/Cargo.toml
+          cargo clippy --manifest-path studio-tauri/src-tauri/Cargo.toml --all-targets -- -D warnings
+          npm run build --prefix studio-tauri
+          ./scripts/generate-license-report.ps1 -Check
+      - name: Package public source candidate
+        shell: pwsh
+        run: ./scripts/package-source.ps1
+      - name: Build installers
+        run: npm run tauri build --prefix studio-tauri
+      - name: Write artifact hashes
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem build/cargo/release/bundle -Recurse -File |
+            Where-Object { $_.Extension -eq '.msi' -or $_.Name -like '*setup.exe' }
+          if (-not $files) { throw 'No installer artifacts were produced.' }
+          $files | Get-FileHash -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash)  $([IO.Path]::GetFileName($_.Path))" } |
+            Set-Content -Encoding utf8NoBOM build/cargo/release/bundle/SHA256SUMS.txt
+      - name: Upload private-test candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: resubwinny-windows-alpha-private-test
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            build/cargo/release/resubwinny-studio.exe
+            build/cargo/release/arib-caption-worker.exe
+            build/cargo/release/bundle/**/*.msi
+            build/cargo/release/bundle/**/*setup.exe
+            build/cargo/release/bundle/SHA256SUMS.txt
+            build/source/resubwinny-*-source.zip
+            build/source/SOURCE-SHA256SUMS.txt
+
+# This workflow intentionally does not create a GitHub Release. Public binary
+# distribution remains blocked until the exact bundled LGPL libmpv DLL and its
+# complete corresponding-source archive are published together and signing is
+# configured.

@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a reproducible parsing, export, preview, or desktop problem
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not upload copyrighted broadcast recordings. Provide bounded metadata, hashes, logs, or a redistributable constructed fixture.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - MPEG-TS / M2TS inspection
+        - B24 decoding
+        - ARIB-TTML / B62
+        - ASS / TTML / SRT / WebVTT export
+        - Native preview
+        - Multi-task processing
+        - Desktop interface
+        - Experimental TLV/MMTP
+        - Build or packaging
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Include the expected result and the actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ResubWinny version or commit
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system and architecture
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Safe diagnostic evidence
+      description: Add route codes, structured diagnostics, screenshots, and anonymized stream metadata. Remove personal paths when needed.

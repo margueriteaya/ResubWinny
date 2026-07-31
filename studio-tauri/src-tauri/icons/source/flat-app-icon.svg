@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>ResubWinny flat fallback app icon</title>
+  <rect x="32" y="32" width="960" height="960" rx="208" fill="#E64B3C"/>
+  <rect
+    x="202"
+    y="337.625"
+    width="620"
+    height="348.75"
+    rx="48"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="64"
+  />
+  <g fill="#FFFFFF">
+    <rect x="350" y="450" width="220" height="40" rx="12"/>
+    <rect x="318" y="525" width="360" height="40" rx="12"/>
+    <rect x="710" y="448" width="40" height="120" rx="12"/>
+    <rect x="360" y="407" width="32" height="24" rx="7"/>
+    <rect x="412" y="407" width="38" height="24" rx="7"/>
+  </g>
+  <rect x="470" y="407" width="32" height="24" rx="7" fill="#F2C14E"/>
+</svg>

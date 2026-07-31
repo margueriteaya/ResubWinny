@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose a scoped capability or workflow improvement
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the broadcast-caption or user workflow problem, not only a preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Expected outcome
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Standards and sample evidence
+      description: Link relevant ARIB clauses, compatible projects, or redistributable fixtures.
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Architecture boundaries
+      options:
+        - label: The proposal keeps media parsing and layout calculation out of the WebView.
+        - label: A GUI operation can also be represented through the backend or Worker/CLI.

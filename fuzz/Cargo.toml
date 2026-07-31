@@ -1,0 +1,62 @@
+[package]
+name = "resubwinny-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "MPL-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arib-caption-worker = { path = "../crates/arib-caption-worker", features = ["fuzzing"] }
+
+[[bin]]
+name = "probe_input"
+path = "fuzz_targets/probe_input.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_ttml"
+path = "fuzz_targets/decode_ttml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_ts_metadata"
+path = "fuzz_targets/parse_ts_metadata.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_ts_transport"
+path = "fuzz_targets/parse_ts_transport.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_arib_si_text"
+path = "fuzz_targets/decode_arib_si_text.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_pes_b24"
+path = "fuzz_targets/parse_pes_b24.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_mmtp"
+path = "fuzz_targets/parse_mmtp.rs"
+test = false
+doc = false
+bench = false

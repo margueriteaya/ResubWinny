@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ResubWinny",
+  "version": "0.1.0-1",
+  "identifier": "one.dscf.resubwinny",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build:bundle",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../../build/frontend"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "ResubWinny — Japanese Broadcast Caption Toolkit",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 720,
+        "minHeight": 600,
+        "resizable": true,
+        "decorations": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' customprotocol: asset:; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.ico"],
+    "resources": {
+      "../../build/cargo/release/arib-caption-worker.exe": "arib-caption-worker.exe",
+      "../../LICENSE": "LICENSE",
+      "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "../../third_party/libaribcaption/LICENSE": "licenses/libaribcaption-MIT.txt",
+      "../../third_party/libmpv/LICENSE.LGPL": "licenses/libmpv-LGPL-2.1.txt",
+      "../../third_party/libmpv/COPYRIGHT.mpv": "licenses/libmpv-COPYRIGHT.txt",
+      "../../third_party/rounded-mplus-1m-arib/rounded-mplus-1m-arib.ttf": "fonts/rounded-mplus-1m-arib.ttf",
+      "../../third_party/rounded-mplus-1m-arib/LICENSE.txt": "fonts/LICENSE.rounded-mplus-1m-arib.txt",
+      "../../third_party/libmpv/windows-x86_64/libmpv-2.dll": "libmpv-2.dll"
+    },
+    "windows": { "wix": { "language": "en-US" } }
+  }
+}

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:tts="http://www.w3.org/ns/ttml#styling">
+  <head>
+    <layout>
+      <region xml:id="bottom" tts:origin="10% 80%" tts:extent="80% 15%" />
+      <region xml:id="vertical" tts:origin="80% 10%" tts:extent="10% 70%" />
+    </layout>
+  </head>
+  <body>
+    <div begin="1s">
+      <p begin="500ms" dur="2s" region="bottom" tts:fontSize="72px" tts:color="#FFFF00FF">字幕 <ruby><span tts:ruby="base">漢</span><rt><span tts:ruby="text">かん</span></rt></ruby></p>
+      <p begin="3s" dur="1s" region="vertical" tts:writingMode="tbrl">縦書き</p>
+    </div>
+  </body>
+</tt>

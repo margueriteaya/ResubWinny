@@ -1,0 +1,24 @@
+[package]
+name = "resubwinny-studio"
+version = "0.1.0-alpha.1"
+description = "Japanese Broadcast Caption Toolkit"
+edition = "2024"
+license = "MPL-2.0"
+
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2.5.1", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+fontdue = "0.9"
+png = "0.17"
+libloading = "0.8"
+tauri = { version = "2.11.5", features = [] }
+tauri-plugin-dialog = "2.4.0"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61.3", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_System_ProcessStatus", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }

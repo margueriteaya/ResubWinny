@@ -1,0 +1,104 @@
+name: ResubWinny CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Core and desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify repository hygiene
+        shell: pwsh
+        run: ./scripts/verify-repository.ps1
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: studio-tauri/package-lock.json
+      - name: Format
+        run: cargo fmt --check
+      - name: Format desktop service
+        run: cargo fmt --manifest-path studio-tauri/src-tauri/Cargo.toml --check
+      - name: Test
+        run: cargo test --workspace
+      - name: Lint worker
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Install pinned Windows libmpv runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/setup-libmpv.ps1
+      - name: Verify pinned third-party sources and runtimes
+        shell: pwsh
+        run: |
+          $arguments = if ($IsWindows) { @('-RequireRuntime') } else { @() }
+          & ./scripts/check-upstreams.ps1 @arguments
+      - name: Check desktop service
+        run: cargo check --manifest-path studio-tauri/src-tauri/Cargo.toml
+      - name: Verify dependency license inventory
+        shell: pwsh
+        run: ./scripts/generate-license-report.ps1 -Check
+      - name: Lint desktop service
+        run: cargo clippy --manifest-path studio-tauri/src-tauri/Cargo.toml --all-targets -- -D warnings
+      - name: Install desktop frontend dependencies
+        run: npm ci --prefix studio-tauri
+      - name: Build desktop frontend
+        run: npm run build --prefix studio-tauri
+
+  fuzz-build:
+    name: Fuzz targets (Linux nightly)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: taiki-e/install-action@cargo-fuzz
+      - name: Build transport probe fuzz target
+        run: cargo fuzz build probe_input
+      - name: Build TTML fuzz target
+        run: cargo fuzz build decode_ttml
+      - name: Build TS PSI/PES metadata fuzz target
+        run: cargo fuzz build parse_ts_metadata
+      - name: Build B24 PES-header fuzz target
+        run: cargo fuzz build parse_pes_b24
+      - name: Build MMTP fuzz target
+        run: cargo fuzz build parse_mmtp
+
+  dependency-audit:
+    name: Dependency vulnerability audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+      - uses: taiki-e/install-action@cargo-audit
+      - name: Audit Worker dependencies
+        run: cargo audit --file Cargo.lock
+      - name: Audit desktop dependencies
+        run: cargo audit --file studio-tauri/src-tauri/Cargo.lock
+      - name: Audit fuzz dependencies
+        run: cargo audit --file fuzz/Cargo.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: studio-tauri/package-lock.json
+      - name: Audit frontend dependencies
+        run: npm audit --prefix studio-tauri --audit-level=high
