@@ -26,6 +26,8 @@ pub(crate) struct B24Track {
     pub(crate) service_id: u16,
     pub(crate) pmt_pid: u16,
     pub(crate) caption_pid: u16,
+    pub(crate) component_tag: u8,
+    pub(crate) caption_pids: Vec<u16>,
     pub(crate) language: Option<String>,
     pub(crate) service_name: Option<String>,
 }
@@ -34,6 +36,26 @@ pub(crate) struct B24Track {
 pub(crate) struct DataTracks {
     pub(crate) pmt_pid: u16,
     pub(crate) pids: Vec<u16>,
+    pub(crate) caption_pids: Vec<u16>,
+    pub(crate) superimpose_pids: Vec<u16>,
+}
+
+impl DataTracks {
+    pub(crate) fn retain_default_caption_tracks(&mut self) {
+        if !self.caption_pids.is_empty() {
+            self.pids.retain(|pid| self.caption_pids.contains(pid));
+        }
+    }
+
+    pub(crate) fn component_kind(&self, pid: u16) -> &'static str {
+        if self.caption_pids.contains(&pid) {
+            "caption"
+        } else if self.superimpose_pids.contains(&pid) {
+            "superimpose"
+        } else {
+            "candidate"
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Clone)]

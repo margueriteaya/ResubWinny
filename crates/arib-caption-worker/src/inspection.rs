@@ -52,11 +52,14 @@ pub(crate) fn inspect_input(path: &Path) -> io::Result<InputInspection> {
                         track
                             .pids
                             .iter()
-                            .map(|pid| CaptionTrackInspection {
-                                label: "MPEG-TS private data".into(),
-                                detail: format!(
-                                    "PID 0x{pid:04X} · candidate ARIB-TTML PES route"
-                                ),
+                            .map(|pid| {
+                                let kind = track.component_kind(*pid);
+                                CaptionTrackInspection {
+                                    label: format!("MPEG-TS private {kind}"),
+                                    detail: format!(
+                                        "PID 0x{pid:04X} · {kind} component · candidate ARIB-TTML PES route"
+                                    ),
+                                }
                             })
                             .collect(),
                     ),
@@ -86,9 +89,14 @@ pub(crate) fn inspect_input(path: &Path) -> io::Result<InputInspection> {
                     let tracks = track
                         .pids
                         .iter()
-                        .map(|pid| CaptionTrackInspection {
-                            label: "BS4K/8K private data".into(),
-                            detail: format!("PID 0x{pid:04X} · scanned for ARIB-TTML captions"),
+                        .map(|pid| {
+                            let kind = track.component_kind(*pid);
+                            CaptionTrackInspection {
+                                label: format!("BS4K/8K private {kind}"),
+                                detail: format!(
+                                    "PID 0x{pid:04X} · {kind} component · candidate ARIB-TTML PES route"
+                                ),
+                            }
                         })
                         .collect();
                     (

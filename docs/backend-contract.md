@@ -123,7 +123,11 @@ Known limitations are product constraints, not hidden fallbacks:
   `preview.platform_not_implemented`; they do not imply a native preview route.
 - `sync_preview_overlay` reports both `mediaTimeMs` and `projectTimeMs`. It queries captions using `projectTimeMs`; the default mapping is identity, but PTS repair, programme boundaries and user offsets must update the backend mapping rather than teaching the WebView a second clock.
 - `trackId` is passed as a validated PID selector for all discovered MPEG-TS
-  B24 or M2TS data tracks. Inspection reports PAT/PMT service IDs, SDT service
+  B24 or M2TS data tracks. For B24, the selected PID resolves to a logical
+  `service_id + component_tag` track; sequential decoding follows current
+  PAT/PMT updates and may continue on a replacement PID for that same logical
+  track. Inspection reports the representative `caption_pid`, every bounded-
+  discovery `caption_pids`, the component tag, PAT/PMT service IDs, SDT service
   names and ISO-639 caption languages. Its `broadcast` object additionally
   reports optional NIT network name, current-service EIT present-event name and
   description, and TDT/TOT UTC broadcast time. This SI pass is content-based,
@@ -134,3 +138,21 @@ Known limitations are product constraints, not hidden fallbacks:
   metadata remain outside the product contract. The queue supervisor owns pause
   state and sends cooperative pause/resume controls to its active Worker; idle
   pause still prevents the next queued job from starting.
+
+Private-PES track discovery reports `pids`, `caption_pids`, and
+`superimpose_pids`. Component tags `0x30..0x37` and `0x38..0x3f` classify the
+two services, but do not by themselves prove B24 or TTML: B24 still requires
+its data-component descriptor, while TTML still requires a complete,
+strictly-decoded XML document. With no explicit `trackId`, conversion and
+preview select declared caption components and keep superimpose components
+independent. If PMT descriptors do not classify a private stream, it remains a
+candidate rather than being guessed from its PID.
+
+Namespace-conformant TTML is parsed by XML local name and ancestry, including
+default or prefixed TTML namespaces. Sequential ARIB-TTML documents may omit
+`begin`, `end`, and `dur`; the next complete document on the same PID closes
+the previous document, and an empty `<tt>` is a clear operation. A 192-byte
+M2TS route derives this document clock from the 30-bit arrival timestamp with
+wrap handling when PES PTS marker/prefix validation fails. It never accepts a
+zero-filled private PES field merely because `PTS_DTS_flags` was set, and it
+never closes one PID from a document arriving on another PID.

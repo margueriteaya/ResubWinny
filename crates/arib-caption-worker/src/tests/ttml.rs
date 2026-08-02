@@ -1,5 +1,43 @@
 use super::*;
 
+#[test]
+fn parses_namespace_conformant_arib_ttml_without_element_timing_until_next_document() {
+    let xml = r##"<?xml version="1.0" encoding="utf-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml"
+    xmlns:tts="http://www.w3.org/ns/ttml#styling"
+    xmlns:arib-tt="http://www.arib.or.jp/ns/arib-ttml/v1_0">
+  <head><styling><style xml:id="font" tts:fontSize="144px 144px"/></styling>
+    <layout><region xml:id="display" tts:extent="2480px 1920px" tts:origin="680px 1560px"/></layout>
+  </head>
+  <body><div><p region="display"><span style="font">字幕です。</span></p></div></body>
+</tt>"##;
+
+    assert!(parse_ttml_captions(xml, 2_000).is_empty());
+    let captions = parse_ttml_captions_until(xml, 2_000, Some(4_750));
+    assert_eq!(captions.len(), 1);
+    assert_eq!(captions[0].text, "字幕です。");
+    assert_eq!((captions[0].start_ms, captions[0].end_ms), (2_000, 4_750));
+}
+
+#[test]
+fn parses_namespace_prefixed_ttml_elements_by_local_name() {
+    let xml = r#"<tt:tt xmlns:tt="http://www.w3.org/ns/ttml"><tt:body><tt:div>
+      <tt:p begin="1s" end="2s">prefixed</tt:p>
+    </tt:div></tt:body></tt:tt>"#;
+    let captions = parse_ttml_captions(xml, 500);
+    assert_eq!(captions.len(), 1);
+    assert_eq!(captions[0].text, "prefixed");
+    assert_eq!((captions[0].start_ms, captions[0].end_ms), (1_500, 2_500));
+}
+
+#[test]
+fn rejects_private_pes_with_zero_filled_fake_pts() {
+    let pes = [
+        0x00, 0x00, 0x01, 0xbd, 0x00, 0x20, 0x80, 0x80, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ];
+    assert_eq!(pes_pts_from_header(&pes), None);
+}
+
 fn ffmpeg_available() -> bool {
     std::process::Command::new("ffmpeg")
         .arg("-version")

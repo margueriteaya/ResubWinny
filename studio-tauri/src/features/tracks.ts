@@ -9,10 +9,15 @@ export function trackDisplayLabel(track: Track) {
   switch (track.kind) {
     case "b24_verified":
       return t("tracks.b24Verified").replace("{0}", ordinal);
+    case "mpeg_ts_ttml_caption":
     case "mpeg_ts_ttml_candidate":
       return t("tracks.mpegTsTtmlCandidate").replace("{0}", ordinal);
-    case "m2ts_ttml":
+    case "m2ts_ttml_caption":
+    case "m2ts_ttml_candidate":
       return t("tracks.m2tsTtml").replace("{0}", ordinal);
+    case "mpeg_ts_ttml_superimpose":
+    case "m2ts_ttml_superimpose":
+      return t("tracks.superimpose").replace("{0}", ordinal);
     default:
       return track.label;
   }
@@ -27,7 +32,14 @@ export function trackDisplayDetail(track: Track) {
       track.serviceName ?? "",
     ].filter(Boolean).join(" · ");
   }
-  if (track.kind === "mpeg_ts_ttml_candidate") return t("tracks.mpegTsTtmlDetail");
-  if (track.kind === "m2ts_ttml") return t("tracks.m2tsTtmlDetail");
+  if (track.kind === "mpeg_ts_ttml_caption" || track.kind === "mpeg_ts_ttml_candidate") {
+    return t("tracks.mpegTsTtmlDetail");
+  }
+  if (track.kind === "m2ts_ttml_caption" || track.kind === "m2ts_ttml_candidate") {
+    return t("tracks.m2tsTtmlDetail");
+  }
+  if (track.kind === "mpeg_ts_ttml_superimpose" || track.kind === "m2ts_ttml_superimpose") {
+    return t("tracks.superimposeDetail");
+  }
   return track.detail;
 }

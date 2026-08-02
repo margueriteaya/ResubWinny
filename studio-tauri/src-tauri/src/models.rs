@@ -451,6 +451,10 @@ pub struct WorkerB24Track {
 #[derive(Deserialize)]
 pub struct WorkerDataTracks {
     pub pids: Vec<u16>,
+    #[serde(default)]
+    pub caption_pids: Vec<u16>,
+    #[serde(default)]
+    pub superimpose_pids: Vec<u16>,
 }
 
 #[derive(Deserialize)]

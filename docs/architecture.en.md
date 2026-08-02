@@ -183,6 +183,18 @@ document-boundary and declared-encoding validation; a private PID alone is
 never evidence of captions. The 188-byte private-PES route has a constructed
 end-to-end regression and still needs a lawful real-recording fixture.
 
+Dynamic MPEG-TS PMT correction (2026-08-02): a B24 logical track is identified
+by `service_id + component_tag`; the PID found at the beginning of a recording
+is not treated as permanent. `inspect` samples the head plus a fixed number of
+bounded 1 MiB windows across the file, while sequential decoding continuously
+tracks current PAT/PMT and flushes the old PES before a PID transition.
+Component tags `0x30..=0x37` are captions and `0x38..=0x3f` are superimpose;
+the latter never enters the ordinary caption or TTML-candidate route. A
+21,609,477,452-byte real recording whose later PMT introduced PID `0x1201`
+completed with 18,722 PES, 3,825 scenes, 70,853 characters, and zero decoder
+errors. ASS/archive/DRCS semantics are unchanged, and raw evidence records the
+actual PID of each PES.
+
 Route codes follow the same evidence boundary: `mpeg_ts_b24_verified` is
 descriptor-verified; `mpeg_ts_ttml_candidate` denotes private PES PIDs in
 either 188-byte TS or 192-byte M2TS and is not a caption claim;
@@ -305,3 +317,22 @@ vertical data path is an axis transpose pending real vertical-corpus validation.
 FFmpeg/libass pixel tests are the runtime compatibility gate because libmpv's
 internal libass does not expose glyph metrics. This path does not enter or alter
 the native preview chain (`libaribcaption -> native RGBA -> libmpv surface`).
+
+## Sequential ARIB-TTML documents and private-PES tracks (2026-08-02)
+
+Namespace-conformant TTML is now read through a read-only XML tree by local
+name and ancestry, without requiring literal `<p>` spelling. Some 192-byte
+recordings carry ARIB-TTML documents without `begin`, `end`, or `dur`; the next
+complete document on the same PID closes the previous document, and an empty
+`<tt>` clears it. Zero-filled private-PES timestamps are rejected when their
+MPEG marker/prefix bits are invalid, and the 192-byte route instead uses the
+M2TS arrival timestamp with 30-bit wrap handling. Document state is isolated
+per PID.
+
+PMT `component_tag` ranges `0x30..0x37` and `0x38..0x3f` classify caption and
+superimpose components, but do not alone prove B24 or TTML. B24 still requires
+`data_component_id 0x0008`; TTML still requires complete XML and strict
+encoding validation. Default preview/export selects declared caption tracks,
+while superimpose remains an independent explicitly selectable track.
+Unclassified streams remain candidates and are never inferred from a PID,
+filename, or programme name.

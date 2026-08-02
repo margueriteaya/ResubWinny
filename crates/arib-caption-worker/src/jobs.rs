@@ -118,6 +118,8 @@ where
             )));
         }
         tracks.pids.retain(|pid| *pid == track_id);
+    } else {
+        tracks.retain_default_caption_tracks();
     }
     let temporary = output.with_extension("ass.part");
     let mut writer = BufWriter::new(File::create(&temporary)?);
@@ -150,8 +152,8 @@ where
         .then(|| output.with_extension("caption.pes.jsonl"));
     let raw_temporary = raw.as_ref().map(|path| path.with_extension("jsonl.part"));
     let mut raw_writer = match &raw_temporary {
-        Some(path) => {
-            let mut writer = BufWriter::new(File::create(path)?);
+        Some(temporary_path) => {
+            let mut writer = BufWriter::new(File::create(temporary_path)?);
             write_raw_header(&mut writer, path, "arib_ttml_private_pes")?;
             Some(writer)
         }

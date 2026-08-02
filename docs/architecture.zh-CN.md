@@ -216,6 +216,8 @@ ARIB-TTML span 样式校正（2026-07-23）：实际广播 payload 常将有效�
 
 现实输入优先级：当前 release gate 是 188-byte MPEG-TS/B24 与已成功严格验证的 192-byte MPEG-TS packetisation/private PES/ARIB-TTML，两者都有本地长样本和流式计数基线。原生 BS4K/8K 的 TLV/MMTP 是规范主线，但目前只有构造/单元证据与受限 `stpp` 路由，能力码为 `tlv_mmtp_experimental`；在获得合法真实 TLV 语料前，它只提供探测、诊断、原始证据和明确条件下的转换，不作为通用支持。inspection contract 使用 `mpeg_ts_b24_verified`、`mpeg_ts_ttml_candidate`、`tlv_mmtp_experimental` 与 `unknown_unsupported`：private PES PID 仅为 candidate，不能冒充 TTML 验证结果；`mpeg_ts_192_ttml_verified` 只用于完成严格验证后的 192-byte M2TS 转换 route。这些能力码来自内容探测，不来自扩展名。
 
+MPEG-TS 动态 PMT 校正（2026-08-02）：B24 逻辑轨以 `service_id + component_tag` 标识，不把文件开头发现的 PID 当作整份录像的永久属性。`inspect` 在文件头和全文件固定数量的 1 MiB 窗口中有界采样 PAT/PMT；顺序解码则持续跟踪 current PAT/PMT，并在同一逻辑轨迁移 PID 时刷新旧 PES 后切换。`component_tag 0x30..=0x37` 归为字幕，`0x38..=0x3f` 归为文字超级，后者不得进入普通字幕或 TTML candidate。一个 21,609,477,452-byte 实际录像在 PMT version 更新后发现 PID `0x1201`，完整转换得到 18,722 PES、3,825 scene、70,853 字符和 0 decoder error；ASS/archive/DRCS 语义不变，raw evidence 记录每个 PES 的实际来源 PID。
+
 换列竖排 ruby 增量（2026-07-25）：后端现在会在明确关联的 ruby 正文自动换列时，按已记录的正文字符格阅读路径分配 ruby 字形，并在对应书写方向的侧边以 0.5 倍绘制。该受限 continuation 已有 archive 到 `render_at` 的 PNG 金样覆盖；它不表示已完成通用 B62 ruby 分组、来源特定定位、纵中横或完整字形朝向。
 
 桌面持久化校正（2026-07-26）：设置、任务记录、任务历史、artifact manifest、checkpoint 与 DRCS 映射现在统一使用同目录原子发布器：先同步完整 `.part`，保留旧元数据直到新文件安装成功，替换失败则恢复旧文件。这修正了 Windows 的覆盖语义；不改变字幕 payload、archive 语义或任何传输 route。
@@ -245,3 +247,9 @@ ASS 默认使用随项目提供的 `Rounded M+ 1m for ARIB`，广播源的 `丸�
 Ruby 对应关系现已成为字幕模型阶段的产物，而不是 ASS exporter 临时执行的启发式规则。B24 `RubyBinding` 会在 `RegionInterval` 进入导出器之前记录基准 region/index 范围、基准文本与 cell box、Ruby 原始盒、上下位置、书写方向和来源依据。ARIB-TTML 同样记录基准 caption/run/grapheme 范围；同一时间组中的独立 B62 Ruby region 会在有界分组完整后、archive/TTML/ASS 写出前建立对应关系。真实 M2TS corpus 当前形成 31 条结构化 binding，其中 `ささ` 明确对应 `捧`；无法证明的 region 保持未绑定，不作猜测。
 
 只有 ASS 离线导出使用 Box Layout。布局器通过可替换的 glyph-metrics 接口测量随程序提供的 Rounded M+ 字体，把基准文字的实际 ink range 分配为总宽度严格相等的 slot；字形墨迹可能重叠时按整数像素缩小字号，最后仅对整组可见 Ruby 墨迹做一次有界整数像素回退校正。正文始终保持为一条由 libass shaping 的 Dialogue，只有 Ruby 字形允许分别定位。显式 `rubyPosition` 的上置/下置会保留；竖排目前只提供同一算法的轴转置数据路径，等待真实竖排 corpus 验证。由于 libmpv 内部使用的 libass 不公开字形度量 API，FFmpeg/libass 像素测试是当前运行时兼容门槛。该布局不会进入或改动原生预览链路（`libaribcaption -> native RGBA -> libmpv surface`）。
+
+## 顺序 ARIB-TTML 文档与私有 PES 轨道（2026-08-02）
+
+符合 namespace 规范的 TTML 现在通过只读 XML 树的 local-name 与祖先关系解析，不再要求标签必须写成字面 `<p>`。部分 192-byte 录制文件的 ARIB-TTML 文档不含 `begin`、`end` 或 `dur`；同一 PID 的下一份完整文档会关闭上一份文档，空 `<tt>` 表示清屏。若 private PES 虽设置 PTS 标志却未满足 MPEG marker/prefix 规则，零填充值会被拒绝，192-byte 路线改用处理 30-bit 回绕的 M2TS arrival timestamp。各 PID 的文档状态完全隔离。
+
+PMT 的 `component_tag 0x30..0x37` 与 `0x38..0x3f` 分别分类 caption 和 superimpose，但该标签本身不证明 B24 或 TTML。B24 仍须具有 `data_component_id 0x0008`，TTML 仍须通过完整 XML 与严格编码验证。默认预览和导出只选择声明的 caption 轨，superimpose 作为独立可选轨保留；描述符无法分类时保持 candidate，不以 PID、文件名或节目名称猜测。

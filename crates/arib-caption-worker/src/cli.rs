@@ -58,6 +58,23 @@ pub(crate) fn artifact_events(report: &ConversionReport) -> Vec<serde_json::Valu
     events
 }
 
+fn emit_empty_caption_diagnostic(summary: &B24DecodeSummary) {
+    if summary.captions != 0 {
+        return;
+    }
+    emit_json(&serde_json::json!({
+        "type": "diagnostic",
+        "level": "warning",
+        "code": "caption.no_decoded_statements",
+        "message": "The declared ARIB text service produced no decoded caption statements. It may carry only superimpose or service-management data.",
+        "parameters": {
+            "bytesRead": summary.bytes_read,
+            "pesPackets": summary.pes_packets,
+            "decoderErrors": summary.decoder_errors,
+        },
+    }));
+}
+
 pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args_os().skip(1);
     let Some(command) = args.next() else {
@@ -301,6 +318,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
         if archive_only {
             publish_archive_only(&output, &mut report)?;
         }
+        emit_empty_caption_diagnostic(&report.summary);
         if report.summary.drcs_glyphs > 0 {
             emit_json(&serde_json::json!({
                 "type": "drcs-discovered",
@@ -343,11 +361,19 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         None
     };
-    let mpeg_ts_data_tracks = if probe.kind == InputKind::MpegTs {
+    let mut mpeg_ts_data_tracks = if probe.kind == InputKind::MpegTs {
         discover_mpeg_ts_data_tracks(path)?
     } else {
         None
     };
+    if let Some(tracks) = &mut mpeg_ts_data_tracks {
+        tracks
+            .pids
+            .retain(|pid| !b24_tracks.iter().any(|track| track.caption_pid == *pid));
+        if tracks.pids.is_empty() {
+            mpeg_ts_data_tracks = None;
+        }
+    }
     if command == "inspect" {
         let inspection = inspect_input(path)?;
         for track in &b24_tracks {
@@ -363,6 +389,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                     "type": "track-discovered",
                     "route": "mpeg_ts_ttml_candidate",
                     "trackId": pid,
+                    "componentKind": tracks.component_kind(*pid),
                 }));
             }
         }
@@ -370,8 +397,9 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
             for pid in &tracks.pids {
                 emit_json(&serde_json::json!({
                     "type": "track-discovered",
-                    "route": "mpeg_ts_192_ttml_verified",
+                    "route": "mpeg_ts_ttml_candidate",
                     "trackId": pid,
+                    "componentKind": tracks.component_kind(*pid),
                 }));
             }
         }
@@ -402,6 +430,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                 "warnings": summary.decoder_errors,
             }));
         })?;
+        emit_empty_caption_diagnostic(&summary);
         emit_stage("completed");
         emit_json(&serde_json::json!({ "type": "completed", "summary": summary }));
     }

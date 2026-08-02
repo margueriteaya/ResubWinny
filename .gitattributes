@@ -5,7 +5,6 @@
 *.ico binary
 *.png binary
 *.ttf binary
-*.ts binary
 *.m2ts binary
 *.tlv binary
 *.mmts binary

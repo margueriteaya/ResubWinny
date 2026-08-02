@@ -18,6 +18,21 @@ use crate::{
 const PSI_SECTION_LIMIT: usize = 4096;
 const SI_SCAN_BYTES: u64 = 64 * 1024 * 1024;
 const DYNAMIC_SI_SCAN_BYTES: u64 = 24 * 1024 * 1024;
+const PSI_SAMPLE_WINDOW_BYTES: u64 = 1024 * 1024;
+const PSI_SAMPLE_WINDOW_COUNT: u64 = 16;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum B24TextServiceKind {
+    Caption,
+    Superimpose,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct B24CaptionStream {
+    pub(crate) pid: u16,
+    pub(crate) component_tag: u8,
+    pub(crate) language: Option<String>,
+}
 
 /// Reassemble one bounded PSI section for a single PID during stream discovery.
 /// PSI is not retained after discovery: this deliberately caps malformed input
@@ -169,7 +184,21 @@ pub(crate) fn pmt_programs(section: &[u8]) -> Vec<(u16, u16)> {
         .collect()
 }
 
-pub(crate) fn b24_descriptor(descriptors: &[u8]) -> bool {
+fn descriptor_component_tag(descriptors: &[u8]) -> Option<u8> {
+    let mut index = 0;
+    while index + 2 <= descriptors.len() {
+        let tag = descriptors[index];
+        let length = usize::from(descriptors[index + 1]);
+        let body = descriptors.get(index + 2..index + 2 + length)?;
+        if tag == 0x52 && body.len() == 1 {
+            return body.first().copied();
+        }
+        index += 2 + length;
+    }
+    None
+}
+
+fn has_b24_data_component_descriptor(descriptors: &[u8]) -> bool {
     let mut index = 0;
     while index + 2 <= descriptors.len() {
         let tag = descriptors[index];
@@ -177,12 +206,25 @@ pub(crate) fn b24_descriptor(descriptors: &[u8]) -> bool {
         let Some(body) = descriptors.get(index + 2..index + 2 + length) else {
             return false;
         };
-        if (tag == 0xfd && body.starts_with(&[0x00, 0x08])) || (tag == 0x52 && body == [0x30]) {
+        if tag == 0xfd && body.starts_with(&[0x00, 0x08]) {
             return true;
         }
         index += 2 + length;
     }
     false
+}
+
+pub(crate) fn b24_text_service_kind(descriptors: &[u8]) -> Option<B24TextServiceKind> {
+    match descriptor_component_tag(descriptors)? {
+        0x30..=0x37 => Some(B24TextServiceKind::Caption),
+        0x38..=0x3f => Some(B24TextServiceKind::Superimpose),
+        _ => None,
+    }
+}
+
+pub(crate) fn b24_descriptor(descriptors: &[u8]) -> bool {
+    b24_text_service_kind(descriptors) == Some(B24TextServiceKind::Caption)
+        && has_b24_data_component_descriptor(descriptors)
 }
 
 pub(crate) fn iso639_language(descriptors: &[u8]) -> Option<String> {
@@ -437,7 +479,15 @@ fn scan_broadcast_metadata(
     Ok(metadata)
 }
 
+#[cfg_attr(not(feature = "fuzzing"), allow(dead_code))]
 pub(crate) fn b24_caption_pids(section: &[u8]) -> Vec<u16> {
+    b24_caption_streams(section)
+        .into_iter()
+        .map(|stream| stream.pid)
+        .collect()
+}
+
+pub(crate) fn b24_caption_streams(section: &[u8]) -> Vec<B24CaptionStream> {
     if section.len() < 16 || section[0] != 0x02 {
         return Vec::new();
     }
@@ -447,7 +497,7 @@ pub(crate) fn b24_caption_pids(section: &[u8]) -> Vec<u16> {
         Some(end) => end,
         None => return Vec::new(),
     };
-    let mut pids = Vec::new();
+    let mut streams = Vec::new();
     while index + 5 <= end {
         let stream_type = section[index];
         let pid = (u16::from(section[index + 1] & 0x1f) << 8) | u16::from(section[index + 2]);
@@ -456,39 +506,60 @@ pub(crate) fn b24_caption_pids(section: &[u8]) -> Vec<u16> {
         let Some(descriptors) = section.get(index + 5..index + 5 + descriptor_length) else {
             return Vec::new();
         };
-        if stream_type == 0x06 && b24_descriptor(descriptors) {
-            pids.push(pid);
+        if stream_type == 0x06
+            && b24_descriptor(descriptors)
+            && let Some(component_tag) = descriptor_component_tag(descriptors)
+        {
+            streams.push(B24CaptionStream {
+                pid,
+                component_tag,
+                language: iso639_language(descriptors),
+            });
         }
         index += 5 + descriptor_length;
     }
-    pids
+    streams
 }
 
+#[cfg_attr(not(feature = "fuzzing"), allow(dead_code))]
 pub(crate) fn data_pids(section: &[u8]) -> Vec<u16> {
+    classified_data_pids(section).0
+}
+
+pub(crate) fn classified_data_pids(section: &[u8]) -> (Vec<u16>, Vec<u16>, Vec<u16>) {
     if section.len() < 16 || section[0] != 0x02 {
-        return Vec::new();
+        return (Vec::new(), Vec::new(), Vec::new());
     }
     let program_info_length = (usize::from(section[10] & 0x0f) << 8) | usize::from(section[11]);
     let mut index = 12 + program_info_length;
     let end = match section.len().checked_sub(4) {
         Some(end) => end,
-        None => return Vec::new(),
+        None => return (Vec::new(), Vec::new(), Vec::new()),
     };
     let mut pids = Vec::new();
+    let mut caption_pids = Vec::new();
+    let mut superimpose_pids = Vec::new();
     while index + 5 <= end {
         let stream_type = section[index];
         let pid = (u16::from(section[index + 1] & 0x1f) << 8) | u16::from(section[index + 2]);
         let descriptor_length =
             (usize::from(section[index + 3] & 0x0f) << 8) | usize::from(section[index + 4]);
-        if index + 5 + descriptor_length > end {
-            return Vec::new();
-        }
-        if stream_type == 0x06 {
+        let Some(descriptors) = section.get(index + 5..index + 5 + descriptor_length) else {
+            return (Vec::new(), Vec::new(), Vec::new());
+        };
+        let declared_b24_text_service = b24_text_service_kind(descriptors).is_some()
+            && has_b24_data_component_descriptor(descriptors);
+        if stream_type == 0x06 && !declared_b24_text_service {
             pids.push(pid);
+            match descriptor_component_tag(descriptors) {
+                Some(0x30..=0x37) => caption_pids.push(pid),
+                Some(0x38..=0x3f) => superimpose_pids.push(pid),
+                _ => {}
+            }
         }
         index += 5 + descriptor_length;
     }
-    pids
+    (pids, caption_pids, superimpose_pids)
 }
 
 /// Discover private PES streams in a normal 188-byte MPEG-TS recording.
@@ -514,9 +585,14 @@ pub(crate) fn discover_mpeg_ts_data_tracks(path: &Path) -> io::Result<Option<Dat
             pmt_pid = first_pmt_pid(&section);
         }
         if Some(pid) == pmt_pid && section[0] == 0x02 {
-            let pids = data_pids(&section);
+            let (pids, caption_pids, superimpose_pids) = classified_data_pids(&section);
             if !pids.is_empty() {
-                return Ok(Some(DataTracks { pmt_pid: pid, pids }));
+                return Ok(Some(DataTracks {
+                    pmt_pid: pid,
+                    pids,
+                    caption_pids,
+                    superimpose_pids,
+                }));
             }
         }
     }
@@ -553,52 +629,33 @@ where
 
 pub(crate) fn discover_b24_tracks(path: &Path) -> io::Result<Vec<B24Track>> {
     let mut file = File::open(path)?;
-    let mut bytes = vec![0; PSI_SCAN_BYTES];
-    let length = file.read(&mut bytes)?;
+    let file_length = file.metadata()?.len();
     let mut pmt_programs_by_pid = HashMap::new();
     let mut service_names = HashMap::new();
     let mut tracks = Vec::new();
-    let mut psi = HashMap::<u16, PsiAssembler>::new();
-    for packet in bytes[..length].chunks_exact(188) {
-        let Some((pid, start, payload)) = ts_payload(packet) else {
-            continue;
-        };
-        if pid != 0 && pid != 0x11 && !pmt_programs_by_pid.contains_key(&pid) {
-            continue;
-        }
-        let Some(section) = psi.entry(pid).or_default().push(payload, start) else {
-            continue;
-        };
-        if pid == 0 && section[0] == 0x00 {
-            for (program, pmt) in pmt_programs(&section) {
-                pmt_programs_by_pid.insert(pmt, program);
-            }
-        }
-        if pid == 0x11 && matches!(section.first(), Some(0x42) | Some(0x46)) {
-            for service_id in pmt_programs_by_pid.values().copied() {
-                if let Some(name) = service_name_from_sdt(&section, service_id) {
-                    service_names.insert(service_id, name);
-                }
-            }
-        }
-        if section[0] == 0x02 && pmt_programs_by_pid.contains_key(&pid) {
-            for caption_pid in b24_caption_pids(&section) {
-                if !tracks
-                    .iter()
-                    .any(|track: &B24Track| track.caption_pid == caption_pid)
-                {
-                    tracks.push(B24Track {
-                        service_id: *pmt_programs_by_pid.get(&pid).unwrap_or(&0),
-                        pmt_pid: pid,
-                        caption_pid,
-                        language: iso639_language(&section),
-                        service_name: pmt_programs_by_pid
-                            .get(&pid)
-                            .and_then(|service_id| service_names.get(service_id))
-                            .cloned(),
-                    });
-                }
-            }
+    let initial_length = (PSI_SCAN_BYTES as u64).min(file_length);
+    scan_b24_psi_window(
+        &mut file,
+        0,
+        initial_length,
+        &mut pmt_programs_by_pid,
+        &mut service_names,
+        &mut tracks,
+    )?;
+
+    if file_length > initial_length {
+        let maximum_start = file_length.saturating_sub(PSI_SAMPLE_WINDOW_BYTES);
+        for sample in 1..=PSI_SAMPLE_WINDOW_COUNT {
+            let offset = maximum_start.saturating_mul(sample) / PSI_SAMPLE_WINDOW_COUNT;
+            let aligned_offset = offset / 188 * 188;
+            scan_b24_psi_window(
+                &mut file,
+                aligned_offset,
+                PSI_SAMPLE_WINDOW_BYTES.min(file_length.saturating_sub(aligned_offset)),
+                &mut pmt_programs_by_pid,
+                &mut service_names,
+                &mut tracks,
+            )?;
         }
     }
     for track in &mut tracks {
@@ -607,6 +664,81 @@ pub(crate) fn discover_b24_tracks(path: &Path) -> io::Result<Vec<B24Track>> {
         }
     }
     Ok(tracks)
+}
+
+fn scan_b24_psi_window(
+    file: &mut File,
+    start_offset: u64,
+    length: u64,
+    pmt_programs_by_pid: &mut HashMap<u16, u16>,
+    service_names: &mut HashMap<u16, String>,
+    tracks: &mut Vec<B24Track>,
+) -> io::Result<()> {
+    file.seek(SeekFrom::Start(start_offset))?;
+    let mut packet = [0_u8; 188];
+    let mut bytes_read = 0_u64;
+    let mut psi = HashMap::<u16, PsiAssembler>::new();
+    while bytes_read.saturating_add(188) <= length {
+        match file.read_exact(&mut packet) {
+            Ok(()) => bytes_read += 188,
+            Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => break,
+            Err(error) => return Err(error),
+        }
+        let Some((pid, start, payload)) = ts_payload(&packet) else {
+            continue;
+        };
+        if pid != 0 && pid != 0x11 && !pmt_programs_by_pid.contains_key(&pid) {
+            continue;
+        }
+        for section in psi.entry(pid).or_default().push_all(payload, start) {
+            if pid == 0 && section[0] == 0x00 {
+                for (program, pmt) in pmt_programs(&section) {
+                    pmt_programs_by_pid.insert(pmt, program);
+                }
+            }
+            if pid == 0x11 && matches!(section.first(), Some(0x42) | Some(0x46)) {
+                for service_id in pmt_programs_by_pid.values().copied() {
+                    if let Some(name) = service_name_from_sdt(&section, service_id) {
+                        service_names.insert(service_id, name);
+                    }
+                }
+            }
+            if section[0] == 0x02
+                && section.get(5).is_some_and(|flags| flags & 0x01 != 0)
+                && let Some(&service_id) = pmt_programs_by_pid.get(&pid)
+            {
+                for stream in b24_caption_streams(&section) {
+                    if let Some(track) = tracks.iter_mut().find(|track| {
+                        track.service_id == service_id
+                            && track.component_tag == stream.component_tag
+                    }) {
+                        if !track.caption_pids.contains(&stream.pid) {
+                            track.caption_pids.push(stream.pid);
+                        }
+                        track.caption_pid = stream.pid;
+                        track.pmt_pid = pid;
+                        if stream.language.is_some() {
+                            track.language = stream.language;
+                        }
+                    } else {
+                        tracks.push(B24Track {
+                            service_id,
+                            pmt_pid: pid,
+                            caption_pid: stream.pid,
+                            component_tag: stream.component_tag,
+                            caption_pids: vec![stream.pid],
+                            language: stream.language,
+                            service_name: service_names.get(&service_id).cloned(),
+                        });
+                    }
+                }
+                for track in tracks.iter().filter(|track| track.service_id == service_id) {
+                    debug_assert!((0x30..=0x37).contains(&track.component_tag));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn discover_b24(path: &Path) -> io::Result<Option<B24Track>> {

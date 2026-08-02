@@ -1,5 +1,14 @@
 /build/
-/testfile/validation-*
+/target/
+/fuzz/target/
+/studio-tauri/src-tauri/target/
+
+# Local recordings, generated validation artifacts, and scratch downloads.
+# Small redistributable fixtures belong under crates/*/testdata instead.
+/testfile/
+/artifacts/
+/tmp/
+
 /studio-tauri/node_modules/
 /studio-tauri/.playwright-cli/
 /studio-tauri/src-tauri/gen/

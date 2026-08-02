@@ -59,11 +59,18 @@ pub fn inspect_source(app: AppHandle, path: String) -> Result<Inspection, String
             .filter(|pid| !verified_b24_pids.contains(pid))
             .enumerate()
         {
+            let kind = if data_tracks.caption_pids.contains(&pid) {
+                "mpeg_ts_ttml_caption"
+            } else if data_tracks.superimpose_pids.contains(&pid) {
+                "mpeg_ts_ttml_superimpose"
+            } else {
+                "mpeg_ts_ttml_candidate"
+            };
             tracks.push(Track {
-                label: format!("mpeg_ts_ttml_candidate:{}", index + 1),
-                detail: "track.mpeg_ts_ttml_candidate".into(),
+                label: format!("{kind}:{}", index + 1),
+                detail: format!("track.{kind}"),
                 pid: Some(format!("PID 0x{pid:04X}")),
-                kind: "mpeg_ts_ttml_candidate".into(),
+                kind: kind.into(),
                 ordinal: index + 1,
                 service_id: None,
                 language: None,
@@ -73,11 +80,18 @@ pub fn inspect_source(app: AppHandle, path: String) -> Result<Inspection, String
     }
     if let Some(data_tracks) = probe.m2ts_data_tracks {
         for (index, pid) in data_tracks.pids.into_iter().enumerate() {
+            let kind = if data_tracks.caption_pids.contains(&pid) {
+                "m2ts_ttml_caption"
+            } else if data_tracks.superimpose_pids.contains(&pid) {
+                "m2ts_ttml_superimpose"
+            } else {
+                "m2ts_ttml_candidate"
+            };
             tracks.push(Track {
-                label: format!("m2ts_ttml:{}", index + 1),
-                detail: "track.m2ts_ttml".into(),
+                label: format!("{kind}:{}", index + 1),
+                detail: format!("track.{kind}"),
                 pid: Some(format!("PID 0x{pid:04X}")),
-                kind: "m2ts_ttml".into(),
+                kind: kind.into(),
                 ordinal: index + 1,
                 service_id: None,
                 language: None,

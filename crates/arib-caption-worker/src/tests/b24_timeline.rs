@@ -2,9 +2,32 @@ use super::*;
 
 #[test]
 fn finds_b24_component_descriptor() {
-    let descriptors = [0x52, 0x01, 0x30];
-    assert!(b24_descriptor(&descriptors));
-    assert!(!b24_descriptor(&[0x52, 0x01, 0x31]));
+    for component_tag in 0x30..=0x37 {
+        assert!(b24_descriptor(&[
+            0x52,
+            0x01,
+            component_tag,
+            0xfd,
+            0x02,
+            0x00,
+            0x08,
+        ]));
+        assert!(!b24_descriptor(&[0x52, 0x01, component_tag]));
+    }
+    for component_tag in 0x38..=0x3f {
+        assert!(!b24_descriptor(&[0x52, 0x01, component_tag]));
+        assert!(!b24_descriptor(&[
+            0xfd,
+            0x02,
+            0x00,
+            0x08,
+            0x52,
+            0x01,
+            component_tag,
+        ]));
+    }
+    assert!(b24_descriptor(&[0xfd, 0x02, 0x00, 0x08, 0x52, 0x01, 0x30]));
+    assert!(!b24_descriptor(&[0xfd, 0x02, 0x00, 0x08]));
 }
 
 #[test]
@@ -14,6 +37,8 @@ fn selects_the_requested_b24_track_instead_of_only_the_first_track() {
             service_id: 101,
             pmt_pid: 0x0100,
             caption_pid: 0x0120,
+            component_tag: 0x30,
+            caption_pids: vec![0x0120],
             language: Some("jpn".into()),
             service_name: None,
         },
@@ -21,6 +46,8 @@ fn selects_the_requested_b24_track_instead_of_only_the_first_track() {
             service_id: 101,
             pmt_pid: 0x0100,
             caption_pid: 0x0121,
+            component_tag: 0x31,
+            caption_pids: vec![0x0121],
             language: Some("jpn".into()),
             service_name: None,
         },
@@ -54,6 +81,7 @@ fn parses_b24_payload_and_pts() {
     assert_eq!(pts, Some(1000));
     assert_eq!(payload, [0x80]);
 }
+
 #[test]
 fn indefinite_duration_ends_at_next_caption() {
     assert_eq!(caption_end(1_000, i64::MAX, 2_500), 2_500);

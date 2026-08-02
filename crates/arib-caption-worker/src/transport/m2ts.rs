@@ -7,7 +7,7 @@ use std::{
 use crate::{
     B24DecodeSummary, DataTracks, PSI_SCAN_BYTES, PsiAssembler, TtmlCaption,
     caption::ttml::{TsFraming, scan_ts_ttml_impl},
-    data_pids, first_pmt_pid, ts_payload,
+    classified_data_pids, first_pmt_pid, ts_payload,
 };
 
 /// Discover private data PIDs in a 192-byte recorder packet stream.
@@ -35,9 +35,14 @@ pub(crate) fn discover_m2ts_data_tracks(path: &Path) -> io::Result<Option<DataTr
             pmt_pid = first_pmt_pid(&section);
         }
         if Some(pid) == pmt_pid && section[0] == 0x02 {
-            let pids = data_pids(&section);
+            let (pids, caption_pids, superimpose_pids) = classified_data_pids(&section);
             if !pids.is_empty() {
-                return Ok(Some(DataTracks { pmt_pid: pid, pids }));
+                return Ok(Some(DataTracks {
+                    pmt_pid: pid,
+                    pids,
+                    caption_pids,
+                    superimpose_pids,
+                }));
             }
         }
     }

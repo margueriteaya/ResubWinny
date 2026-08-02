@@ -87,6 +87,11 @@ npm lock data in CI. This inventory does not replace the dependencies'
 authoritative license texts, which must also be archived with public binary
 releases where required.
 
+The Worker uses `roxmltree` for namespace-aware, read-only TTML structure
+parsing. It is an unmodified package-managed dependency distributed under
+MIT or Apache-2.0; its pinned version and authoritative package metadata are
+recorded in `Cargo.lock` and `docs/dependency-licenses.md`.
+
 ## Broadcast corpus
 
 Private recordings and local corpus files are not part of ResubWinny and are

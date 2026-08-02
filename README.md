@@ -117,6 +117,7 @@ Worker 使用固定大小的流式缓冲和 64 位文件偏移。文件体积增
 | Svelte 5 / Vite | 前端界面与构建 | npm lockfile 固定 | 见依赖许可证清单 |
 | serde / serde_json | Worker 协议、模型和持久化 | Cargo 依赖 | 见依赖许可证清单 |
 | encoding_rs | ARIB-TTML 字符编码 | Cargo 依赖 | 见依赖许可证清单 |
+| roxmltree | namespace-aware TTML/XML 结构解析 | Cargo 依赖 | MIT / Apache-2.0 |
 | fontdue / ttf-parser | 后端字幕及 Ruby 字形度量 | Cargo 依赖 | 见依赖许可证清单 |
 | [makeding/aribb62.js](https://github.com/makeding/aribb62.js) | ARIB-TTML/B62 行为研究参考 | 仅参考，不捆绑源码 | 审查版本的 package 元数据声明 MIT；详见第三方记录 |
 

@@ -1,4 +1,5 @@
 use crate::*;
+use roxmltree::{Document, Node, NodeType};
 
 pub(crate) fn attribute(tag: &str, name: &str) -> Option<String> {
     for quote in ['\"', '\''] {
@@ -226,7 +227,11 @@ fn ttml_root_tag(xml: &str) -> Option<&str> {
 }
 
 fn ttml_display_plane(xml: &str) -> TtmlDisplayPlane {
-    let Some(root) = ttml_root_tag(xml) else {
+    ttml_display_plane_with_root(xml, ttml_root_tag(xml))
+}
+
+fn ttml_display_plane_with_root(xml: &str, root: Option<&str>) -> TtmlDisplayPlane {
+    let Some(root) = root else {
         return TtmlDisplayPlane::logical();
     };
     if let Some(extent) = attribute(root, "tts:extent").or_else(|| attribute(root, "extent")) {
@@ -606,23 +611,111 @@ pub(crate) fn ttml_parent_timing(parents: &[&str]) -> (i64, Option<i64>) {
 }
 
 pub(crate) fn parse_ttml_captions(xml: &str, base_pts_ms: i64) -> Vec<TtmlCaption> {
+    parse_ttml_captions_until(xml, base_pts_ms, None)
+}
+
+fn ttml_node_opening_tag<'input>(xml: &'input str, node: Node<'_, 'input>) -> Option<&'input str> {
+    let range = node.range();
+    let start = range.start;
+    let end = xml.get(start..range.end)?.find('>')? + start;
+    xml.get(start..=end)
+}
+
+fn ttml_node_inner_xml<'input>(xml: &'input str, node: Node<'_, 'input>) -> Option<&'input str> {
+    let range = node.range();
+    let value = xml.get(range.clone())?;
+    let start = value.find('>')? + 1;
+    let end = value.rfind('<')?;
+    (end >= start).then(|| &value[start..end])
+}
+
+fn ttml_node_attribute<'input>(node: Node<'input, 'input>, name: &str) -> Option<&'input str> {
+    let local_name = name.rsplit(':').next().unwrap_or(name);
+    node.attributes()
+        .find(|attribute| attribute.name() == local_name)
+        .map(|attribute| attribute.value())
+}
+
+fn append_ttml_node_text(node: Node<'_, '_>, output: &mut String) {
+    match node.node_type() {
+        NodeType::Text => output.push_str(node.text().unwrap_or_default()),
+        NodeType::Element if node.tag_name().name() == "br" => output.push('\n'),
+        _ => {
+            for child in node.children() {
+                append_ttml_node_text(child, output);
+            }
+        }
+    }
+}
+
+fn ttml_node_plain_text(node: Node<'_, '_>) -> String {
+    let mut output = String::new();
+    append_ttml_node_text(node, &mut output);
+    output.trim().to_owned()
+}
+
+fn ttml_style_definitions_from_document<'input>(
+    xml: &'input str,
+    document: &Document<'input>,
+) -> BTreeMap<String, TtmlCaptionStyle> {
+    let mut definitions = BTreeMap::new();
+    for node in document
+        .descendants()
+        .filter(|node| node.is_element() && node.tag_name().name() == "style")
+    {
+        let (Some(id), Some(tag)) = (
+            ttml_node_attribute(node, "xml:id"),
+            ttml_node_opening_tag(xml, node),
+        ) else {
+            continue;
+        };
+        definitions.insert(id.to_owned(), ttml_inline_style(tag));
+    }
+    definitions
+}
+
+pub(crate) fn ttml_document_has_paragraph(xml: &str) -> bool {
+    match Document::parse(xml) {
+        Ok(document) => document
+            .descendants()
+            .any(|node| node.is_element() && node.tag_name().name() == "p"),
+        Err(_) => xml.contains("<p ") || xml.contains("<p>"),
+    }
+}
+
+/// Parse one TTML document. ARIB-TTML carried as a sequential document stream
+/// may omit element timing; in that case `document_end_ms` is the timestamp of
+/// the next complete document on the same component/PID.
+pub(crate) fn parse_ttml_captions_until(
+    xml: &str,
+    base_pts_ms: i64,
+    document_end_ms: Option<i64>,
+) -> Vec<TtmlCaption> {
     let mut captions = Vec::new();
-    let style_definitions = ttml_style_definitions(xml);
-    let display_plane = ttml_display_plane(xml);
-    let mut remaining = xml;
-    while let Some(offset) = remaining.find("<p") {
-        let absolute_offset = xml.len().saturating_sub(remaining.len()) + offset;
-        remaining = &remaining[offset..];
-        let Some(tag_end) = remaining.find('>') else {
-            break;
+    let Ok(document) = Document::parse(xml) else {
+        // Older recorder exports and a number of preserved fixtures use TTML
+        // prefixes without declaring their namespace. They are not XML
+        // namespace-conformant, so keep the bounded legacy reader isolated as
+        // a compatibility route. Conformant documents always use the DOM path.
+        return parse_ttml_captions_legacy(xml, base_pts_ms, document_end_ms);
+    };
+    let root_tag = ttml_node_opening_tag(xml, document.root_element());
+    let style_definitions = ttml_style_definitions_from_document(xml, &document);
+    let display_plane = ttml_display_plane_with_root(xml, root_tag);
+    for paragraph in document
+        .descendants()
+        .filter(|node| node.is_element() && node.tag_name().name() == "p")
+    {
+        let Some(tag) = ttml_node_opening_tag(xml, paragraph) else {
+            continue;
         };
-        let tag = &remaining[..tag_end + 1];
-        let Some(close) = remaining[tag_end + 1..].find("</p>") else {
-            break;
-        };
-        let body_end = tag_end + 1 + close;
-        let body = &remaining[tag_end + 1..body_end];
-        let parent_divs = ttml_open_div_stack(xml, absolute_offset);
+        let body = ttml_node_inner_xml(xml, paragraph).unwrap_or_default();
+        let mut parent_divs = paragraph
+            .ancestors()
+            .filter(|node| node.is_element() && node.tag_name().name() == "div")
+            .filter_map(|node| ttml_node_opening_tag(xml, node))
+            .collect::<Vec<_>>();
+        parent_divs.reverse();
         let (parent_begin, parent_end) = ttml_parent_timing(&parent_divs);
         let own_begin = attribute(tag, "begin").and_then(|value| ttml_time_ms(&value));
         let start = Some(parent_begin.saturating_add(own_begin.unwrap_or(0)));
@@ -635,11 +728,12 @@ pub(crate) fn parse_ttml_captions(xml: &str, base_pts_ms: i64) -> Vec<TtmlCaptio
                     .zip(duration)
                     .map(|(start, duration)| start.saturating_add(duration))
             })
-            .or(parent_end);
-        let text = ttml_plain_text(body);
+            .or(parent_end)
+            .or_else(|| document_end_ms.map(|end| end.saturating_sub(base_pts_ms)));
+        let text = ttml_node_plain_text(paragraph);
         if let (Some(start), Some(end)) = (start, end)
             && !text.is_empty()
-            && end > start
+            && base_pts_ms.saturating_add(end) > base_pts_ms.saturating_add(start)
         {
             let region = attribute(tag, "region")
                 .or_else(|| {
@@ -649,7 +743,14 @@ pub(crate) fn parse_ttml_captions(xml: &str, base_pts_ms: i64) -> Vec<TtmlCaptio
                         .find_map(|div| attribute(div, "region"))
                 })
                 .unwrap_or_default();
-            let region_tag = ttml_tag_with_xml_id(xml, "region", &region);
+            let region_tag = document
+                .descendants()
+                .find(|node| {
+                    node.is_element()
+                        && node.tag_name().name() == "region"
+                        && ttml_node_attribute(*node, "xml:id") == Some(region.as_str())
+                })
+                .and_then(|node| ttml_node_opening_tag(xml, node));
             let (x, y, width, height) = ttml_region_geometry(region_tag, display_plane);
             let mut style = ttml_resolved_style(tag, &parent_divs, region_tag, &style_definitions);
             // A single wrapper span can safely provide the caption-level
@@ -682,6 +783,95 @@ pub(crate) fn parse_ttml_captions(xml: &str, base_pts_ms: i64) -> Vec<TtmlCaptio
             captions.push(TtmlCaption {
                 start_ms: base_pts_ms + start,
                 end_ms: base_pts_ms + end,
+                text,
+                x,
+                y,
+                width,
+                height,
+                style,
+                rich_body,
+                ruby_bindings,
+                source: None,
+            });
+        }
+    }
+    captions
+}
+
+fn parse_ttml_captions_legacy(
+    xml: &str,
+    base_pts_ms: i64,
+    document_end_ms: Option<i64>,
+) -> Vec<TtmlCaption> {
+    let mut captions = Vec::new();
+    let style_definitions = ttml_style_definitions(xml);
+    let display_plane = ttml_display_plane(xml);
+    let mut remaining = xml;
+    while let Some(offset) = remaining.find("<p") {
+        let absolute_offset = xml.len().saturating_sub(remaining.len()) + offset;
+        remaining = &remaining[offset..];
+        let Some(tag_end) = remaining.find('>') else {
+            break;
+        };
+        let tag = &remaining[..tag_end + 1];
+        let Some(close) = remaining[tag_end + 1..].find("</p>") else {
+            break;
+        };
+        let body_end = tag_end + 1 + close;
+        let body = &remaining[tag_end + 1..body_end];
+        let parent_divs = ttml_open_div_stack(xml, absolute_offset);
+        let (parent_begin, parent_end) = ttml_parent_timing(&parent_divs);
+        let own_begin = attribute(tag, "begin").and_then(|value| ttml_time_ms(&value));
+        let start = parent_begin.saturating_add(own_begin.unwrap_or(0));
+        let own_end = attribute(tag, "end").and_then(|value| ttml_time_ms(&value));
+        let duration = attribute(tag, "dur").and_then(|value| ttml_time_ms(&value));
+        let end = own_end
+            .map(|end| parent_begin.saturating_add(end))
+            .or_else(|| duration.map(|duration| start.saturating_add(duration)))
+            .or(parent_end)
+            .or_else(|| document_end_ms.map(|end| end.saturating_sub(base_pts_ms)));
+        let text = ttml_plain_text(body);
+        if let Some(end) = end
+            && !text.is_empty()
+            && end > start
+        {
+            let region = attribute(tag, "region")
+                .or_else(|| {
+                    parent_divs
+                        .iter()
+                        .rev()
+                        .find_map(|div| attribute(div, "region"))
+                })
+                .unwrap_or_default();
+            let region_tag = ttml_tag_with_xml_id(xml, "region", &region);
+            let (x, y, width, height) = ttml_region_geometry(region_tag, display_plane);
+            let mut style = ttml_resolved_style(tag, &parent_divs, region_tag, &style_definitions);
+            if body.matches("<span").count() == 1
+                && let Some(span_tag) = ttml_first_span_tag(body)
+            {
+                ttml_apply_style(&mut style, span_tag, &style_definitions);
+            }
+            normalise_ttml_style_lengths(&mut style, display_plane);
+            let rich_body = safe_ttml_inline_body(body).map(|safe| {
+                normalise_ttml_inline_length_attributes(
+                    expand_ttml_inline_style_references(&safe, &style_definitions),
+                    display_plane,
+                )
+            });
+            let ruby_writing_mode = match style.writing_mode.as_deref() {
+                Some("vertical-lr" | "tblr") => RubyWritingMode::VerticalLr,
+                Some("vertical-rl" | "tbrl") => RubyWritingMode::VerticalRl,
+                _ => RubyWritingMode::HorizontalTb,
+            };
+            let ruby_bindings = rich_body
+                .as_deref()
+                .map(|body| {
+                    ttml_ruby_bindings(&parse_ttml_inline_runs(body, &style), ruby_writing_mode)
+                })
+                .unwrap_or_default();
+            captions.push(TtmlCaption {
+                start_ms: base_pts_ms.saturating_add(start),
+                end_ms: base_pts_ms.saturating_add(end),
                 text,
                 x,
                 y,

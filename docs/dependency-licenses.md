@@ -4,7 +4,7 @@ This file is generated from the committed Cargo and npm lock data by
 `scripts/generate-license-report.ps1`. It records package metadata for review;
 the dependency source distributions remain the authoritative license texts.
 
-Generated inventory: 449 Cargo packages and 111 npm packages.
+Generated inventory: 450 Cargo packages and 111 npm packages.
 
 ## Cargo
 
@@ -263,6 +263,7 @@ Generated inventory: 449 Cargo packages and 111 npm packages.
 | `regex-syntax` | `0.8.11` | MIT OR Apache-2.0 | Desktop service |
 | `reqwest` | `0.13.4` | MIT OR Apache-2.0 | Desktop service |
 | `rfd` | `0.16.0` | MIT | Desktop service |
+| `roxmltree` | `0.20.0` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `rustc_version` | `0.4.1` | MIT OR Apache-2.0 | Desktop service |
 | `rustc-hash` | `2.1.3` | Apache-2.0 OR MIT | Desktop service |
 | `rustversion` | `1.0.23` | MIT OR Apache-2.0 | Desktop service |

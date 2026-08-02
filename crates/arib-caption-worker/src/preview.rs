@@ -72,7 +72,7 @@ pub(crate) fn preview_caption(path: &Path) -> io::Result<Option<CaptionPreview>>
                 let result = scan_b24(
                     path,
                     &track,
-                    |scene| {
+                    |_, scene| {
                         preview = Some(b24_preview(&scene));
                         Err(io::Error::new(io::ErrorKind::Interrupted, "preview ready"))
                     },
@@ -87,9 +87,10 @@ pub(crate) fn preview_caption(path: &Path) -> io::Result<Option<CaptionPreview>>
                 }
                 Ok(preview)
             } else {
-                let tracks = discover_mpeg_ts_data_tracks(path)?.ok_or_else(|| {
+                let mut tracks = discover_mpeg_ts_data_tracks(path)?.ok_or_else(|| {
                     io::Error::other("no B24 caption or private ARIB-TTML data PID found")
                 })?;
+                tracks.retain_default_caption_tracks();
                 let mut preview = None;
                 let result = scan_mpeg_ts_ttml(
                     path,
@@ -111,8 +112,9 @@ pub(crate) fn preview_caption(path: &Path) -> io::Result<Option<CaptionPreview>>
             }
         }
         InputKind::M2ts => {
-            let tracks = discover_m2ts_data_tracks(path)?
+            let mut tracks = discover_m2ts_data_tracks(path)?
                 .ok_or_else(|| io::Error::other("no BS4K/8K private data PID found"))?;
+            tracks.retain_default_caption_tracks();
             let mut preview = None;
             let result = scan_m2ts_ttml(
                 path,

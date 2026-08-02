@@ -178,6 +178,16 @@ ARIB-TTML XML を探索できます。document boundary と declared encoding �
 188-byte private-PES route は構成した end-to-end regression で検証済みであり、
 合法な実録画 fixture は今後必要です。
 
+MPEG-TS dynamic PMT 修正（2026-08-02）：B24 logical track は
+`service_id + component_tag` で識別し、録画先頭で見つかった PID をファイル全体の
+固定属性とは扱いません。`inspect` は先頭と全体に分散した固定数の 1 MiB window で
+PAT/PMT を有界 sampling し、sequential decode は current PAT/PMT を継続追跡して
+PID 遷移前に旧 PES を flush します。`component_tag 0x30..=0x37` は字幕、
+`0x38..=0x3f` は文字スーパーであり、後者を通常字幕または TTML candidate route に
+入れません。後続 PMT で PID `0x1201` が追加される 21,609,477,452-byte の実録画は、
+18,722 PES、3,825 scene、70,853 character、decoder error 0 で完了しました。
+ASS/archive/DRCS semantics は変更せず、raw evidence は各 PES の実 PID を記録します。
+
 route code も同じ evidence 境界に従います。`mpeg_ts_b24_verified` は
 descriptor で検証済み、`mpeg_ts_ttml_candidate` は 188-byte TS または
 192-byte M2TS の private PES PID を示すだけで caption の証拠ではありません。
@@ -223,3 +233,9 @@ ASS の既定 font は同梱の `Rounded M+ 1m for ARIB` とし、broadcast の 
 Ruby の対応付けは ASS exporter の一時 heuristic ではなく caption model の処理になりました。B24 の `RubyBinding` は exporter に到達する前に、base region/index range、base text と cell box、source ruby box、placement、writing mode、provenance を保持します。ARIB-TTML も base caption/run/grapheme range を保持し、独立 B62 ruby region は同じ timing の有界 group が揃った時点で archive、TTML、ASS の書き出し前に対応付けます。実 M2TS corpus では `ささ` → `捧` を含む 31 件の構造化 binding を得ました。曖昧または未対応の region は推測せず unbound のまま残します。
 
 ASS だけが export 専用 box layout を使います。交換可能な glyph-metrics interface の現在の実装は同梱 Rounded M+ font を測定し、base の rendered ink range を総幅が一致する slot に分配します。glyph ink が重なる場合は整数 pixel 単位で font size を fallback し、最後に visible ruby ink 全体へ一回だけ有界な整数 pixel の中心補正を行います。base 本文は一つの shaped Dialogue event のままで、個別配置できるのは ruby glyph だけです。明示的な `rubyPosition` の上置・下置を保持し、縦書きは実 corpus 検証まで同じ algorithm の axis transpose として扱います。libmpv 内部の libass は glyph metrics API を公開しないため、FFmpeg/libass pixel test を runtime compatibility gate とします。この処理は native preview chain（`libaribcaption -> native RGBA -> libmpv surface`）へ入り込まず、変更もしません。
+
+## Sequential ARIB-TTML document と private PES track（2026-08-02）
+
+Namespace に準拠する TTML は read-only XML tree の local-name と ancestor 関係で解析し、literal な `<p>` 表記に依存しません。一部の 192-byte 録画では ARIB-TTML document に `begin`、`end`、`dur` がなく、同じ PID の次の complete document が前の document を閉じ、空の `<tt>` が clear を表します。Private PES が PTS flag を立てても MPEG marker/prefix 規則を満たさない zero-filled 値は拒否し、192-byte route は 30-bit wrap を処理する M2TS arrival timestamp を使います。PID ごとの document state は分離します。
+
+PMT の `component_tag 0x30..0x37` と `0x38..0x3f` は caption と superimpose を分類しますが、それだけで B24/TTML とは確定しません。B24 は引き続き `data_component_id 0x0008`、TTML は complete XML と strict encoding validation を必要とします。既定の preview/export は caption track のみを選び、superimpose は明示的に選択できる独立 track として保持します。分類不能な stream は candidate のままとし、PID、filename、programme name から推測しません。
