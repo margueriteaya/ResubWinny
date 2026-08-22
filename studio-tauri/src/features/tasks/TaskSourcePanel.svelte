@@ -20,7 +20,6 @@
 </script>
 
 <section class="source-panel">
-  <p class="eyebrow">{t("workspace.sourceFile")}</p>
   <div class="source-file">
     <span class="large-file">{inspection.container === "TLV" ? "TLV" : "TS"}</span>
     <div><b>{inspection.name}</b><small>{bytes(inspection.size)} ({inspection.size.toLocaleString()} bytes)</small><small>{inspection.container}{inspection.packetSize ? ` · ${inspection.packetSize} B packets` : ""}</small></div>
@@ -41,8 +40,12 @@
     <p class="muted">{t("tracks.selectOne")}</p>
     {#each inspection.tracks as track}
       <button class:selected={selectedTrackKeys.has(trackKey(track))} class="track" aria-pressed={selectedTrackKeys.has(trackKey(track))} disabled={selectionDisabled} onclick={() => onSelectTrack(track)}>
-        <span class="check">{selectedTrackKeys.has(trackKey(track)) ? "✓" : ""}</span><span><b>{trackDisplayLabel(track)}</b><small>{trackDisplayDetail(track)}</small><small>{track.pid}</small></span><ChevronRight size={19} />
+        <span class="check">{#if selectedTrackKeys.has(trackKey(track))}<svg class="source-checkmark" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 5.15 3.65 8 9 1.55" /></svg>{/if}</span><span><b>{trackDisplayLabel(track)}</b><small>{trackDisplayDetail(track)}</small><small>{track.pid}</small></span><ChevronRight size={19} />
       </button>
     {/each}
   {:else}<p class="muted">{t("tracks.none")}</p>{/if}
 </section>
+
+<style>
+  .source-checkmark{display:block;width:10px;height:10px;overflow:visible;filter:none}.source-checkmark path{fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+</style>

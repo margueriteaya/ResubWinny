@@ -28,7 +28,7 @@ const localeDocuments = await Promise.all(localeFiles.map(async (name) => ({
   name,
   document: JSON.parse(await readFile(join(localeDirectory, name), 'utf8')),
 })))
-const referenceLocale = localeDocuments.find(({ document }) => document.locale === 'en')
+const referenceLocale = localeDocuments.find(({ name }) => name === 'en.json')
 if (!referenceLocale) violations.push('locales/en.json is required as the message-key reference')
 const referenceKeys = new Set(Object.keys(referenceLocale?.document.messages ?? {}))
 

@@ -17,15 +17,16 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@lucide/svelte": "^1.0.1",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.4.0",
-    "@lucide/svelte": "^1.0.1",
+    "macos-traffic-lights": "^1.1.0",
     "svelte": "^5.55.7"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^6.0.0",
-    "@tsconfig/svelte": "^5.0.0",
     "@tauri-apps/cli": "^2.11.0",
+    "@tsconfig/svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "tslib": "^2.4.0",
     "typescript": "^5.6.3",

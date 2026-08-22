@@ -14,12 +14,20 @@ export function installDesktopLifecycle(options: DesktopLifecycleOptions): () =>
   let disposed = false;
   let disposeDrop: (() => void) | undefined;
   let disposeMovement: (() => void) | undefined;
+  let surfaceFrame = 0;
+  const scheduleSurfaceChange = () => {
+    if (surfaceFrame) return;
+    surfaceFrame = requestAnimationFrame(() => {
+      surfaceFrame = 0;
+      options.onSurfaceChange();
+    });
+  };
 
   void subscribeRecordingDrops(options.onRecordingDrop).then((dispose) => {
     if (disposed) dispose();
     else disposeDrop = dispose;
   });
-  void subscribeWindowMovement(options.onSurfaceChange).then((dispose) => {
+  void subscribeWindowMovement(scheduleSurfaceChange).then((dispose) => {
     if (disposed) dispose();
     else disposeMovement = dispose;
   });
@@ -44,10 +52,10 @@ export function installDesktopLifecycle(options: DesktopLifecycleOptions): () =>
     options.onPlayerCommand(command);
   };
 
-  const layoutObserver = new ResizeObserver(options.onSurfaceChange);
+  const layoutObserver = new ResizeObserver(scheduleSurfaceChange);
   layoutObserver.observe(document.documentElement);
-  window.addEventListener("resize", options.onSurfaceChange);
-  window.addEventListener("scroll", options.onSurfaceChange, true);
+  window.addEventListener("resize", scheduleSurfaceChange);
+  window.addEventListener("scroll", scheduleSurfaceChange, true);
   window.addEventListener("keydown", handlePlayerKey);
 
   return () => {
@@ -55,8 +63,9 @@ export function installDesktopLifecycle(options: DesktopLifecycleOptions): () =>
     disposeDrop?.();
     disposeMovement?.();
     layoutObserver.disconnect();
-    window.removeEventListener("resize", options.onSurfaceChange);
-    window.removeEventListener("scroll", options.onSurfaceChange, true);
+    window.removeEventListener("resize", scheduleSurfaceChange);
+    window.removeEventListener("scroll", scheduleSurfaceChange, true);
     window.removeEventListener("keydown", handlePlayerKey);
+    if (surfaceFrame) cancelAnimationFrame(surfaceFrame);
   };
 }

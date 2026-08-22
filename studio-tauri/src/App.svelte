@@ -1,8 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
-  import SettingsPanel from "./SettingsPanel.svelte";
   import HomePage from "./features/home/HomePage.svelte";
-  import TaskWorkspace from "./features/tasks/TaskWorkspace.svelte";
   import { NativePreviewController } from "./features/tasks/native-preview-controller";
   import { reduceTaskEvent } from "./features/tasks/event-state";
   import {
@@ -14,8 +12,6 @@
     type ExportFormat,
     type ExportPreservation,
   } from "./features/tasks/controller";
-  import BatchPage from "./features/batch/BatchPage.svelte";
-  import DrcsPage from "./features/drcs/DrcsPage.svelte";
   import AppSidebar from "./components/AppSidebar.svelte";
   import type { Page } from "./components/navigation";
   import {
@@ -67,6 +63,14 @@
 
 
   let page: Page = "home";
+  let TaskWorkspaceComponent: any = null;
+  let BatchPageComponent: any = null;
+  let DrcsPageComponent: any = null;
+  let SettingsPageComponent: any = null;
+  let sidebarCollapsed = false;
+  let compactTaskViewport = false;
+  let compactSourceOpen = false;
+  let compactOutputOpen = false;
   let inspection: Inspection | null = null;
   let error = "";
   let isInspecting = false;
@@ -96,6 +100,12 @@
     defaultTimeline: "Auto (Gap Merge + Overlap Resolve)",
     locale: "system",
     theme: "system",
+    workspaceLayout: {
+      sourceWidth: 240,
+      outputWidth: 300,
+      sourceCollapsed: false,
+      outputCollapsed: false,
+    },
   };
   let settingsPanel: "appearance" | "typography" | "output" | "player" = "typography";
   let outputDirectory = "";
@@ -128,6 +138,18 @@
   let playbackMappingBusy = false;
   let mediaTimeMs: number | null = null;
   let previewDurationMs: number | null = null;
+  let previewResizeFrame = 0;
+  let previewResizeInFlight = false;
+  let previewResizePending = false;
+
+  $: if (page === "batch" && !BatchPageComponent)
+    void import("./features/batch/BatchPage.svelte").then((module) => BatchPageComponent = module.default);
+  $: if (page === "tasks" && !TaskWorkspaceComponent)
+    void import("./features/tasks/TaskWorkspace.svelte").then((module) => TaskWorkspaceComponent = module.default);
+  $: if (page === "drcs" && !DrcsPageComponent)
+    void import("./features/drcs/DrcsPage.svelte").then((module) => DrcsPageComponent = module.default);
+  $: if (page === "settings" && !SettingsPageComponent)
+    void import("./features/settings/SettingsPage.svelte").then((module) => SettingsPageComponent = module.default);
   // mpv owns a native surface. Once it starts, remove the WebView placeholder
   // so the instructional layer cannot be mistaken for video state.
   $: if (nativePreview)
@@ -168,6 +190,48 @@
   function savedPreferences(): AppSettings {
     return appSettings;
   }
+
+  function updateWorkspaceLayout(workspaceLayout: AppSettings["workspaceLayout"]) {
+    appSettings = { ...appSettings, workspaceLayout };
+    if (desktopRuntime) void backend.updateSettings(appSettings).catch(reportBackendFailure);
+  }
+
+  $: sourceInspectorCollapsed = compactTaskViewport ? !compactSourceOpen : appSettings.workspaceLayout.sourceCollapsed;
+  $: outputInspectorCollapsed = compactTaskViewport ? !compactOutputOpen : appSettings.workspaceLayout.outputCollapsed;
+
+  function toggleSourceInspector() {
+    if (compactTaskViewport) {
+      const opening = !compactSourceOpen;
+      compactSourceOpen = opening;
+      if (opening) compactOutputOpen = false;
+      void tick().then(resizePreview);
+      return;
+    }
+    updateWorkspaceLayout({ ...appSettings.workspaceLayout, sourceCollapsed: !appSettings.workspaceLayout.sourceCollapsed });
+  }
+
+  function toggleOutputInspector() {
+    if (compactTaskViewport) {
+      const opening = !compactOutputOpen;
+      compactOutputOpen = opening;
+      if (opening) compactSourceOpen = false;
+      void tick().then(resizePreview);
+      return;
+    }
+    updateWorkspaceLayout({ ...appSettings.workspaceLayout, outputCollapsed: !appSettings.workspaceLayout.outputCollapsed });
+  }
+
+  onMount(() => {
+    const query = window.matchMedia("(max-width: 980px)");
+    const update = () => {
+      compactTaskViewport = query.matches;
+      compactSourceOpen = false;
+      compactOutputOpen = false;
+    };
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  });
 
   function reportBackendFailure(reason: unknown) {
     const message = reason instanceof Error ? reason.message : String(reason);
@@ -479,9 +543,25 @@
     }
   }
 
-  async function resizePreview() {
-    if (desktopRuntime && playerRunning && nativePreview)
+  function resizePreview() {
+    previewResizePending = true;
+    if (previewResizeFrame || previewResizeInFlight) return;
+    previewResizeFrame = requestAnimationFrame(() => {
+      previewResizeFrame = 0;
+      void flushPreviewResize();
+    });
+  }
+
+  async function flushPreviewResize() {
+    if (!previewResizePending || !desktopRuntime || !playerRunning || !nativePreview) return;
+    previewResizePending = false;
+    previewResizeInFlight = true;
+    try {
       await nativePreviewController.resize(previewRect());
+    } finally {
+      previewResizeInFlight = false;
+      if (previewResizePending) resizePreview();
+    }
   }
 
   async function stopPreview() {
@@ -905,15 +985,32 @@
     };
   });
 
-  onDestroy(() => void nativePreviewController.dispose());
+  onDestroy(() => {
+    if (previewResizeFrame) cancelAnimationFrame(previewResizeFrame);
+    void nativePreviewController.dispose();
+  });
 </script>
 
 <svelte:head><meta name="color-scheme" content="light dark" /></svelte:head>
 
-<main class:dark-workspace={page !== "home"}>
+<main class:dark-workspace={page !== "home"} class:sidebar-collapsed={sidebarCollapsed} data-page={page} data-playing={playerRunning && !playerPaused}>
+  <div class="shell-glass" aria-hidden="true"></div>
   {#key `shell:${$localeRevision}`}
-    <WindowChrome onWindowAction={(action) => void windowAction(action)} onBeginDrag={() => void beginDrag()} onBeginResize={(direction) => void beginResize(direction as ResizeDirection)} />
-    <AppSidebar {page} hasTask={Boolean(inspection)} busy={isInspecting || isExporting || batchRunning} theme={appSettings.theme} onNavigate={selectView} />
+    <WindowChrome
+      {sidebarCollapsed}
+      {page}
+      workspaceLayout={appSettings.workspaceLayout}
+      {sourceInspectorCollapsed}
+      {outputInspectorCollapsed}
+      onWindowAction={(action) => void windowAction(action)}
+      onBeginDrag={() => void beginDrag()}
+      onBeginResize={(direction) => void beginResize(direction as ResizeDirection)}
+      onToggleSidebar={() => sidebarCollapsed = !sidebarCollapsed}
+      onToggleSourceInspector={toggleSourceInspector}
+      onToggleOutputInspector={toggleOutputInspector}
+      onChooseSource={() => void chooseSource()}
+    />
+    <AppSidebar {page} hasTask={Boolean(inspection)} taskName={inspection?.name ?? ""} busy={isInspecting || isExporting || batchRunning} onNavigate={selectView} />
   {/key}
 
   <section class="application">
@@ -933,7 +1030,8 @@
         }}
       />
     {:else if page === "tasks"}
-      <TaskWorkspace
+      {#if TaskWorkspaceComponent}
+      <svelte:component this={TaskWorkspaceComponent}
         {inspection}
         {isInspecting}
         {previewIndexing}
@@ -964,6 +1062,13 @@
         bind:outputDirectory
         canResume={canResumeCurrentJob}
         {resumeBusy}
+        workspaceLayout={appSettings.workspaceLayout}
+        compactViewport={compactTaskViewport}
+        {compactSourceOpen}
+        {compactOutputOpen}
+        onToggleCompactSource={toggleSourceInspector}
+        onToggleCompactOutput={toggleOutputInspector}
+        onWorkspaceLayoutChange={updateWorkspaceLayout}
         subtitle={inspection ? `${inspection.container} · ${routeDisplayLabel}` : t("task.selectRecording")}
         onChooseSource={chooseSource}
         onChooseOutputDirectory={chooseOutputDirectory}
@@ -976,19 +1081,21 @@
         onSeekAbsolute={seekPreviewAbsolute}
         onSetVolume={setPreviewVolume}
         onSaveMapping={savePlaybackMapping}
-        onDiagnosticsCount={(count) => (diagnosticsCount = count)}
-        onError={(message) => (error = formatMessage("error.backend", { message }))}
+        onDiagnosticsCount={(count: number) => (diagnosticsCount = count)}
+        onError={(message: string) => (error = formatMessage("error.backend", { message }))}
         onStartExport={startExport}
-        onToggleFormat={(next) => {
+        onToggleFormat={(next: ExportFormat) => {
           const updated = new Set(selectedFormats);
           if (updated.has(next)) updated.delete(next); else updated.add(next);
           selectedFormats = updated;
         }}
-        onTogglePreservation={(feature) => (preservation = { ...preservation, [feature]: !preservation[feature] })}
+        onTogglePreservation={(feature: keyof ExportPreservation) => (preservation = { ...preservation, [feature]: !preservation[feature] })}
         onResume={resumeCheckpoint}
       />
+      {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
     {:else if page === "batch"}
-      <BatchPage
+      {#if BatchPageComponent}
+      <svelte:component this={BatchPageComponent}
         items={batchInputs}
         running={batchRunning}
         paused={isPaused}
@@ -997,28 +1104,31 @@
         onClearCompleted={clearCompletedBatchJobs}
         onPauseQueue={pauseBatchQueue}
         onStartQueue={startBatchQueue}
-        onOpenItem={(item) => void openMultiTaskItem(item)}
+        onOpenItem={(item: BatchItem) => void openMultiTaskItem(item)}
         outputDirectory={multiTaskOutputDirectory}
         onChooseOutputDirectory={chooseMultiTaskOutputDirectory}
         formats={supportedFormats}
         {selectedFormats}
         {preservation}
-        onToggleFormat={(next) => {
+        onToggleFormat={(next: ExportFormat) => {
           const updated = new Set(selectedFormats);
           if (updated.has(next)) updated.delete(next); else updated.add(next);
           selectedFormats = updated;
         }}
-        onTogglePreservation={(feature) => (preservation = { ...preservation, [feature]: !preservation[feature] })}
+        onTogglePreservation={(feature: keyof ExportPreservation) => (preservation = { ...preservation, [feature]: !preservation[feature] })}
       />
+      {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
     {:else if page === "drcs"}
-      <DrcsPage
+      {#if DrcsPageComponent}
+      <svelte:component this={DrcsPageComponent}
         glyphs={drcsGlyphs}
         message={drcsMessage}
         canRefresh={Boolean(inspection)}
         onRefresh={loadDrcs}
-        getMapping={(id) => mappings()[id]}
+        getMapping={(id: string) => mappings()[id]}
         onSaveMapping={saveGlyphMapping}
       />
+      {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
     {:else}
       <header class="workspace-header">
         <div>
@@ -1026,12 +1136,14 @@
           <p>{t("settings.description")}</p>
         </div>
       </header>
-      <SettingsPanel
+      {#if SettingsPageComponent}
+      <svelte:component this={SettingsPageComponent}
         bind:panel={settingsPanel}
         {saveCaptionFont}
         onSettingsSaved={applyPreferences}
         onSettingsPreview={applyPreferences}
       />
+      {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
     {/if}
     {/key}
   </section>
@@ -1039,3 +1151,8 @@
     <StatusBar sourceSize={inspection?.size ?? 0} container={inspection?.container ?? ""} trackCount={inspection?.tracks.length ?? 0} {warnings} {isExporting} {previewIndexing} {isPaused} {progress} onPause={pauseExport} onResume={resumeExport} onCancel={cancelExport} />
   {/key}
 </main>
+
+<style>
+  .route-loading{display:grid;place-items:center;min-height:240px}.route-loading span{width:16px;height:16px;border:2px solid color-mix(in srgb,var(--rw-text) 16%,transparent);border-top-color:var(--rw-accent);border-radius:50%;animation:route-spin 700ms linear infinite}@keyframes route-spin{to{transform:rotate(1turn)}}
+  @media(prefers-reduced-motion:reduce){.route-loading span{animation:none;border-top-color:inherit}}
+</style>

@@ -4,18 +4,23 @@
     ChevronRight,
     CirclePause,
     CirclePlay,
+    FileVideo2,
+    FolderOutput,
     FolderPlus,
     FolderOpen,
     Gauge,
     ListRestart,
     Play,
+    RadioTower,
     Trash2,
     TriangleAlert,
   } from "@lucide/svelte";
-  import type { BatchItem } from "./features/batch/controller";
-  import type { ExportFormat, ExportPreservation } from "./backend";
-  import { trackDisplayLabel, trackKey } from "./features/tracks";
-  import { t } from "./i18n";
+  import type { BatchItem } from "./controller";
+  import type { ExportFormat, ExportPreservation } from "../../backend";
+  import { trackDisplayLabel, trackKey } from "../tracks";
+  import { t } from "../../i18n";
+  import MacCheckbox from "../../components/MacCheckbox.svelte";
+  import PopupButton from "../../components/PopupButton.svelte";
 
   export let items: BatchItem[] = [];
   export let running = false;
@@ -28,7 +33,7 @@
   export let openItem: (item: BatchItem) => void;
   export let outputDirectory = "";
   export let chooseOutputDirectory: () => void;
-  export let formats: { name: ExportFormat; description: string }[] = [];
+  export let formats: { name: ExportFormat; description: string; icon?: any; color?: string }[] = [];
   export let selectedFormats = new Set<ExportFormat>(["ASS"]);
   export let preservation: ExportPreservation;
   export let onToggleFormat: (format: ExportFormat) => void = () => {};
@@ -67,6 +72,19 @@
   };
   const isStatus = (item: BatchItem, code: string) => statusCode(item.status) === code;
   const statusLabel = (status: string) => t(`batch.status.${statusCode(status)}`, status);
+  let preset = "custom";
+  $: selectedFormatOptions = formats.filter((format) => selectedFormats.has(format.name));
+  $: destinationLabel = outputDirectory.trim() || t("batch.sameFolder");
+  $: queueSummary = items.reduce(
+    (summary, item) => {
+      const status = statusCode(item.status);
+      if (status === "running") summary.running += 1;
+      else if (status === "queued") summary.queued += 1;
+      else if (status === "completed") summary.completed += 1;
+      return summary;
+    },
+    { running: 0, queued: 0, completed: 0 },
+  );
 </script>
 
 <section class="batch-shell">
@@ -76,12 +94,12 @@
     ><button
       class="secondary output-directory"
       onclick={chooseOutputDirectory}
-      title={outputDirectory || t("batch.sameFolder")}
-      ><FolderOpen size={17} /> {outputDirectory || t("batch.chooseOutputDirectory")}</button
+      data-tooltip={outputDirectory || t("batch.sameFolder")}
+      ><FolderOpen size={17} /><span>{outputDirectory || t("batch.chooseOutputDirectory")}</span></button
     ><button
       class="secondary"
       onclick={startQueue}
-      disabled={(running && !paused) || !items.some((item) => isStatus(item, "queued"))}
+      disabled={(running && !paused) || queueSummary.queued === 0}
       ><Play size={18} />
       {paused ? t("batch.resumeQueue") : running ? t("batch.queueRunning") : t("batch.startQueue")}</button
     ><button
@@ -103,10 +121,10 @@
               >{t("batch.destination")}</span
             >
           </div>
-          {#each items as item}
+          {#each items as item (item.inspection.path)}
             <button class="queue-row" onclick={() => openItem(item)}
               ><span class="file"
-                ><b>{item.inspection.container === "TLV" ? "TLV" : "TS"}</b><i
+                ><span class="file-kind" aria-hidden="true">{#if item.inspection.container === "TLV"}<RadioTower size={18} />{:else}<FileVideo2 size={18} />{/if}<small>{item.inspection.container === "TLV" ? "TLV" : "TS"}</small></span><i
                   ><strong>{item.inspection.name}</strong><small
                     >{bytes(item.inspection.size)} · {item.inspection.tracks
                       .length}
@@ -118,7 +136,7 @@
                 ><b>{item.inspection.service}</b><small
                   >{item.inspection.container}</small
                 ></span
-              ><span><b>{[...selectedFormats].join(" · ") || "—"}</b><small>{t("batch.faithfulLayout")}</small></span
+              ><span class="queue-formats">{#if selectedFormatOptions.length}<span class="format-icons">{#each selectedFormatOptions as format (format.name)}<span class={`format-icon ${format.color ?? "blue"}`} data-tooltip={format.description}>{#if format.icon}<svelte:component this={format.icon} size={13} />{/if}</span>{/each}</span><b>{selectedFormatOptions.map((format) => format.name).join(" · ")}</b>{:else}<b>—</b>{/if}<small>{t("batch.faithfulLayout")}</small></span
               ><span
                 class:finished={isStatus(item, "completed")}
                 class:issue={isStatus(item, "warning")}
@@ -133,8 +151,8 @@
                 >{#if item.warnings}<span class="warnings"
                     ><TriangleAlert size={16} /> {item.warnings}</span
                   >{:else}—{/if}</span
-              ><span class="destination"
-                >{t("batch.sameFolder")} <ChevronRight size={16} /></span
+              ><span class="destination" data-tooltip={destinationLabel}
+                ><FolderOutput size={15} /><span>{destinationLabel}</span><ChevronRight size={16} /></span
               ></button
             >
           {/each}
@@ -147,16 +165,14 @@
               <span><b>{items.length}</b><small>{t("batch.total")}</small></span
               ><span
                 ><b
-                  >{items.filter((item) => isStatus(item, "running"))
-                    .length}</b
+                  >{queueSummary.running}</b
                 ><small>{t("batch.processing")}</small></span
               ><span
-                ><b>{items.filter((item) => isStatus(item, "queued")).length}</b
+                ><b>{queueSummary.queued}</b
                 ><small>{t("batch.queued")}</small></span
               ><span
                 ><b
-                  >{items.filter((item) => isStatus(item, "completed"))
-                    .length}</b
+                  >{queueSummary.completed}</b
                 ><small>{t("batch.completed")}</small></span
               >
             </div>
@@ -191,16 +207,16 @@
     </section>
     <aside class="preset-panel">
       <p>{t("batch.preset")}</p>
-      <div class="preset-select">{t("batch.customOptions")}</div>
+      <PopupButton label={t("batch.preset")} value={preset} options={[{ value: "custom", label: t("batch.customOptions") }]} onChange={(value) => preset = value} />
       <section class="batch-options">
         <h2>{t("workspace.outputFormat")}</h2>
         <div class="batch-format-list">
-          {#each formats as item}<label class:checked={selectedFormats.has(item.name)}><input type="checkbox" checked={selectedFormats.has(item.name)} onchange={() => onToggleFormat(item.name)} /><span><b>{item.name}</b><small>{item.description}</small></span></label>{/each}
+          {#each formats as item}<div class="batch-format-option" class:checked={selectedFormats.has(item.name)}><MacCheckbox checked={selectedFormats.has(item.name)} label={item.name} onChange={() => onToggleFormat(item.name)} /><span class={`format-icon ${item.color ?? "blue"}`}>{#if item.icon}<svelte:component this={item.icon} size={13} />{/if}</span><span class="format-copy"><b>{item.name}</b><small>{item.description}</small></span></div>{/each}
         </div>
         <h2>{t("workspace.preserveFeatures")}</h2>
         <div class="batch-preserve-list">
-          {#each preservationKeys as feature}<label><input type="checkbox" checked={preservation[feature]} onchange={() => onTogglePreservation(feature)} /><span>{t(`feature.${feature}`)}</span></label>{/each}
-          <label><input type="checkbox" checked={preservation.gaiji && preservation.accessibility} onchange={toggleAccessibilityAndGaiji} /><span>{t("feature.accessibilityAndGaiji")}</span></label>
+          {#each preservationKeys as feature}<MacCheckbox checked={preservation[feature]} label={t(`feature.${feature}`)} onChange={() => onTogglePreservation(feature)} />{/each}
+          <MacCheckbox checked={preservation.gaiji && preservation.accessibility} label={t("feature.accessibilityAndGaiji")} onChange={toggleAccessibilityAndGaiji} />
         </div>
       </section>
       <section>
@@ -329,7 +345,7 @@
     align-items: center;
     gap: 12px;
   }
-  .file > b {
+  .file-kind {
     display: grid;
     place-items: center;
     width: 38px;
@@ -426,10 +442,8 @@
   }
   .batch-options{margin-top:20px!important;padding:0!important;border:0!important;background:transparent!important}
   .batch-format-list,.batch-preserve-list{display:grid;gap:7px}
-  .batch-format-list label{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;padding:8px;border:1px solid #303e4b;border-radius:5px;background:#151d25;cursor:pointer}
-  .batch-format-list label.checked{border-color:#227cf0;background:#172b42}
   .batch-format-list b,.batch-format-list small{display:block}.batch-format-list small{margin-top:3px;color:#91a0b0;font-size:10px;line-height:1.3}
-  .batch-preserve-list{grid-template-columns:1fr 1fr}.batch-preserve-list label{display:flex;align-items:center;gap:6px;color:#b8c4d1;font-size:11px}
+  .batch-preserve-list{grid-template-columns:1fr 1fr}
   .batch-summary h2,
   .preset-panel h2 {
     margin: 0 0 17px;
@@ -491,17 +505,6 @@
     color: #a7b4c1;
     font-size: 11px;
     font-weight: 700;
-  }
-  .preset-select {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 12px;
-    color: #e4edf6;
-    border: 1px solid #354350;
-    border-radius: 6px;
-    background: #1b252e;
   }
   .preset-panel section {
     margin-top: 20px;
@@ -577,16 +580,10 @@
       border-color: #dfe6ee;
       background: #fafcff;
     }
-    .preset-select {
-      color: #344254;
-      border-color: #d9e2ec;
-      background: #fff;
-    }
     .preset-panel dd,
     .quick-action {
       color: #394758;
     }
-    .batch-format-list label{border-color:#dfe6ee;background:#fff}.batch-format-list label.checked{border-color:#176ce7;background:#f3f8ff}.batch-preserve-list label{color:#394758}
     .quick-action {
       border-color: #e3e9ef;
     }
@@ -597,7 +594,7 @@
     .queue-empty h2 {
       color: #2a3849;
     }
-    .file > b {
+    .file-kind {
       color: #4d5968;
       background: #f2f4f5;
     }
@@ -615,18 +612,47 @@
   .queue-row{color:var(--rw-text);border-color:var(--rw-border-subtle);background:var(--rw-surface-raised)}
   .queue-row:hover{background:color-mix(in srgb,var(--rw-accent) 7%,var(--rw-surface-raised))}
   .queue-row small,.queue-footer,.batch-summary span small,.metric small,.preset-panel>p,.preset-panel dt{color:var(--rw-muted)}
-  .file>b{color:var(--rw-text-secondary);border-color:var(--rw-border);background:var(--rw-surface-muted)}
+  .file-kind{color:var(--rw-text-secondary);border-color:var(--rw-border);background:var(--rw-surface-muted)}
   .job-status{color:var(--rw-accent)}.job-status.finished{color:var(--rw-success)}.job-status.finished i{background:var(--rw-success)}.job-status.issue,.warnings{color:var(--rw-warning)}.job-status.issue i{background:var(--rw-warning)}
   .job-progress{background:var(--rw-border)}.destination{color:var(--rw-text-secondary)}
   .batch-summary section,.preset-panel section{color:var(--rw-text);border-color:var(--rw-border);background:var(--rw-surface-raised)}
-  .batch-format-list label{color:var(--rw-text);border-color:var(--rw-border);background:var(--rw-surface-raised)}
-  .batch-format-list label.checked{border-color:var(--rw-accent);background:color-mix(in srgb,var(--rw-accent) 9%,var(--rw-surface-raised))}
-  .batch-format-list small{color:var(--rw-muted)}.batch-preserve-list label{color:var(--rw-text-secondary)}
-  .batch-format-list input,.batch-preserve-list input{accent-color:var(--rw-accent)}
+  .batch-format-list small{color:var(--rw-muted)}
   .queue-empty{color:var(--rw-muted);border-color:color-mix(in srgb,var(--rw-accent) 55%,var(--rw-border))}.queue-empty h2{color:var(--rw-text)}
   .preset-panel{border-color:var(--rw-border);background:var(--rw-surface-muted)}
-  .preset-select{color:var(--rw-text);border-color:var(--rw-border);background:var(--rw-surface-raised)}
   .preset-panel dd,.quick-action{color:var(--rw-text-secondary)}.quick-action{border-color:var(--rw-border)}
+  .batch-format-option{position:relative;display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;align-items:start;padding:8px;border:1px solid var(--rw-border);border-radius:6px;background:var(--rw-surface-raised)}.batch-format-option.checked{border-color:color-mix(in srgb,var(--rw-accent) 60%,var(--rw-border));background:color-mix(in srgb,var(--rw-accent) 9%,var(--rw-surface-raised))}.batch-format-option>span{grid-column:2}.batch-format-option :global(.mac-checkbox){position:absolute;z-index:1;inset:0;align-items:flex-start;width:100%;min-height:0;padding:8px}.batch-format-option :global(.checkbox-label){display:none}.batch-preserve-list :global(.mac-checkbox){color:var(--rw-text-secondary);font-size:11px}
   @media (max-width:1180px){.batch-grid{grid-template-columns:minmax(0,1fr)}.preset-panel{border-top:1px solid var(--rw-border);border-left:0}.queue-area{padding-bottom:18px}}
   @media (max-width:760px){.batch-actions{flex-wrap:wrap;padding:14px 12px}.batch-actions>span{display:none}.queue-area{padding-inline:10px}.batch-summary{grid-template-columns:1fr}.batch-preserve-list{grid-template-columns:1fr}}
+
+  /* macOS 27 content geometry. The rules above preserve the existing state
+     surface while this block supplies the approved visual hierarchy. */
+  .batch-shell{min-height:0;overflow:hidden;border:1px solid var(--rw-border-subtle);border-radius:8px;background:var(--rw-content)}
+  .batch-actions{gap:7px;min-height:48px;padding:7px 10px;border-bottom:1px solid var(--rw-border-subtle);background:var(--rw-surface-muted)}
+  .add,.secondary{height:32px;min-height:32px;padding:0 10px;border:.5px solid var(--rw-glass-border);border-radius:8px;font-size:11px;box-shadow:var(--rw-control-shadow);backdrop-filter:blur(16px) saturate(1.2)}
+  .add :global(svg),.secondary :global(svg){width:15px;height:15px;flex:0 0 15px}.output-directory{max-width:260px;min-width:0}.output-directory>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .batch-grid{grid-template-columns:minmax(0,1fr) 292px;min-height:520px;border-top:0}.queue-area{padding:10px;overflow:auto}.queue-table{min-width:820px;margin:0;border:1px solid var(--rw-border-subtle);border-radius:7px}
+  .queue-heading,.queue-row{grid-template-columns:minmax(190px,1.5fr) minmax(90px,.72fr) minmax(100px,.72fr) 86px 88px 60px minmax(100px,.8fr);gap:8px}.queue-heading{min-height:32px;padding:0 10px;color:var(--rw-muted);border-color:var(--rw-border-subtle);background:var(--rw-surface-muted);font-size:9px;font-weight:650}.queue-row{min-height:76px;padding:8px 10px;color:var(--rw-text);border-color:var(--rw-border-subtle);background:transparent;contain-intrinsic-size:auto 76px}.queue-row:hover{background:color-mix(in srgb,var(--rw-accent) 6%,transparent)}
+  .file{gap:8px}.file-kind{position:relative;display:grid;place-items:center;width:30px;height:38px;flex:0 0 30px;border:1px solid var(--rw-border);border-radius:5px}.file-kind>small{position:absolute;right:-4px;bottom:-3px;margin:0;padding:0 2px;border:1px solid var(--rw-content);border-radius:3px;background:var(--rw-surface-muted);font-size:6px;line-height:9px;font-weight:700}.file strong{font-size:11px;line-height:14px}.queue-row b{font-size:10px;line-height:13px}.queue-row small{margin-top:2px;font-size:8px;line-height:11px}.job-status{padding-left:11px;font-size:10px}.job-status i{top:3px;width:6px;height:6px}.job-progress{width:70px;height:4px}.warnings,.destination{font-size:9px}
+  .queue-footer{height:28px;padding:0 3px;align-items:center;font-size:9px}.batch-summary{grid-template-columns:1.3fr 1fr 1fr;gap:8px;margin-top:10px}.batch-summary section{padding:10px;border-color:var(--rw-border-subtle);border-radius:7px;background:var(--rw-surface-muted)}.batch-summary h2{margin:0 0 9px;font-size:10px}.batch-summary section>div{gap:14px}.batch-summary span b{font-size:17px;line-height:20px}.batch-summary span small,.metric small{margin-top:2px;font-size:8px}.metric{grid-template-columns:21px 1fr!important}.metric :global(svg){width:18px;height:18px}.queue-empty{min-height:400px;gap:8px;border-color:color-mix(in srgb,var(--rw-accent) 48%,var(--rw-border));border-radius:8px;font-size:11px}.queue-empty h2{font-size:15px}.queue-empty p{font-size:11px}
+  .preset-panel{padding:12px;border-color:var(--rw-border-subtle);background:var(--rw-surface-muted)}.preset-panel>p{margin:0 0 5px;font-size:9px}.preset-panel>:global(.popup-button){margin-top:0}.preset-panel section{margin-top:14px;padding:10px;border-color:var(--rw-border-subtle);border-radius:7px;background:var(--rw-content)}.preset-panel h2{margin:0 0 9px;font-size:10px}.batch-options{margin-top:14px!important}.batch-format-list,.batch-preserve-list{gap:5px}.batch-format-option{padding:6px;border-color:var(--rw-border-subtle);border-radius:6px}.batch-format-option :global(.mac-checkbox){padding:6px}.batch-format-list b{font-size:10px}.batch-format-list small{margin-top:1px;font-size:8px}.batch-preserve-list :global(.mac-checkbox){font-size:9px;gap:6px}.preset-panel dl div{margin-bottom:10px}.preset-panel dt{font-size:8px}.preset-panel dd{margin-top:2px;font-size:9px}.quick-action{gap:7px;height:30px;padding:0;font-size:9px}.quick-action :global(svg){width:14px;height:14px}
+  @media(max-width:1180px){.batch-grid{grid-template-columns:minmax(0,1fr)}.preset-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;border-top:1px solid var(--rw-border-subtle);border-left:0}.preset-panel>p,.preset-panel>:global(.popup-button){grid-column:1/-1}.preset-panel section{margin-top:0}.batch-options{margin-top:0!important}}
+  @media(max-width:760px){.batch-actions{padding:7px;flex-wrap:wrap}.batch-actions>span{display:none}.queue-area{padding:7px}.batch-summary,.preset-panel{grid-template-columns:1fr}.batch-preserve-list{grid-template-columns:1fr}.preset-panel>p,.preset-panel>:global(.popup-button){grid-column:auto}}
+
+  /* The toolbar and inspector are control layers; the queue is content. Keep
+     each layer visually and mechanically independent instead of wrapping the
+     whole workflow in a web-style card. */
+  .batch-shell{display:grid;grid-template-rows:48px minmax(0,1fr);width:100%;height:100%;min-height:0;border:0;border-radius:0;background:transparent}
+  .batch-actions{justify-self:stretch;width:100%;min-width:0;padding:7px 0;border:0;border-bottom:1px solid var(--rw-border-subtle);background:transparent}
+  .batch-grid{justify-self:stretch;width:100%;height:100%;min-height:0;overflow:hidden}
+  .queue-area{min-width:0;min-height:0;padding:10px 12px 10px 0;overflow:auto}
+  .queue-table{margin:0;border-color:var(--rw-border-subtle);background:var(--rw-content)}
+  .queue-empty{min-height:100%;border:0;background:transparent}
+  .preset-panel{min-width:0;min-height:0;padding:10px 0 12px 12px;overflow:auto;border-left:1px solid var(--rw-border-subtle);background:var(--rw-surface-muted);backdrop-filter:none;-webkit-backdrop-filter:none}
+  .preset-panel section{padding:0;border:0;border-radius:0;background:transparent}
+  .batch-format-option{background:color-mix(in srgb,var(--rw-content) 72%,transparent)}
+  .queue-formats{min-width:0}.format-icons{display:flex;align-items:center;gap:2px;margin-bottom:3px}.format-icon{display:grid;place-items:center;width:22px;height:22px;flex:0 0 22px;border-radius:5px}.format-icon.purple{color:#7b4db5;background:#7b4db516}.format-icon.green{color:#168247;background:#16824716}.format-icon.blue{color:#1766b3;background:#1766b316}.format-icon.orange{color:#b86400;background:#b8640016}.queue-formats>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.destination{display:grid;grid-template-columns:15px minmax(0,1fr) 16px;gap:4px}.destination>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.batch-format-option{grid-template-columns:16px 24px minmax(0,1fr);align-items:center}.batch-format-option>.format-icon{grid-column:2}.batch-format-option>.format-copy{min-width:0;grid-column:3}.format-copy b,.format-copy small{overflow:hidden;text-overflow:ellipsis}.batch-format-option :global(.mac-checkbox){align-items:center}
+  .batch-summary section{border-color:var(--rw-border-subtle);background:var(--rw-surface-muted)}
+  .add,.secondary{background:transparent}
+  .add{background:color-mix(in srgb,var(--rw-accent) 76%,var(--rw-glass-control))}
+  @media(max-width:1180px){.batch-shell{height:auto}.batch-grid{overflow:visible}.preset-panel{overflow:visible;padding:12px 0 0;border-top:1px solid var(--rw-border-subtle);border-left:0;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}}
 </style>

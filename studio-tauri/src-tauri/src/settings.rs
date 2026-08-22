@@ -39,6 +39,8 @@ fn normalize(mut settings: AppSettings) -> AppSettings {
     if settings.locale.trim().is_empty() {
         settings.locale = "system".into();
     }
+    settings.workspace_layout.source_width = settings.workspace_layout.source_width.clamp(220, 320);
+    settings.workspace_layout.output_width = settings.workspace_layout.output_width.clamp(280, 380);
     settings
 }
 
@@ -183,6 +185,7 @@ mod tests {
             default_timeline: "Strict original timestamps".into(),
             locale: "ja".into(),
             theme: "dark".into(),
+            workspace_layout: Default::default(),
         });
         assert_eq!(settings.ui_font, "cjk");
         assert_eq!(settings.caption_font, "system");
@@ -201,6 +204,12 @@ mod tests {
             default_timeline: "make it up".into(),
             locale: "".into(),
             theme: "neon".into(),
+            workspace_layout: crate::models::WorkspaceLayoutSettings {
+                source_width: 12,
+                output_width: 900,
+                source_collapsed: true,
+                output_collapsed: false,
+            },
         });
         assert_eq!(settings.ui_font, "system");
         assert_eq!(settings.caption_font, "arib");
@@ -211,5 +220,8 @@ mod tests {
         );
         assert_eq!(settings.locale, "system");
         assert_eq!(settings.theme, "system");
+        assert_eq!(settings.workspace_layout.source_width, 220);
+        assert_eq!(settings.workspace_layout.output_width, 380);
+        assert!(settings.workspace_layout.source_collapsed);
     }
 }

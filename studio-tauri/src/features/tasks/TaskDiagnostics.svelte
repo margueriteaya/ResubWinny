@@ -44,7 +44,7 @@
   </header>
   {#if records.length}
     <ol>
-      {#each records.slice().reverse() as item}
+      {#each records.slice().reverse() as item (`${item.timestamp}:${item.code}:${item.message}`)}
         <li>
           <time>{new Date(item.timestamp * 1000).toLocaleTimeString()}</time>
           <span><strong>{item.code}</strong><small>{formatMessage(item.code, item.parameters, item.message)}</small></span>
@@ -69,7 +69,7 @@
   header { display: flex; justify-content: space-between; gap: 12px; padding: 15px 17px; border-bottom: 1px solid var(--rw-border); }
   header span { color: var(--rw-muted); font-size: 12px; }
   ol { margin: 0; padding: 0; list-style: none; }
-  li { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; padding: 12px 17px; border-bottom: 1px solid var(--rw-border-subtle); }
+  li { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; padding: 12px 17px; border-bottom: 1px solid var(--rw-border-subtle); content-visibility: auto; contain-intrinsic-size: auto 64px; }
   time { color: var(--rw-accent); font: 12px "Cascadia Mono", monospace; }
   strong, small { display: block; }
   strong { color: var(--rw-text); font: 12px "Cascadia Mono", monospace; }

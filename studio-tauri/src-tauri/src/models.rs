@@ -13,6 +13,28 @@ pub struct AppSettings {
     pub locale: String,
     #[serde(default = "default_theme")]
     pub theme: String,
+    #[serde(default)]
+    pub workspace_layout: WorkspaceLayoutSettings,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceLayoutSettings {
+    pub source_width: u16,
+    pub output_width: u16,
+    pub source_collapsed: bool,
+    pub output_collapsed: bool,
+}
+
+impl Default for WorkspaceLayoutSettings {
+    fn default() -> Self {
+        Self {
+            source_width: 240,
+            output_width: 300,
+            source_collapsed: false,
+            output_collapsed: false,
+        }
+    }
 }
 
 fn default_locale() -> String {
@@ -31,6 +53,7 @@ impl Default for AppSettings {
             default_timeline: "Auto (Gap Merge + Overlap Resolve)".into(),
             locale: default_locale(),
             theme: default_theme(),
+            workspace_layout: WorkspaceLayoutSettings::default(),
         }
     }
 }

@@ -29,7 +29,8 @@ export class NativePreviewController {
   private starting = false;
   private generation = 0;
   private syncTimer: ReturnType<typeof setInterval> | undefined;
-  private syncing = false;
+  private playbackSyncing = false;
+  private broadcastSyncing = false;
   private lastBroadcastSyncAt = 0;
   private source = "";
   private rect: PreviewRect | null = null;
@@ -71,8 +72,9 @@ export class NativePreviewController {
       setMapping(mapping);
       this.stopSync();
       this.syncTimer = setInterval(() => {
-        void this.sync(callbacks);
+        this.scheduleSync(callbacks);
       }, 500);
+      this.scheduleSync(callbacks);
       callbacks.onNotice("notice.previewStarted");
       return true;
     } finally {
@@ -131,13 +133,20 @@ export class NativePreviewController {
   private stopSync() {
     if (this.syncTimer) clearInterval(this.syncTimer);
     this.syncTimer = undefined;
-    this.syncing = false;
+    this.playbackSyncing = false;
+    this.broadcastSyncing = false;
     this.lastBroadcastSyncAt = 0;
   }
 
-  private async sync(callbacks: PreviewCallbacks) {
-    if (!this.running || this.syncing) return;
-    this.syncing = true;
+  private scheduleSync(callbacks: PreviewCallbacks) {
+    void this.syncPlaybackState(callbacks);
+    void this.syncBroadcastMetadata(callbacks);
+    void this.syncCaptionOverlay(callbacks);
+  }
+
+  private async syncPlaybackState(callbacks: PreviewCallbacks) {
+    if (!this.running || this.playbackSyncing) return;
+    this.playbackSyncing = true;
     try {
       const state = await backend.getPreviewPlaybackState();
       this.consecutiveSyncFailures = 0;
@@ -146,30 +155,6 @@ export class NativePreviewController {
       callbacks.setMediaTime(state.timeSeconds == null ? null : Math.round(state.timeSeconds * 1000));
       callbacks.setDuration(state.durationSeconds == null ? null : Math.round(state.durationSeconds * 1000));
       if (state.paused != null) callbacks.setPaused(state.paused);
-
-      const now = Date.now();
-      if (now - this.lastBroadcastSyncAt >= 5_000) {
-        this.lastBroadcastSyncAt = now;
-        try {
-          callbacks.setBroadcastMetadata(
-            await backend.getPreviewBroadcastMetadata(callbacks.selectedServiceId()),
-          );
-        } catch (reason) {
-          // SI tables can be absent from an individual bounded window. Keep
-          // the last verified metadata while playback proceeds to the next one.
-          callbacks.onError(reason);
-        }
-      }
-      if (!this.running || callbacks.renderBusy()) return;
-      const archivePath = callbacks.archivePath();
-      if (!archivePath) return;
-      callbacks.setRenderBusy(true);
-      try {
-        const result = await backend.syncPreviewOverlay(archivePath);
-        if (result.projectTimeMs != null) callbacks.setProjectTime(result.projectTimeMs);
-      } finally {
-        callbacks.setRenderBusy(false);
-      }
     } catch (reason) {
       this.consecutiveSyncFailures += 1;
       if (this.consecutiveSyncFailures >= 3) {
@@ -178,7 +163,40 @@ export class NativePreviewController {
         callbacks.onError(reason);
       }
     } finally {
-      this.syncing = false;
+      this.playbackSyncing = false;
+    }
+  }
+
+  private async syncBroadcastMetadata(callbacks: PreviewCallbacks) {
+    const now = Date.now();
+    if (!this.running || this.broadcastSyncing || now - this.lastBroadcastSyncAt < 5_000) return;
+    this.lastBroadcastSyncAt = now;
+    this.broadcastSyncing = true;
+    try {
+      callbacks.setBroadcastMetadata(
+        await backend.getPreviewBroadcastMetadata(callbacks.selectedServiceId()),
+      );
+    } catch (reason) {
+      // SI tables can be absent from an individual bounded window. Keep the
+      // last verified metadata while playback proceeds to the next one.
+      callbacks.onError(reason);
+    } finally {
+      this.broadcastSyncing = false;
+    }
+  }
+
+  private async syncCaptionOverlay(callbacks: PreviewCallbacks) {
+    if (!this.running || callbacks.renderBusy()) return;
+    const archivePath = callbacks.archivePath();
+    if (!archivePath) return;
+    callbacks.setRenderBusy(true);
+    try {
+      const result = await backend.syncPreviewOverlay(archivePath);
+      if (result.projectTimeMs != null) callbacks.setProjectTime(result.projectTimeMs);
+    } catch (reason) {
+      callbacks.onError(reason);
+    } finally {
+      callbacks.setRenderBusy(false);
     }
   }
 

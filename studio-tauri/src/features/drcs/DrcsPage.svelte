@@ -1,5 +1,5 @@
 <script lang="ts">
-  import DrcsDictionary from "../../DrcsDictionary.svelte";
+  import DrcsDictionary from "./DrcsDictionary.svelte";
   import type { DrcsGlyph, DrcsMapping } from "../../backend";
   import { t } from "../../i18n";
 
@@ -18,3 +18,9 @@
 <section class="drcs-page">
   <DrcsDictionary {glyphs} {message} refresh={onRefresh} {getMapping} saveMapping={onSaveMapping} />
 </section>
+
+<style>
+  .drcs-page{min-width:0;min-height:0;overflow:hidden}
+  :global(main[data-page="drcs"] .application){display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+  @media(max-width:720px){:global(main[data-page="drcs"] .application){overflow:auto}.drcs-page{overflow:visible}}
+</style>

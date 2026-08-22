@@ -1,5 +1,5 @@
 <script lang="ts">
-  import BatchProcessing from "../../BatchProcessing.svelte";
+  import BatchQueue from "./BatchQueue.svelte";
   import { t } from "../../i18n";
   import type { ExportFormat, ExportPreservation } from "../../backend";
   import type { BatchItem } from "./controller";
@@ -15,7 +15,7 @@
   export let onOpenItem: (item: BatchItem) => void = () => {};
   export let outputDirectory = "";
   export let onChooseOutputDirectory: () => void = () => {};
-  export let formats: { name: ExportFormat; description: string }[] = [];
+  export let formats: { name: ExportFormat; description: string; icon?: any; color?: string }[] = [];
   export let selectedFormats = new Set<ExportFormat>(["ASS"]);
   export let preservation: ExportPreservation;
   export let onToggleFormat: (format: ExportFormat) => void = () => {};
@@ -26,7 +26,7 @@
   <div><h1>{t("batch.title")}</h1><p>{t("batch.description")}</p></div>
 </header>
 <section class="batch-page">
-  <BatchProcessing
+  <BatchQueue
     {items}
     {running}
     {paused}
@@ -45,3 +45,9 @@
     {onTogglePreservation}
   />
 </section>
+
+<style>
+  .batch-page{min-width:0;min-height:0;overflow:hidden}
+  :global(main[data-page="batch"] .application){display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+  @media(max-width:760px){:global(main[data-page="batch"] .application){overflow:auto}.batch-page{overflow:visible}}
+</style>
