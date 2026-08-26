@@ -99,8 +99,15 @@
 </script>
 
 <section class="settings-shell">
-  <nav class="settings-nav" aria-label={t('nav.settings')}><button class:selected={panel === 'appearance'} onclick={() => panel = 'appearance'}><Palette size={18} /> {t('settings.appearance')}</button><button class:selected={panel === 'typography'} onclick={() => panel = 'typography'}><Type size={18} /> {t('settings.typography')}</button><button class:selected={panel === 'output'} onclick={() => panel = 'output'}><FileText size={18} /> {t('settings.output')}</button><button class:selected={panel === 'player'} onclick={() => panel = 'player'}><MonitorCog size={18} /> {t('settings.player')}</button></nav>
+  <nav class="settings-nav" aria-label={t('nav.settings')}>
+    <button type="button" aria-current={panel === 'appearance' ? 'page' : undefined} class:selected={panel === 'appearance'} onclick={() => panel = 'appearance'}><Palette size={18} /> {t('settings.appearance')}</button>
+    <button type="button" aria-current={panel === 'typography' ? 'page' : undefined} class:selected={panel === 'typography'} onclick={() => panel = 'typography'}><Type size={18} /> {t('settings.typography')}</button>
+    <button type="button" aria-current={panel === 'output' ? 'page' : undefined} class:selected={panel === 'output'} onclick={() => panel = 'output'}><FileText size={18} /> {t('settings.output')}</button>
+    <button type="button" aria-current={panel === 'player' ? 'page' : undefined} class:selected={panel === 'player'} onclick={() => panel = 'player'}><MonitorCog size={18} /> {t('settings.player')}</button>
+  </nav>
   <section class="settings-content">
+    {#key panel}
+    <div class="settings-panel">
     {#if panel === 'appearance'}
       <header><h2>{t('settings.appearance')}</h2><p>{t('settings.appearanceDescription')}</p></header>
       <article><h3>{t('settings.language')}</h3><p>{t('settings.languageDescription')}</p><div class="field-label"><span>{t('settings.language')}</span><div class="language-row"><PopupButton label={t('settings.language')} value={preferences.locale} options={languageOptions} disabled={languageRefreshBusy} onOpen={refreshLanguagePacks} onChange={(value) => void selectLanguage(value)} /><button class="icon-button liquid-control" data-tooltip={t('settings.openLanguagePackDirectory')} aria-label={t('settings.openLanguagePackDirectory')} onclick={openLanguagePackDirectory}><FolderOpen size={18} /></button></div></div><p class="language-folder-hint">{t('settings.languagePackFolderDescription')}</p>{#if languageError}<p class="settings-error">{languageError}</p>{/if}</article>
@@ -125,6 +132,8 @@
       </article>
       <article><h3>{t('settings.previewControls')}</h3><p>{t('settings.previewControlsDescription')}</p></article>
     {/if}
+    </div>
+    {/key}
     <footer><button class="reset" onclick={reset}><RotateCcw size={17} /> {t('settings.reset')}</button><button class="save" onclick={save}>{#if saved}<Check size={17} /> {t('settings.saved')}{:else}<Save size={17} /> {t('settings.save')}{/if}</button></footer>
   </section>
 </section>
@@ -132,10 +141,11 @@
 <style>
   .settings-shell{display:grid;grid-template-columns:184px minmax(0,720px);gap:28px;width:min(100%,932px);margin:20px auto 12px;color:var(--rw-text)}
   .settings-nav{position:sticky;top:0;display:grid;align-content:start;gap:2px;height:max-content;padding:6px}
-  .settings-nav button{display:flex;align-items:center;gap:9px;height:34px;padding:0 9px;border:0;border-radius:7px;color:var(--rw-text-secondary);background:transparent;font-size:12px;text-align:left}
+  .settings-nav button{display:flex;align-items:center;gap:9px;height:34px;padding:0 9px;border:0;border-radius:7px;color:var(--rw-text-secondary);background:transparent;font-size:12px;text-align:left;transition:color var(--rw-motion-responsive) var(--rw-ease-out),background-color var(--rw-motion-responsive) var(--rw-ease-out),box-shadow var(--rw-motion-responsive) var(--rw-ease-out)}
   .settings-nav button.selected{color:var(--rw-text);background:color-mix(in srgb,var(--rw-text) 10%,transparent);box-shadow:inset 0 .5px rgba(255,255,255,.48)}
   .settings-nav button :global(svg){width:16px;height:16px;color:var(--rw-accent);stroke-width:1.8}
   .settings-content{min-width:0}
+  .settings-panel{animation:settings-panel-reveal var(--rw-motion-fluid) var(--rw-ease-fluid) both}
   .settings-content header{padding:2px 0 16px;border-bottom:1px solid var(--rw-border-subtle)}
   .settings-content h2{margin:0;font-size:20px;line-height:25px;font-weight:680}
   .settings-content header p,.settings-content article>p{color:var(--rw-text-secondary);font-size:12px;line-height:17px}
@@ -151,6 +161,8 @@
   .runtime-status{display:grid;gap:7px;margin:12px 0 0}.runtime-status div{display:grid;grid-template-columns:128px minmax(0,1fr);gap:10px}.runtime-status dt{color:var(--rw-muted);font-size:10px}.runtime-status dd{margin:0;color:var(--rw-warning);font-size:10px;line-height:14px;word-break:break-word}.runtime-status dd.available{color:var(--rw-success)}
   footer{display:flex;justify-content:flex-end;gap:8px;padding:17px 0}.reset,.save{display:flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:7px;font-size:11px}.reset{color:var(--rw-text);border:.5px solid var(--rw-glass-border);background:transparent;box-shadow:var(--rw-control-shadow)}.save{color:#fff;background:var(--rw-accent)}
   .theme-control{margin-top:6px}.theme-control :global(.mac-segmented){min-width:270px}
+  @keyframes settings-panel-reveal{from{opacity:0;transform:translate3d(0,5px,0)}to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){.settings-panel{animation:none}}
   @media(max-width:860px){.settings-shell{grid-template-columns:1fr;gap:14px;margin-top:0}.settings-nav{position:static;grid-template-columns:repeat(4,minmax(0,1fr))}.settings-nav button{justify-content:center}.settings-nav button :global(svg){display:none}.runtime-status div{grid-template-columns:1fr}}
   @media(max-width:620px){.settings-nav{grid-template-columns:repeat(2,minmax(0,1fr))}.caption-sample{align-items:flex-start;flex-direction:column}.theme-control :global(.mac-segmented){width:100%;min-width:0}}
 </style>

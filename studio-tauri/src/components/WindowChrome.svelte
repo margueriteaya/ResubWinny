@@ -54,8 +54,11 @@
       </button>
     {/each}
   </div>
-  <button class="titlebar-icon liquid-control sidebar-toggle" aria-label={sidebarCollapsed ? t("app.showSidebar") : t("app.hideSidebar")} data-tooltip={sidebarCollapsed ? t("app.showSidebar") : t("app.hideSidebar")} onclick={onToggleSidebar}>
-    {#if sidebarCollapsed}<PanelLeftOpen size={16} />{:else}<PanelLeftClose size={16} />{/if}
+  <button class="titlebar-icon liquid-control sidebar-toggle" class:collapsed={sidebarCollapsed} aria-label={sidebarCollapsed ? t("app.showSidebar") : t("app.hideSidebar")} aria-controls="app-sidebar" aria-expanded={!sidebarCollapsed} data-tooltip={sidebarCollapsed ? t("app.showSidebar") : t("app.hideSidebar")} onclick={onToggleSidebar}>
+    <span class="sidebar-toggle-icons" aria-hidden="true">
+      <span class="sidebar-toggle-expanded"><PanelLeftClose size={16} /></span>
+      <span class="sidebar-toggle-collapsed"><PanelLeftOpen size={16} /></span>
+    </span>
   </button>
   <div class="title-drag-region" role="presentation" onmousedown={onBeginDrag}></div>
   <div class="titlebar-tools">

@@ -67,7 +67,9 @@
   let BatchPageComponent: any = null;
   let DrcsPageComponent: any = null;
   let SettingsPageComponent: any = null;
-  let sidebarCollapsed = false;
+  const sidebarCompactQuery = "(max-width: 1250px)";
+  let sidebarCollapsed = typeof window !== "undefined" && window.matchMedia(sidebarCompactQuery).matches;
+  let sidebarAutoCollapsed = sidebarCollapsed;
   let compactTaskViewport = false;
   let compactSourceOpen = false;
   let compactOutputOpen = false;
@@ -221,12 +223,40 @@
     updateWorkspaceLayout({ ...appSettings.workspaceLayout, outputCollapsed: !appSettings.workspaceLayout.outputCollapsed });
   }
 
+  function setSidebarCollapsed(collapsed: boolean, automatic = false) {
+    if (sidebarCollapsed === collapsed) {
+      sidebarAutoCollapsed = automatic && collapsed;
+      return;
+    }
+    sidebarCollapsed = collapsed;
+    sidebarAutoCollapsed = automatic && collapsed;
+    void tick().then(resizePreview);
+  }
+
+  function toggleSidebar() {
+    setSidebarCollapsed(!sidebarCollapsed);
+  }
+
   onMount(() => {
     const query = window.matchMedia("(max-width: 980px)");
     const update = () => {
       compactTaskViewport = query.matches;
       compactSourceOpen = false;
       compactOutputOpen = false;
+    };
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  });
+
+  onMount(() => {
+    const query = window.matchMedia(sidebarCompactQuery);
+    const update = () => {
+      if (query.matches && !sidebarCollapsed) {
+        setSidebarCollapsed(true, true);
+      } else if (!query.matches && sidebarAutoCollapsed) {
+        setSidebarCollapsed(false);
+      }
     };
     update();
     query.addEventListener("change", update);
@@ -993,7 +1023,7 @@
 
 <svelte:head><meta name="color-scheme" content="light dark" /></svelte:head>
 
-<main class:dark-workspace={page !== "home"} class:sidebar-collapsed={sidebarCollapsed} data-page={page} data-playing={playerRunning && !playerPaused}>
+<main class:dark-workspace={page !== "home"} class:sidebar-collapsed={sidebarCollapsed} data-page={page} data-preview-active={playerRunning}>
   <div class="shell-glass" aria-hidden="true"></div>
   {#key `shell:${$localeRevision}`}
     <WindowChrome
@@ -1005,12 +1035,12 @@
       onWindowAction={(action) => void windowAction(action)}
       onBeginDrag={() => void beginDrag()}
       onBeginResize={(direction) => void beginResize(direction as ResizeDirection)}
-      onToggleSidebar={() => sidebarCollapsed = !sidebarCollapsed}
+      onToggleSidebar={toggleSidebar}
       onToggleSourceInspector={toggleSourceInspector}
       onToggleOutputInspector={toggleOutputInspector}
       onChooseSource={() => void chooseSource()}
     />
-    <AppSidebar {page} hasTask={Boolean(inspection)} taskName={inspection?.name ?? ""} busy={isInspecting || isExporting || batchRunning} onNavigate={selectView} />
+    <AppSidebar {page} collapsed={sidebarCollapsed} hasTask={Boolean(inspection)} taskName={inspection?.name ?? ""} busy={isInspecting || isExporting || batchRunning} onNavigate={selectView} />
   {/key}
 
   <section class="application">

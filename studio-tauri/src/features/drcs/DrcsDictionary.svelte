@@ -55,7 +55,7 @@ import { FileType2, Filter, Grid3X3, Image, Maximize2, Minus, Plus, RotateCcw, S
           {#each visible as glyph (glyph.id)}
             {@const saved = getMapping(glyph.id)}
             {@const currentAction = saved?.action === 'character' ? 'character' : 'image'}
-            <button class:selected={selected?.id === glyph.id} class="glyph-row" onclick={() => selectGlyph(glyph)}>
+            <button class:selected={selected?.id === glyph.id} class="glyph-row" aria-pressed={selected?.id === glyph.id} onclick={() => selectGlyph(glyph)}>
               <span class="mini-glyph"><img src={glyph.image} alt={`${t('drcs.glyph')} ${glyph.id}`} /></span>
               <span class="mapping"><b>{saved?.text || glyph.alternativeText || t('drcs.unmapped')}</b><small>{glyph.id} · {glyph.width}×{glyph.height}</small></span>
               <span class:needs-review={currentAction === 'image' && !saved?.text} class="mapping-status"><i></i>{currentAction === 'image' && !saved?.text ? t('drcs.review') : t('drcs.mapped')}<small>{currentAction === 'character' ? t('drcs.character') : t('drcs.image')}</small></span>
