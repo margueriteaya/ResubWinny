@@ -4,15 +4,15 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: resubwinny-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    name: Core and desktop (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+  static-quality:
+    name: Static quality gate
+    runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
       - name: Verify repository hygiene
@@ -24,41 +24,52 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: Install Linux desktop dependencies
-        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: studio-tauri/package-lock.json
-      - name: Format
-        run: cargo fmt --check
-      - name: Format desktop service
-        run: cargo fmt --manifest-path studio-tauri/src-tauri/Cargo.toml --check
-      - name: Test
-        run: cargo test --workspace
-      - name: Lint worker
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Install pinned Windows libmpv runtime
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/setup-libmpv.ps1
-      - name: Verify pinned third-party sources and runtimes
+      - name: Install frontend dependencies
+        run: npm ci --prefix studio-tauri
+      - name: Format Rust sources
         shell: pwsh
         run: |
-          $arguments = if ($IsWindows) { @('-RequireRuntime') } else { @() }
-          & ./scripts/check-upstreams.ps1 @arguments
-      - name: Check desktop service
-        run: cargo check --manifest-path studio-tauri/src-tauri/Cargo.toml
-      - name: Verify dependency license inventory
-        shell: pwsh
-        run: ./scripts/generate-license-report.ps1 -Check
+          cargo fmt --check
+          cargo fmt --manifest-path studio-tauri/src-tauri/Cargo.toml --check
+      - name: Lint Worker
+        run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Lint desktop service
         run: cargo clippy --manifest-path studio-tauri/src-tauri/Cargo.toml --all-targets -- -D warnings
-      - name: Install desktop frontend dependencies
-        run: npm ci --prefix studio-tauri
-      - name: Build desktop frontend
+      - name: Build and check desktop frontend
         run: npm run build --prefix studio-tauri
+      - name: Verify pinned sources and generated licenses
+        shell: pwsh
+        run: |
+          ./scripts/check-upstreams.ps1
+          ./scripts/generate-license-report.ps1 -Check
+
+  platform-tests:
+    name: Rust tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Test Worker
+        run: cargo test --workspace
+      - name: Test desktop service
+        run: cargo test --manifest-path studio-tauri/src-tauri/Cargo.toml
 
   fuzz-build:
     name: Fuzz targets (Linux nightly)
@@ -68,16 +79,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - uses: taiki-e/install-action@cargo-fuzz
-      - name: Build transport probe fuzz target
-        run: cargo fuzz build probe_input
-      - name: Build TTML fuzz target
-        run: cargo fuzz build decode_ttml
-      - name: Build TS PSI/PES metadata fuzz target
-        run: cargo fuzz build parse_ts_metadata
-      - name: Build B24 PES-header fuzz target
-        run: cargo fuzz build parse_pes_b24
-      - name: Build MMTP fuzz target
-        run: cargo fuzz build parse_mmtp
+      - name: Build every declared fuzz target
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t targets < <(
+            cargo metadata --manifest-path fuzz/Cargo.toml --no-deps --format-version 1 |
+              python3 -c 'import json,sys; data=json.load(sys.stdin); print("\n".join(t["name"] for t in data["packages"][0]["targets"] if "bin" in t["kind"]))'
+          )
+          test "${#targets[@]}" -gt 0
+          for target in "${targets[@]}"; do
+            echo "Building fuzz target: $target"
+            cargo fuzz build "$target"
+          done
 
   dependency-audit:
     name: Dependency vulnerability audit
@@ -89,12 +103,12 @@ jobs:
         with:
           toolchain: 1.97.1
       - uses: taiki-e/install-action@cargo-audit
-      - name: Audit Worker dependencies
-        run: cargo audit --file Cargo.lock
-      - name: Audit desktop dependencies
-        run: cargo audit --file studio-tauri/src-tauri/Cargo.lock
-      - name: Audit fuzz dependencies
-        run: cargo audit --file fuzz/Cargo.lock
+      - name: Audit Rust dependencies
+        shell: pwsh
+        run: |
+          cargo audit --file Cargo.lock
+          cargo audit --file studio-tauri/src-tauri/Cargo.lock
+          cargo audit --file fuzz/Cargo.lock
       - uses: actions/setup-node@v4
         with:
           node-version: 22

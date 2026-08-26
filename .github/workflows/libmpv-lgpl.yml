@@ -15,15 +15,43 @@ jobs:
       - name: Checkout ResubWinny
         uses: actions/checkout@v4
 
+      - name: Read the canonical dependency pins
+        id: pins
+        shell: pwsh
+        run: |
+          $dependency = (Get-Content -Raw third_party/versions.json | ConvertFrom-Json).dependencies.libmpvWindowsX86_64
+          "build_tag=$($dependency.buildTag)" >> $env:GITHUB_OUTPUT
+          "build_recipe_commit=$($dependency.buildRecipeCommit)" >> $env:GITHUB_OUTPUT
+          "toolchain_commit=$($dependency.toolchainCommit)" >> $env:GITHUB_OUTPUT
+          "mpv_commit=$($dependency.mpvCommit)" >> $env:GITHUB_OUTPUT
+          "ffmpeg_commit=$($dependency.ffmpegCommit)" >> $env:GITHUB_OUTPUT
+
+      - name: Install native Ubuntu build prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential bison flex gettext git mercurial subversion \
+            ninja-build gyp cmake yasm nasm automake pkg-config libtool \
+            libtool-bin gcc-multilib g++-multilib clang lld libc++-dev \
+            libc++abi-dev libgmp-dev libmpfr-dev libmpc-dev libgcrypt20-dev \
+            gperf ragel texinfo autopoint re2c asciidoc python3-roman \
+            python3-mako python3-jsonschema python3-rst2pdf python3-cairo \
+            docbook2x unzip p7zip-full curl wget libmimalloc-dev ccache glslc
+
       - name: Check out pinned build sources
         shell: bash
+        env:
+          BUILD_RECIPE_COMMIT: ${{ steps.pins.outputs.build_recipe_commit }}
+          TOOLCHAIN_COMMIT: ${{ steps.pins.outputs.toolchain_commit }}
         run: |
           set -euo pipefail
           mkdir -p build/libmpv
           git clone https://github.com/zhongfly/mpv-winbuild.git build/libmpv/recipe
-          git -C build/libmpv/recipe checkout --detach b4b1088c30e8821e012fd20052de4c2d3a8eaad4
+          git -C build/libmpv/recipe checkout --detach "$BUILD_RECIPE_COMMIT"
           git clone https://github.com/shinchiro/mpv-winbuild-cmake.git build/libmpv/toolchain
-          git -C build/libmpv/toolchain checkout --detach 04283f7e911149809c46bc236a834cf7134ba133
+          git -C build/libmpv/toolchain checkout --detach "$TOOLCHAIN_COMMIT"
           git -C build/libmpv/toolchain config user.name "ResubWinny Build"
           git -C build/libmpv/toolchain config user.email "build@resubwinny.invalid"
 
@@ -38,12 +66,16 @@ jobs:
 
       - name: Pin mpv and FFmpeg source commits
         shell: python
+        env:
+          MPV_COMMIT: ${{ steps.pins.outputs.mpv_commit }}
+          FFMPEG_COMMIT: ${{ steps.pins.outputs.ffmpeg_commit }}
         run: |
+          import os
           from pathlib import Path
 
           pins = {
-              "mpv.cmake": "0fb136f685c21ec10943f682bec1c90220d2d90f",
-              "ffmpeg.cmake": "2f209337fc66b58bf0495265880bb37580c3f981",
+              "mpv.cmake": os.environ["MPV_COMMIT"],
+              "ffmpeg.cmake": os.environ["FFMPEG_COMMIT"],
           }
           root = Path("build/libmpv/toolchain/packages")
           for filename, commit in pins.items():
@@ -54,36 +86,22 @@ jobs:
               text = text[:line_end] + f"    GIT_TAG {commit}\n" + text[line_end:]
               path.write_text(text, encoding="utf-8", newline="\n")
 
-      - name: Build LGPL libmpv in pinned Arch container
+      - name: Build LGPL libmpv directly on the runner
         shell: bash
         run: |
           set -euo pipefail
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/work" \
-            -w /work/build/libmpv/toolchain \
-            archlinux:base-devel \
-            bash -lc '
-              set -euo pipefail
-              pacman-key --init
-              pacman-key --populate archlinux
-              pacman -Syu --noconfirm
-              pacman -S --noconfirm --needed git ninja cmake meson clang lld libc++ unzip ragel yasm nasm gperf rst2pdf python-cairo curl wget mimalloc ccache python-pip 7zip shaderc
-              python -m pip install --break-system-packages roman
-              git config --global --add safe.directory /work/build/libmpv/toolchain
-              git config --global --add safe.directory /work/build/libmpv/recipe
-              sed -i "/ccache_conf.in/d" CMakeLists.txt
-              sed -i "/ccache/d" exec.in
-              chmod +x ../recipe/build.sh
-              bash ../recipe/build.sh -t 64 -c clang -s true
-              chown -R "$(stat -c "%u:%g" /work)" /work/build/libmpv
-            '
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/build/libmpv/toolchain"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/build/libmpv/recipe"
+          sed -i "/ccache_conf.in/d" build/libmpv/toolchain/CMakeLists.txt
+          sed -i "/ccache/d" build/libmpv/toolchain/exec.in
+          chmod +x build/libmpv/recipe/build.sh
+          cd build/libmpv/toolchain
+          bash ../recipe/build.sh -t 64 -c clang -s true
 
       - name: Locate and extract binary artifact
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
           artifact="$(find build/libmpv/toolchain/release -maxdepth 1 -name 'mpv-dev-lgpl-x86_64-*.7z' -print -quit)"
           test -n "$artifact"
           mkdir -p build/libmpv/binary
@@ -94,10 +112,49 @@ jobs:
 
       - name: Verify pinned media source commits
         shell: bash
+        env:
+          MPV_COMMIT: ${{ steps.pins.outputs.mpv_commit }}
+          FFMPEG_COMMIT: ${{ steps.pins.outputs.ffmpeg_commit }}
         run: |
           set -euo pipefail
-          test "$(git -C build/libmpv/toolchain/src_packages/mpv rev-parse HEAD)" = "0fb136f685c21ec10943f682bec1c90220d2d90f"
-          test "$(git -C build/libmpv/toolchain/src_packages/ffmpeg rev-parse HEAD)" = "2f209337fc66b58bf0495265880bb37580c3f981"
+          test "$(git -C build/libmpv/toolchain/src_packages/mpv rev-parse HEAD)" = "$MPV_COMMIT"
+          test "$(git -C build/libmpv/toolchain/src_packages/ffmpeg rev-parse HEAD)" = "$FFMPEG_COMMIT"
+
+      - name: Record the native build environment
+        shell: bash
+        env:
+          BUILD_TAG: ${{ steps.pins.outputs.build_tag }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, platform, subprocess
+          from pathlib import Path
+
+          def output(*command):
+              return subprocess.check_output(command, text=True).strip()
+
+          packages = output("dpkg-query", "-W", "-f=${Package}=${Version}\\n").splitlines()
+          record = {
+              "schemaVersion": 1,
+              "buildTag": os.environ["BUILD_TAG"],
+              "githubRunner": {
+                  "imageOS": os.environ.get("ImageOS"),
+                  "imageVersion": os.environ.get("ImageVersion"),
+                  "runnerOS": os.environ.get("RUNNER_OS"),
+                  "runnerArch": os.environ.get("RUNNER_ARCH"),
+              },
+              "platform": platform.platform(),
+              "tools": {
+                  "clang": output("clang", "--version").splitlines()[0],
+                  "cmake": output("cmake", "--version").splitlines()[0],
+                  "ninja": output("ninja", "--version"),
+                  "python": platform.python_version(),
+              },
+              "debianPackages": packages,
+          }
+          path = Path("build/libmpv/BUILD-ENVIRONMENT.json")
+          path.write_text(json.dumps(record, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+          PY
 
       - name: Package complete corresponding source
         shell: pwsh
@@ -107,6 +164,7 @@ jobs:
             -PatchedToolchain build/libmpv/toolchain `
             -BuildRecipe build/libmpv/recipe `
             -BinaryDirectory build/libmpv/binary `
+            -BuildEnvironment build/libmpv/BUILD-ENVIRONMENT.json `
             -OutputDirectory build/libmpv/corresponding-source
 
       - name: Upload binary and source as one release candidate
@@ -120,3 +178,4 @@ jobs:
             build/libmpv/corresponding-source/libmpv-corresponding-source-*.tar.gz
             build/libmpv/corresponding-source/SOURCE-RECEIPT.json
             build/libmpv/corresponding-source/PATCHED-TOOLCHAIN.diff
+            build/libmpv/corresponding-source/BUILD-ENVIRONMENT.json

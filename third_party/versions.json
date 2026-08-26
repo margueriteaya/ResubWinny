@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastChecked": "2026-07-27",
+  "lastChecked": "2026-08-14",
   "dependencies": {
     "libaribcaption": {
       "mode": "vendored-source",

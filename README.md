@@ -141,14 +141,27 @@ Worker、Tauri 编译检查和前端构建会在 Windows、macOS 与 Linux CI �
 
 以下命令均在仓库根目录执行。
 
-### 1. 安装前端依赖与 libmpv
+### 1. 一条命令构建
 
 ```powershell
-npm ci --prefix studio-tauri
-./scripts/setup-libmpv.ps1
+./scripts/build.ps1
 ```
 
-`setup-libmpv.ps1` 会下载固定版本的 Windows libmpv 归档，核对归档、DLL 和导入库的 SHA-256。ResubWinny 运行时不会自行下载或更新播放组件。
+该命令会安装锁定的前端依赖，下载并核对固定版本的 Windows libmpv，构建 Worker、前端、桌面程序和安装包。重复执行时已验证的 libmpv 会直接复用。ResubWinny 运行时不会自行下载或更新播放组件。
+
+只生成可执行文件、不生成安装包：
+
+```powershell
+./scripts/build.ps1 -Target Executable
+```
+
+构建不携带 libmpv 的版本：
+
+```powershell
+./scripts/build.ps1 -Libmpv External
+```
+
+此模式不会分发 libmpv，但实时预览需要通过 `RESUBWINNY_LIBMPV` 提供兼容运行库。需要同时执行完整质量检查时附加 `-Check`。携带 libmpv 的本地产物仅供开发与私下测试；公开发布前仍须为完全相同的 DLL 提供通过校验的对应源码包和 receipt。
 
 ### 2. 运行完整质量检查
 
@@ -169,18 +182,25 @@ npm run tauri --prefix studio-tauri -- dev
 
 如需使用其他 Worker，可设置 `RESUBWINNY_WORKER` 为可执行文件的绝对路径。
 
-### 4. 构建桌面程序
+### 4. 直接调用底层构建命令
 
-只生成桌面可执行文件，不生成安装包：
+基础 Tauri 配置不强制携带 libmpv，因此下面的命令适合开发和仅使用外部运行库的构建。只生成桌面可执行文件：
 
 ```powershell
 npm run tauri --prefix studio-tauri -- build --no-bundle
 ```
 
-生成完整 Tauri bundle：
+生成不携带 libmpv 的 Tauri bundle：
 
 ```powershell
 npm run tauri --prefix studio-tauri -- build
+```
+
+需要携带已安装并经过哈希验证的 Windows libmpv 时，使用统一构建脚本，或显式添加配置：
+
+```powershell
+./scripts/setup-libmpv.ps1
+npm run tauri --prefix studio-tauri -- build --config src-tauri/tauri.windows-libmpv.conf.json
 ```
 
 产物统一位于：

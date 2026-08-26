@@ -38,8 +38,7 @@
       "../../third_party/libmpv/LICENSE.LGPL": "licenses/libmpv-LGPL-2.1.txt",
       "../../third_party/libmpv/COPYRIGHT.mpv": "licenses/libmpv-COPYRIGHT.txt",
       "../../third_party/rounded-mplus-1m-arib/rounded-mplus-1m-arib.ttf": "fonts/rounded-mplus-1m-arib.ttf",
-      "../../third_party/rounded-mplus-1m-arib/LICENSE.txt": "fonts/LICENSE.rounded-mplus-1m-arib.txt",
-      "../../third_party/libmpv/windows-x86_64/libmpv-2.dll": "libmpv-2.dll"
+      "../../third_party/rounded-mplus-1m-arib/LICENSE.txt": "fonts/LICENSE.rounded-mplus-1m-arib.txt"
     },
     "windows": { "wix": { "language": "en-US" } }
   }

@@ -8,6 +8,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$BinaryDirectory,
     [Parameter(Mandatory = $true)]
+    [string]$BuildEnvironment,
+    [Parameter(Mandatory = $true)]
     [string]$OutputDirectory
 )
 
@@ -19,6 +21,13 @@ $pinned = $versions.dependencies.libmpvWindowsX86_64
 function Resolve-Directory([string]$Path, [string]$Label) {
     if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
         throw "$Label directory does not exist: $Path"
+    }
+    return (Resolve-Path -LiteralPath $Path).Path
+}
+
+function Resolve-File([string]$Path, [string]$Label) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "$Label file does not exist: $Path"
     }
     return (Resolve-Path -LiteralPath $Path).Path
 }
@@ -35,6 +44,7 @@ $sourceCachePath = Resolve-Directory $SourceCache 'Source cache'
 $toolchainPath = Resolve-Directory $PatchedToolchain 'Patched toolchain'
 $recipePath = Resolve-Directory $BuildRecipe 'Build recipe'
 $binaryPath = Resolve-Directory $BinaryDirectory 'Binary'
+$buildEnvironmentPath = Resolve-File $BuildEnvironment 'Build environment'
 
 $recipeHead = Invoke-Git $recipePath @('rev-parse', 'HEAD')
 if ($recipeHead -cne $pinned.buildRecipeCommit) {
@@ -107,6 +117,8 @@ $archiveName = "libmpv-corresponding-source-$($pinned.buildTag).tar.gz"
 $archivePath = Join-Path $outputPath $archiveName
 $receiptPath = Join-Path $outputPath 'SOURCE-RECEIPT.json'
 $toolchainDiffPath = Join-Path $outputPath 'PATCHED-TOOLCHAIN.diff'
+$buildEnvironmentOutputPath = Join-Path $outputPath 'BUILD-ENVIRONMENT.json'
+[IO.File]::Copy($buildEnvironmentPath, $buildEnvironmentOutputPath, $true)
 
 $dllPath = Join-Path $binaryPath 'libmpv-2.dll'
 $importLibraryPath = Join-Path $binaryPath 'libmpv.dll.a'
@@ -147,6 +159,10 @@ $receipt = [ordered]@{
     }
     packageCount = $packages.Count
     packages = $packages
+    buildEnvironment = [ordered]@{
+        file = 'BUILD-ENVIRONMENT.json'
+        sha256 = (Get-FileHash -LiteralPath $buildEnvironmentOutputPath -Algorithm SHA256).Hash
+    }
 }
 [IO.File]::WriteAllText($receiptPath, ($receipt | ConvertTo-Json -Depth 6), [Text.UTF8Encoding]::new($false))
 
@@ -169,6 +185,7 @@ $recipeName = Split-Path -Leaf $recipePath
     "--exclude=$toolchainName/release" `
     -C $outputPath (Split-Path -Leaf $receiptPath) `
     -C $outputPath (Split-Path -Leaf $toolchainDiffPath) `
+    -C $outputPath (Split-Path -Leaf $buildEnvironmentOutputPath) `
     -C $sourceParent $sourceName `
     -C $toolchainParent $toolchainName `
     -C $recipeParent $recipeName

@@ -97,18 +97,12 @@ Assert-Equal 'Rounded M+ 1m for ARIB SHA-256' $fontHash $dependencies.roundedMpl
 
 $libmpvWorkflowPath = Join-Path $repositoryRoot '.github\workflows\libmpv-lgpl.yml'
 $libmpvWorkflow = Get-Content -Raw -LiteralPath $libmpvWorkflowPath
-$workflowPins = @(
-    $dependencies.libmpvWindowsX86_64.buildRecipeCommit,
-    $dependencies.libmpvWindowsX86_64.toolchainCommit,
-    $dependencies.libmpvWindowsX86_64.mpvCommit,
-    $dependencies.libmpvWindowsX86_64.ffmpegCommit
-)
-foreach ($pin in $workflowPins) {
-    if (-not $libmpvWorkflow.Contains($pin, [StringComparison]::Ordinal)) {
-        throw "Pinned libmpv build identity is missing from the build workflow: $pin"
+foreach ($requiredReference in @('third_party/versions.json', 'buildRecipeCommit', 'toolchainCommit', 'mpvCommit', 'ffmpegCommit')) {
+    if (-not $libmpvWorkflow.Contains($requiredReference, [StringComparison]::Ordinal)) {
+        throw "libmpv workflow does not read the canonical dependency field: $requiredReference"
     }
 }
-Write-Host '[ok] libmpv workflow pins match the dependency manifest'
+Write-Host '[ok] libmpv workflow reads its pins from the dependency manifest'
 
 if ($Online) {
     $libaribcaptionHead = Get-RemoteHead $dependencies.libaribcaption.upstream

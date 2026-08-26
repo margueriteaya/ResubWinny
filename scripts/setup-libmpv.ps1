@@ -62,4 +62,5 @@ if (-not (Test-ExpectedFile $stagedDll.FullName $dependency.dllSha256) -or
 New-Item -ItemType Directory -Force -Path $destination | Out-Null
 Copy-Item -LiteralPath $stagedDll.FullName -Destination $dll -Force
 Copy-Item -LiteralPath $stagedImportLibrary.FullName -Destination $importLibrary -Force
+Remove-Item -LiteralPath $extractDirectory -Recurse -Force
 Write-Output "Installed pinned Windows libmpv runtime in $destination"

@@ -1,6 +1,7 @@
 param(
     [switch]$SkipFrontend,
-    [switch]$SkipFuzz
+    [switch]$SkipFuzz,
+    [switch]$RequireLibmpvRuntime
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,7 +39,10 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Fuzz target check failed.' }
     }
 
-    if ($IsWindows) {
+    if ($RequireLibmpvRuntime) {
+        if (-not $IsWindows) {
+            throw '-RequireLibmpvRuntime is supported only on Windows.'
+        }
         ./scripts/check-upstreams.ps1 -RequireRuntime
     } else {
         ./scripts/check-upstreams.ps1

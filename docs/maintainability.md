@@ -27,21 +27,25 @@ work required before the repository is suitable for a public source release.
 | Former hotspot | Current structure |
 | --- | --- |
 | Desktop caption renderer | `caption_renderer.rs` now coordinates composition; `layout`, `rich_text`, `style`, `glyph`, `bitmap`, and `tests` own focused concerns. |
-| Desktop preview | Platform-neutral orchestration remains in `preview.rs`; Windows host, unsupported-platform stubs, and tests are separate modules. |
+| Desktop preview | `preview.rs` owns capability discovery and the stable native command wrappers; archive paging, overlay synchronization, Windows native playback, unsupported-platform stubs, and tests are separate modules. |
+| Desktop jobs | `jobs.rs` owns the public task model; JSON/JSONL persistence and the queue supervisor are isolated in `jobs/repository.rs` and `jobs/supervisor.rs`. |
+| Worker exporters | The public exporter boundary remains in `exporters/mod.rs`; ASS, TTML, text formats, B24 orchestration, evidence, and Ruby layout live in format-focused modules. |
 | Worker TTML | B62 semantics, strict XML document decoding, and TS/PES scanning are separate `ttml`, `document`, and `scan` modules. |
 | Experimental TLV/MMTP | Base packet/MPU handling, signalling/MPT, evidence writing, and the constrained route are separate modules. |
 | Worker tests | Corpus, TS/M2TS, B24/timeline, TTML, and TLV suites own their fixtures in separate files; the full baseline is 129 tests. |
 | libmpv | Dynamic client ABI/playback and the Windows render worker are separate; render tests are isolated. |
 | Desktop timeline | Public paging/presentation stays in `timeline.rs`; the bounded live-window and append-cursor state is isolated in `timeline/cache.rs`. |
-| Svelte application | Theme/locale preferences, multi-task coordination, DRCS dictionary state, task presentation, and output-format metadata moved into feature controllers. |
+| Svelte application | Theme/locale preferences, multi-task coordination, DRCS dictionary state, task presentation, and output-format metadata moved into feature controllers. Multi-task, DRCS, and settings views now live under their owning feature directories rather than the source root. |
 
-The largest production files are now Worker `exporters/mod.rs` (about 1,689
-lines), `caption/ruby.rs` (about 1,080), `App.svelte` (about 1,043), desktop
-`jobs.rs` (about 852), desktop `preview.rs` (about 842), and Worker
-`caption/ttml.rs` (about 764). These are the next maintainability hotspots.
-Splits must follow exporter format, ruby association/layout, application
-lifecycle, job supervision, and preview orchestration boundaries rather than
-arbitrary line-count thresholds.
+The largest production files are now Worker `exporters/ass.rs` (about 1,185
+lines), `caption/ruby.rs` (about 1,080), `App.svelte` (about 1,041), Worker
+`caption/ttml.rs` (about 764), desktop `jobs/repository.rs` (about 720), and
+frontend `features/batch/BatchQueue.svelte` (about 632). The exporter, job, and
+preview entry modules are now small ownership boundaries rather than
+implementation buckets. Further splits should follow ASS event construction,
+ruby association/layout, application session lifecycle, repository concerns,
+and multi-task table/preset concerns rather than arbitrary line-count
+thresholds.
 
 Several renderer hot-path functions still pass explicit geometry to avoid
 allocating transient context objects. The compatibility `start_export`,
@@ -66,6 +70,16 @@ with a coordinated frontend contract migration.
 - `scripts/check.ps1` is the single local entry point for formatting, Worker
   and desktop tests/lints, the frontend build, fuzz compilation, and the
   generated dependency-license inventory.
+- `scripts/build.ps1` is the single packaging entry point. Its Windows default
+  is the bundled profile, which explicitly installs and verifies the pinned
+  runtime; `-Libmpv External` produces a package without libmpv and expects a
+  compatible runtime to be supplied by the user. The base Tauri configuration
+  itself does not silently bundle a runtime.
+- The ordinary CI path has four focused jobs: one shared static-quality gate,
+  a three-platform Rust test matrix, fuzz-target compilation, and dependency
+  auditing. The long LGPL libmpv build is manual and isolated from pull-request
+  CI. It runs directly on the GitHub Ubuntu runner and records its complete
+  tool/package environment beside the corresponding-source archive.
 - `scripts/verify-repository.ps1` rejects generated/downloaded artifacts,
   nested repositories, oversized tracked files, and release-version drift.
   `scripts/package-source.ps1` creates a hash-addressed source archive from a
@@ -106,8 +120,9 @@ with a coordinated frontend contract migration.
 1. Keep architecture, backend contract, README, and locale capability wording
    synchronized with the implemented lossy SRT/WebVTT and Windows-only native
    preview boundary.
-2. Split the remaining production hotspots by behaviour and add focused tests
-   around every moved boundary.
+2. Continue decomposing `App.svelte`, ASS construction, Ruby association, and
+   the multi-task table only when the extracted boundary owns state or behavior;
+   add focused tests around every moved boundary.
 3. Run packaged Windows end-to-end acceptance for source selection, native
    preview, dynamic broadcast metadata, multi-task control, language packs,
    output planning, and artifact publication. Source selection, paused native

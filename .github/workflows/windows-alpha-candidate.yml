@@ -27,31 +27,15 @@ jobs:
       - name: Install pinned Windows libmpv runtime
         shell: pwsh
         run: ./scripts/setup-libmpv.ps1
-      - name: Verify bundled libmpv hash
+      - name: Run package quality gate
         shell: pwsh
-        run: |
-          $pins = Get-Content -Raw third_party/versions.json | ConvertFrom-Json
-          $expected = $pins.dependencies.libmpvWindowsX86_64.dllSha256
-          $actual = (Get-FileHash third_party/libmpv/windows-x86_64/libmpv-2.dll -Algorithm SHA256).Hash
-          if ($actual -ne $expected) { throw "Bundled libmpv hash does not match third_party/versions.json" }
-          ./scripts/check-upstreams.ps1 -RequireRuntime
-      - name: Verify source, contracts, and licenses
-        shell: pwsh
-        run: |
-          ./scripts/verify-repository.ps1
-          cargo fmt --check
-          cargo test -p arib-caption-worker
-          cargo clippy -p arib-caption-worker --all-targets -- -D warnings
-          cargo build -p arib-caption-worker --release
-          cargo test --manifest-path studio-tauri/src-tauri/Cargo.toml
-          cargo clippy --manifest-path studio-tauri/src-tauri/Cargo.toml --all-targets -- -D warnings
-          npm run build --prefix studio-tauri
-          ./scripts/generate-license-report.ps1 -Check
+        run: ./scripts/check.ps1 -SkipFrontend -SkipFuzz -RequireLibmpvRuntime
       - name: Package public source candidate
         shell: pwsh
         run: ./scripts/package-source.ps1
       - name: Build installers
-        run: npm run tauri build --prefix studio-tauri
+        shell: pwsh
+        run: ./scripts/build.ps1 -SkipNpmInstall
       - name: Write artifact hashes
         shell: pwsh
         run: |

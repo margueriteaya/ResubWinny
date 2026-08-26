@@ -6,6 +6,30 @@ used moving dependency branches and did not publish the complete source cache
 as a release artifact. The current DLL is therefore approved for development
 and private testing only, not for ResubWinny's first public binary release.
 
+## Build profiles
+
+The base Tauri configuration does not bundle a libmpv binary. It can therefore
+build the application and installers without downloading or redistributing the
+library; preview then requires a compatible user-supplied runtime. The normal
+one-command build uses the explicit Windows libmpv configuration for a usable
+development/private-test package:
+
+```powershell
+./scripts/build.ps1
+```
+
+An external-runtime package is equally explicit:
+
+```powershell
+./scripts/build.ps1 -Libmpv External
+```
+
+Neither profile weakens the public-release rule. A package containing
+`libmpv-2.dll` must not be published until the matching complete corresponding
+source, source receipt, notices, and binary hashes are published with it. The
+same verified corresponding-source artifact may be reused for later
+ResubWinny builds only while the bundled DLL hash remains identical.
+
 ## Required public-release build
 
 The release build must run from the commits recorded in
@@ -17,10 +41,12 @@ downloading or compiling packages. The same build job must retain:
 3. the complete `src_packages` directory after downloads and updates;
 4. the resulting DLL and import-library hashes;
 5. the package commit/status receipt; and
-6. all build options, patches, license texts, and scripts needed to rebuild.
+6. all build options, patches, license texts, and scripts needed to rebuild; and
+7. the recorded runner, toolchain, and native package environment.
 
 Run `scripts/package-libmpv-source.ps1` against those three source directories
-and the extracted directory containing the newly built DLL/import library.
+and the extracted directory containing the newly built DLL/import library,
+passing the build-environment record produced by the same job.
 The script refuses a source cache missing core packages, verifies the pinned
 recipe and toolchain ancestry, verifies the LGPL configuration, records every
 source package, and creates a hash-addressed corresponding-source archive.
