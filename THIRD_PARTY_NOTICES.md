@@ -77,6 +77,19 @@ MIT, but the reviewed repository has no standalone license file. Semantics are
 implemented independently in Rust and accepted only with project tests and
 ARIB/reference evidence. No third-party source is vendored from this project.
 
+## shuding/liquid-glass
+
+- Upstream: <https://github.com/shuding/liquid-glass>
+- License: MIT
+- Copyright: Copyright (c) 2025 Shu Ding
+- Local license: `third_party/shuding-liquid-glass/LICENSE`
+
+The Windows frontend adapts the upstream rounded-rectangle signed-distance
+displacement-map approach. ResubWinny generates and caches maps only when a
+production control first appears or changes size; WebView2 performs live
+backdrop sampling through its SVG filter compositor. The demo shell, dragging
+code, and continuous mouse-driven map generation are not included.
+
 ## Package-managed dependencies
 
 Rust and npm dependencies are pinned by `Cargo.lock` and

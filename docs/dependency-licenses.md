@@ -4,7 +4,7 @@ This file is generated from the committed Cargo and npm lock data by
 `scripts/generate-license-report.ps1`. It records package metadata for review;
 the dependency source distributions remain the authoritative license texts.
 
-Generated inventory: 450 Cargo packages and 111 npm packages.
+Generated inventory: 450 Cargo packages and 112 npm packages.
 
 ## Cargo
 
@@ -557,6 +557,7 @@ Generated inventory: 450 Cargo packages and 111 npm packages.
 | `fsevents` | `2.3.3` | MIT |
 | `is-reference` | `3.0.3` | MIT |
 | `locate-character` | `3.0.0` | MIT |
+| `macos-traffic-lights` | `1.1.0` | MIT |
 | `magic-string` | `0.30.21` | MIT |
 | `mri` | `1.2.0` | MIT |
 | `nanoid` | `3.3.16` | MIT |

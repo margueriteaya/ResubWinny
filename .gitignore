@@ -11,6 +11,7 @@
 
 /studio-tauri/node_modules/
 /studio-tauri/.playwright-cli/
+/.playwright-cli/
 /studio-tauri/src-tauri/gen/
 /studio-tauri/output/
 /output/
