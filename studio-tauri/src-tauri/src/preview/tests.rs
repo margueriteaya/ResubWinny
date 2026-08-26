@@ -1,7 +1,9 @@
 use super::{
-    OverlayAction, decide_overlay_action, encode_scene_image, interval_bounds,
-    parse_mpv_time_response, playback_file_offset, render_at, scene_bounds,
-    seconds_to_milliseconds,
+    archive::{encode_scene_image, interval_bounds, render_at, scene_bounds},
+    overlay::{
+        OverlayAction, decide_overlay_action, playback_file_offset, seconds_to_milliseconds,
+    },
+    parse_mpv_time_response,
 };
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use serde_json::json;
@@ -159,8 +161,7 @@ fn reads_worker_jsonl_envelopes_for_active_scenes() {
         r#"{"type":"scene","value":{"pts_ms":1000,"wait_duration_ms":500,"text":"字幕"}}"#,
     )
     .expect("archive fixture");
-    let snapshot =
-        super::render_at(path.to_string_lossy().into_owned(), 1_200).expect("render snapshot");
+    let snapshot = render_at(path.to_string_lossy().into_owned(), 1_200).expect("render snapshot");
     assert_eq!(snapshot.intervals.len(), 1);
     std::fs::remove_file(path).expect("remove fixture");
 }
@@ -387,21 +388,21 @@ fn advances_preview_cursor_without_reloading_earlier_records() {
     )
     .expect("archive fixture");
     assert_eq!(
-        super::render_at(path.to_string_lossy().into_owned(), 1_100)
+        render_at(path.to_string_lossy().into_owned(), 1_100)
             .expect("first snapshot")
             .intervals
             .len(),
         1
     );
     assert_eq!(
-        super::render_at(path.to_string_lossy().into_owned(), 2_100)
+        render_at(path.to_string_lossy().into_owned(), 2_100)
             .expect("second snapshot")
             .intervals
             .len(),
         1
     );
     assert_eq!(
-        super::render_at(path.to_string_lossy().into_owned(), 1_100)
+        render_at(path.to_string_lossy().into_owned(), 1_100)
             .expect("rewound snapshot")
             .intervals
             .len(),
@@ -420,8 +421,7 @@ fn attaches_same_mpu_resource_previews_to_active_ttml_captions() {
             r#"{"type":"resource_evidence","value":{"record_key":"stpp-resource:packet:1113:mpu:7:subsample:4","format_hint":"png","format_validation":"header-validated","preview_data_uri":"data:image/png;base64,AA=="}}"#, "\n",
             r#"{"type":"caption","value":{"start_ms":1000,"end_ms":1500,"text":"字幕","style":{"background_image":"subt://4"},"source":{"mmpt_packet_id":1113,"mpu_sequence_number":7}}}"#, "\n",
         )).expect("archive fixture");
-    let snapshot =
-        super::render_at(path.to_string_lossy().into_owned(), 1_200).expect("render snapshot");
+    let snapshot = render_at(path.to_string_lossy().into_owned(), 1_200).expect("render snapshot");
     assert_eq!(snapshot.resource_previews.len(), 1);
     assert_eq!(snapshot.resource_previews[0]["usage"], "background-image");
     assert_eq!(
