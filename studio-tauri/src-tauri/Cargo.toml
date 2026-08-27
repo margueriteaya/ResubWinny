@@ -16,7 +16,7 @@ serde_json = "1"
 base64 = "0.22"
 fontdue = "0.9"
 png = "0.17"
-libloading = "0.8"
+libloading = "0.9"
 tauri = { version = "2.11.5", features = [] }
 tauri-plugin-dialog = "2.4.0"
 
