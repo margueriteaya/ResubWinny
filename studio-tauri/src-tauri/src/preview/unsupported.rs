@@ -1,7 +1,7 @@
 use super::*;
 pub fn caption_overlay(
     _: State<'_, Arc<AppState>>,
-    _: Vec<u8>,
+    _: Arc<[u8]>,
     _: i32,
     _: i32,
     _: i32,

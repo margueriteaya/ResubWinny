@@ -89,6 +89,7 @@ fn main() {
             preview::resize_preview,
             preview::stop_preview,
             preview::preview_command,
+            preview::seek_preview_project,
             timeline::get_timeline_window,
             timeline::get_timeline_window_filtered,
             timeline::get_timeline_recent_window_filtered,

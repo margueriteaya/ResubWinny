@@ -3,6 +3,7 @@
   import HomePage from "./features/home/HomePage.svelte";
   import { NativePreviewController } from "./features/tasks/native-preview-controller";
   import { reduceTaskEvent } from "./features/tasks/event-state";
+  import { mediaToProjectTime, projectToMediaTime } from "./features/tasks/time-mapping";
   import {
     createExportPlan,
     inspectTaskSource,
@@ -61,6 +62,16 @@
     restoreCachedTheme,
   } from "./features/settings/preferences";
 
+  function settleWithin(operation: Promise<unknown> | null, timeoutMs = 1_500) {
+    if (!operation) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const timeout = window.setTimeout(resolve, timeoutMs);
+      void operation.then(
+        () => { window.clearTimeout(timeout); resolve(); },
+        () => { window.clearTimeout(timeout); resolve(); },
+      );
+    });
+  }
 
   let page: Page = "home";
   let TaskWorkspaceComponent: any = null;
@@ -127,7 +138,7 @@
   let playerPaused = true;
   let previewAvailable: boolean | null = null;
   const nativePreviewController = new NativePreviewController();
-  let renderTimeMs = 0;
+  let projectTimeMs = 0;
   let renderBusy = false;
   let archivePath = "";
   let playbackMapping: PlaybackTimeMapping = {
@@ -137,12 +148,20 @@
     rateNumerator: 1,
     rateDenominator: 1,
   };
+  let appliedPlaybackMapping: PlaybackTimeMapping = { ...playbackMapping };
   let playbackMappingBusy = false;
   let mediaTimeMs: number | null = null;
   let previewDurationMs: number | null = null;
   let previewResizeFrame = 0;
   let previewResizeInFlight = false;
   let previewResizePending = false;
+
+  function setAppliedPlaybackMapping(mapping: PlaybackTimeMapping) {
+    appliedPlaybackMapping = { ...mapping };
+    playbackMapping = { ...mapping };
+    if (mediaTimeMs != null)
+      projectTimeMs = mediaToProjectTime(mediaTimeMs, appliedPlaybackMapping);
+  }
 
   $: if (page === "batch" && !BatchPageComponent)
     void import("./features/batch/BatchPage.svelte").then((module) => BatchPageComponent = module.default);
@@ -367,7 +386,7 @@
       warnings = 0;
       captions = 0;
       archivePath = "";
-      renderTimeMs = 0;
+      projectTimeMs = 0;
       mediaTimeMs = null;
       previewDurationMs = null;
       // Start the native player and the bounded caption index independently.
@@ -533,13 +552,16 @@
       const started = await nativePreviewController.start(
         inspection.path,
         previewRect(),
-        (mapping) => (playbackMapping = mapping),
+        setAppliedPlaybackMapping,
         {
           archivePath: () => archivePath,
           renderBusy: () => renderBusy,
           setRenderBusy: (value) => (renderBusy = value),
-          setProjectTime: (timeMs) => (renderTimeMs = timeMs),
-          setMediaTime: (timeMs) => (mediaTimeMs = timeMs),
+          setMediaTime: (timeMs) => {
+            mediaTimeMs = timeMs;
+            if (timeMs != null)
+              projectTimeMs = mediaToProjectTime(timeMs, appliedPlaybackMapping);
+          },
           setDuration: (timeMs) => (previewDurationMs = timeMs),
           setPaused: (paused) => (playerPaused = paused),
           setBroadcastMetadata: (metadata) => {
@@ -567,7 +589,11 @@
       if (!started || page !== "tasks" || taskTab !== "preview") return;
       playerRunning = true;
       playerPaused = true;
-      renderTimeMs = 0;
+      // The controller performs an authoritative first playback poll before
+      // resolving start(). Do not overwrite that sample with a synthetic zero
+      // (which made the ruler briefly jump away from the native player).
+      if (mediaTimeMs == null)
+        projectTimeMs = mediaToProjectTime(0, appliedPlaybackMapping);
     } catch (reason) {
       reportBackendFailure(reason);
     }
@@ -595,6 +621,12 @@
   }
 
   async function stopPreview() {
+    const scrubInitialization = previewScrubInitPromise;
+    const activeSeek = previewProjectSeekActivePromise;
+    cancelPreviewSeek();
+    // A pause command already sent for a scrub must settle before stop; this
+    // keeps it from reaching a newly started native session after teardown.
+    await Promise.all([settleWithin(scrubInitialization), settleWithin(activeSeek)]);
     if (!playerRunning && !nativePreviewController.isRunning()) return;
     try {
       if (desktopRuntime) await nativePreviewController.stop({ onNotice: appendNotice });
@@ -603,12 +635,17 @@
       // previous page's HWND still owns the current preview surface.
       playerRunning = false;
       playerPaused = true;
+      previewScrubWasPaused = null;
     }
   }
 
   let previewGeneration = 0;
   let previewStopPromise: Promise<void> = Promise.resolve();
   let previewResumeTimeMs: number | null = null;
+  let previewScrubWasPaused: boolean | null = null;
+  let previewScrubInitPromise: Promise<void> | null = null;
+  let previewScrubGesture = 0;
+  let previewSeekIntent = 0;
 
   function queuePreviewStop() {
     previewStopPromise = previewStopPromise
@@ -618,16 +655,119 @@
     return previewStopPromise;
   }
 
-  async function seekRunningPreview(milliseconds: number, waitForReady = false) {
+  async function seekRunningPreview(
+    milliseconds: number,
+    waitForReady = false,
+    isCurrent: () => boolean = () => true,
+  ) {
     if (!desktopRuntime || !playerRunning) return;
     if (waitForReady) {
       for (let attempt = 0; attempt < 20; attempt += 1) {
+        if (!isCurrent()) return;
         if (await backend.getPreviewDuration() != null) break;
         await new Promise((resolve) => window.setTimeout(resolve, 100));
       }
     }
-    await backend.seekPreviewAbsolute(milliseconds / 1000);
+    if (!isCurrent() || !playerRunning) return;
+    nativePreviewController.beginSeek();
     mediaTimeMs = milliseconds;
+    projectTimeMs = mediaToProjectTime(milliseconds, appliedPlaybackMapping);
+    try {
+      await backend.seekPreviewAbsolute(milliseconds / 1000);
+    } finally {
+      nativePreviewController.finishSeek(milliseconds);
+    }
+  }
+
+  async function preparePreviewScrub() {
+    if (previewScrubWasPaused === null) {
+      const gesture = ++previewScrubGesture;
+      const wasPaused = playerPaused;
+      previewScrubWasPaused = wasPaused;
+      nativePreviewController.beginScrub();
+      const initialization = (async () => {
+        await backend.clearCaptionOverlay().catch(() => {});
+        if (!wasPaused) await backend.setPreviewPaused(true);
+        if (gesture === previewScrubGesture && previewScrubWasPaused !== null)
+          playerPaused = true;
+      })();
+      previewScrubInitPromise = initialization;
+      try {
+        await initialization;
+      } catch (reason) {
+        if (gesture === previewScrubGesture) {
+          previewScrubWasPaused = null;
+          nativePreviewController.finishScrub(mediaTimeMs);
+        }
+        throw reason;
+      } finally {
+        if (previewScrubInitPromise === initialization) previewScrubInitPromise = null;
+      }
+      return;
+    }
+    if (previewScrubInitPromise) await previewScrubInitPromise;
+  }
+
+  async function seekRunningPreviewProject(
+    milliseconds: number,
+    waitForReady = false,
+    final = true,
+    intent = previewSeekIntent,
+  ) {
+    if (!desktopRuntime || !playerRunning || intent !== previewSeekIntent) return;
+    // The pointer target is published by setPreviewSeekTarget before this
+    // function is reached. Keep the operation from writing an old target
+    // after a newer pointer move has already arrived.
+    if (waitForReady && final) {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        if (intent !== previewSeekIntent) return;
+        if (await backend.getPreviewDuration() != null) break;
+        await new Promise((resolve) => window.setTimeout(resolve, 100));
+      }
+    }
+    if (previewScrubInitPromise) {
+      await previewScrubInitPromise;
+      if (intent !== previewSeekIntent) return;
+    }
+    const startingScrub = !final && previewScrubWasPaused === null;
+    if (startingScrub || (!final && previewScrubInitPromise)) {
+      await preparePreviewScrub();
+      if (intent !== previewSeekIntent) return;
+    } else if (final && previewScrubWasPaused === null) {
+      nativePreviewController.beginSeek();
+    }
+    let mappedMediaTimeMs = mediaTimeMs;
+    try {
+      mappedMediaTimeMs = await backend.seekPreviewProject(milliseconds, final);
+      if (intent === previewSeekIntent) {
+        mediaTimeMs = mappedMediaTimeMs;
+        projectTimeMs = mediaToProjectTime(mappedMediaTimeMs, appliedPlaybackMapping);
+      }
+    } finally {
+      // The broker serializes gestures, so an exact seek always completes its
+      // pause/scrub lifecycle before the next pending gesture starts. Its
+      // timestamp may be stale, but leaving mpv paused or polling guarded is
+      // never valid. stopPreview also awaits this operation before teardown.
+      if (final) {
+        const wasPaused = previewScrubWasPaused;
+        previewScrubWasPaused = null;
+        if (wasPaused !== null) {
+          try {
+            if (!wasPaused) {
+              await backend.setPreviewPaused(false);
+              if (playerRunning) playerPaused = false;
+            }
+          } finally {
+            // Playback restoration is an IPC operation and may fail during a
+            // native-player restart. Always release the controller's scrub
+            // guard so polling and caption sync cannot remain disabled.
+            nativePreviewController.finishScrub(mappedMediaTimeMs);
+          }
+        } else {
+          nativePreviewController.finishSeek(mappedMediaTimeMs);
+        }
+      }
+    }
   }
 
   function switchTaskTab(next: typeof taskTab) {
@@ -650,7 +790,11 @@
     const resumeAt = previewResumeTimeMs;
     await startPreview();
     if (resumeAt != null && resumeAt > 0 && generation === previewGeneration && playerRunning) {
-      await seekRunningPreview(resumeAt, true);
+      await seekRunningPreview(
+        resumeAt,
+        true,
+        () => generation === previewGeneration && taskTab === "preview" && page === "tasks",
+      );
       previewResumeTimeMs = null;
     }
   }
@@ -665,7 +809,77 @@
       reportBackendFailure(reason);
     }
   }
-  async function seekPreviewAbsolute(milliseconds: number) {
+  let previewProjectSeekRunning = false;
+  let previewProjectSeekActivePromise: Promise<void> | null = null;
+  let previewProjectSeekPending: {
+    milliseconds: number;
+    final: boolean;
+    intent: number;
+    resolve: () => void;
+    reject: (reason: unknown) => void;
+  } | null = null;
+
+  function cancelPreviewSeek() {
+    previewSeekIntent += 1;
+    previewScrubGesture += 1;
+    if (previewProjectSeekPending) previewProjectSeekPending.resolve();
+    previewProjectSeekPending = null;
+    previewScrubWasPaused = null;
+    if (playerRunning) nativePreviewController.cancelSeek();
+  }
+
+  // Seek requests are latest-wins. Pointer scrubbing can produce targets
+  // faster than mpv/IPC can acknowledge them; serializing every intermediate
+  // request creates a long queue and makes the playhead visibly lag behind
+  // the pointer. Keep only the newest pending target and resolve superseded
+  // callers immediately.
+  function seekPreviewProject(milliseconds: number, final = true) {
+    const intent = ++previewSeekIntent;
+    const operation = new Promise<void>((resolve, reject) => {
+      if (previewProjectSeekPending) previewProjectSeekPending.resolve();
+      previewProjectSeekPending = { milliseconds, final, intent, resolve, reject };
+    });
+    void pumpPreviewProjectSeek();
+    return operation;
+  }
+
+  async function pumpPreviewProjectSeek() {
+    if (previewProjectSeekRunning || !previewProjectSeekPending) return;
+    const next = previewProjectSeekPending;
+    previewProjectSeekPending = null;
+    previewProjectSeekRunning = true;
+    const execution = performSeekPreviewProject(next.milliseconds, next.final, next.intent);
+    previewProjectSeekActivePromise = execution;
+    try {
+      await execution;
+      next.resolve();
+    } catch (reason) {
+      next.reject(reason);
+    } finally {
+      if (previewProjectSeekActivePromise === execution) previewProjectSeekActivePromise = null;
+      previewProjectSeekRunning = false;
+      if (previewProjectSeekPending) void pumpPreviewProjectSeek();
+    }
+  }
+
+  function setPreviewSeekTarget(milliseconds: number, final = false) {
+    // Publish the target synchronously, before the native IPC round trip. The
+    // same range value is then visible in both controls immediately, while
+    // the controller revision prevents an old playback/overlay sample from
+    // snapping the playhead back during the gesture.
+    // Invalidate an in-flight native result now, rather than waiting for the
+    // next animation-frame broker dispatch. This prevents a one-frame snap
+    // back between two fast pointer samples.
+    previewSeekIntent += 1;
+    projectTimeMs = milliseconds;
+    mediaTimeMs = Math.max(0, projectToMediaTime(milliseconds, appliedPlaybackMapping));
+    if (playerRunning) {
+      if (final) nativePreviewController.beginSeek();
+      else nativePreviewController.beginScrub();
+    }
+  }
+
+  async function performSeekPreviewProject(milliseconds: number, final = true, intent = previewSeekIntent) {
     if (!desktopRuntime) return;
     let restarted = false;
     if (taskTab !== "preview") {
@@ -673,17 +887,14 @@
       taskTab = "preview";
       await tick();
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      if (generation !== previewGeneration || page !== "tasks") return;
+      if (generation !== previewGeneration || page !== "tasks" || intent !== previewSeekIntent) return;
       await previewStopPromise;
       await startPreview();
       restarted = true;
     }
-    if (!playerRunning) return;
+    if (!playerRunning || intent !== previewSeekIntent) return;
     try {
-      // `loadfile` is asynchronous in libmpv. A newly recreated preview can
-      // accept commands before its demuxer exposes a seekable duration, which
-      // returns MPV_ERROR_COMMAND even for a valid absolute seek.
-      await seekRunningPreview(milliseconds, restarted);
+      await seekRunningPreviewProject(milliseconds, restarted, final, intent);
     } catch (reason) {
       reportBackendFailure(reason);
     }
@@ -702,6 +913,9 @@
     playbackMappingBusy = true;
     try {
       await backend.updatePlaybackTimeMapping({ ...playbackMapping });
+      appliedPlaybackMapping = { ...playbackMapping };
+      if (mediaTimeMs != null)
+        projectTimeMs = mediaToProjectTime(mediaTimeMs, appliedPlaybackMapping);
       logs = [...logs, t("preview.mappingApplied")];
     } catch (reason) {
       reportBackendFailure(reason);
@@ -813,7 +1027,7 @@
     warnings = item.warnings;
     captions = 0;
     archivePath = "";
-    renderTimeMs = 0;
+    projectTimeMs = 0;
     mediaTimeMs = null;
     previewDurationMs = null;
     previewIndexing = false;
@@ -893,7 +1107,11 @@
     const resumeAt = previewResumeTimeMs;
     await startPreview();
     if (resumeAt != null && resumeAt > 0 && generation === navigationGeneration && playerRunning) {
-      await seekRunningPreview(resumeAt, true);
+      await seekRunningPreview(
+        resumeAt,
+        true,
+        () => generation === navigationGeneration && page === "tasks" && taskTab === "preview",
+      );
       previewResumeTimeMs = null;
     }
   }
@@ -913,7 +1131,7 @@
       void backend
         .getPlaybackTimeMapping()
         .then((mapping) => {
-          playbackMapping = mapping;
+          setAppliedPlaybackMapping(mapping);
         })
         .catch((reason) => {
           reportBackendFailure(reason);
@@ -1076,13 +1294,14 @@
         {diagnosticsCount}
         {bytesRead}
         {progress}
-        {mediaTimeMs}
+        {projectTimeMs}
         durationMs={previewDurationMs}
         {playerRunning}
         {playerPaused}
         {previewAvailable}
         bind:nativePreview
         bind:playbackMapping
+        {appliedPlaybackMapping}
         {playbackMappingBusy}
         formats={supportedFormats}
         {selectedFormats}
@@ -1108,7 +1327,8 @@
         onStartPreview={startPreview}
         onStopPreview={stopPreview}
         onResizePreview={resizePreview}
-        onSeekAbsolute={seekPreviewAbsolute}
+        onSeekProject={seekPreviewProject}
+        onSeekTarget={setPreviewSeekTarget}
         onSetVolume={setPreviewVolume}
         onSaveMapping={savePlaybackMapping}
         onDiagnosticsCount={(count: number) => (diagnosticsCount = count)}

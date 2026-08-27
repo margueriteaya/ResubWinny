@@ -292,6 +292,7 @@
     "timeline.zoomIn": "Zoom in",
     "timeline.zoomOut": "Zoom out",
     "timeline.fit": "Fit programme duration",
+    "timeline.followPlayhead": "Follow playhead",
     "timeline.previousWindow": "Earlier timeline window",
     "timeline.nextWindow": "Later timeline window",
     "timeline.visibleRange": "Visible timeline range",

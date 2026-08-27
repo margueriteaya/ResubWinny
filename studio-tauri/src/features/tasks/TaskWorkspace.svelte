@@ -23,13 +23,14 @@
   export let diagnosticsCount = 0;
   export let bytesRead = 0;
   export let progress = 0;
-  export let mediaTimeMs: number | null = null;
+  export let projectTimeMs = 0;
   export let durationMs: number | null = null;
   export let playerRunning = false;
   export let playerPaused = true;
   export let previewAvailable: boolean | null = null;
   export let nativePreview: HTMLDivElement | null = null;
   export let playbackMapping: PlaybackTimeMapping;
+  export let appliedPlaybackMapping: PlaybackTimeMapping;
   export let playbackMappingBusy = false;
   export let formats: Format[] = [];
   export let selectedFormats = new Set<ExportFormat>(["ASS"]);
@@ -44,7 +45,8 @@
   export let onStartPreview: () => void = () => {};
   export let onStopPreview: () => void = () => {};
   export let onResizePreview: () => void = () => {};
-  export let onSeekAbsolute: (milliseconds: number) => void = () => {};
+  export let onSeekProject: (milliseconds: number, final?: boolean) => void | Promise<void> = () => {};
+  export let onSeekTarget: (milliseconds: number, final?: boolean) => void = () => {};
   export let onSetVolume: (volume: number) => void = () => {};
   export let onSaveMapping: () => void = () => {};
   export let onDiagnosticsCount: (count: number) => void = () => {};
@@ -149,10 +151,10 @@
       <div class="pane-separator source-separator" role="separator" aria-orientation="vertical" aria-label={t("workspace.resizeSource")} aria-valuemin="220" aria-valuemax="320" aria-valuenow={sourceWidth} tabindex="0" onpointerdown={(event) => resizePane("source", event)} onkeydown={(event) => resizeFromKeyboard("source", event)}></div>
     {/if}
     <TaskPreviewPanel
-      {taskTab} {currentJobId} {archivePath} {desktopRuntime} {captions} {diagnosticsCount} {bytesRead} {progress} {isExporting} {mediaTimeMs} {durationMs} {playerRunning} {playerPaused} {previewAvailable} trackLabel={selectedTrackLabel} trackName={selectedTrackName} trackDetail={selectedTrackDetail}
-      bind:nativePreview bind:playbackMapping {playbackMappingBusy}
+      {taskTab} {currentJobId} {archivePath} {desktopRuntime} {captions} {diagnosticsCount} {bytesRead} {progress} {isExporting} {projectTimeMs} {durationMs} {playerRunning} {playerPaused} {previewAvailable} trackLabel={selectedTrackLabel} trackName={selectedTrackName} trackDetail={selectedTrackDetail}
+      bind:nativePreview bind:playbackMapping {appliedPlaybackMapping} {playbackMappingBusy}
       onSelectTab={onSelectTab} onPlayerCommand={onPlayerCommand} onStartPreview={onStartPreview} onStopPreview={onStopPreview}
-      onResizePreview={onResizePreview} {onSeekAbsolute} {onSetVolume} onSaveMapping={onSaveMapping}
+      onResizePreview={onResizePreview} {onSeekProject} {onSeekTarget} {onSetVolume} onSaveMapping={onSaveMapping}
       onDiagnosticsCount={onDiagnosticsCount} onError={onError}
     />
     {#if !outputIsCollapsed}

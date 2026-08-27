@@ -47,7 +47,7 @@ enum RenderWorkerMessage {
 
 #[cfg(windows)]
 struct CaptionOverlay {
-    pixels: Vec<u8>,
+    pixels: Arc<[u8]>,
     width: i32,
     height: i32,
     x: i32,
@@ -159,7 +159,7 @@ impl LibMpvRenderWorker {
 
     pub fn set_caption_overlay(
         &self,
-        pixels: Vec<u8>,
+        pixels: Arc<[u8]>,
         width: i32,
         height: i32,
         x: i32,

@@ -1,4 +1,4 @@
-use super::archive::render_at;
+use super::archive::{render_at, render_overlay_at};
 use super::*;
 
 fn set_caption_overlay_impl(
@@ -21,12 +21,24 @@ fn set_caption_overlay_impl(
     if info.width == 0 || info.height == 0 {
         return Err("Caption overlay has no pixels.".into());
     }
-    let rgba = &pixels[..info.buffer_size()];
-    let mut bgra = Vec::with_capacity(rgba.len());
-    for pixel in rgba.chunks_exact(4) {
-        bgra.extend_from_slice(&[pixel[2], pixel[1], pixel[0], pixel[3]]);
-    }
-    platform_caption_overlay(state, bgra, info.width as i32, info.height as i32, x, y)
+    let rgba: Arc<[u8]> = pixels[..info.buffer_size()].to_vec().into();
+    platform_caption_overlay(state, rgba, info.width as i32, info.height as i32, x, y)
+}
+
+fn set_caption_overlay_frame(
+    state: State<'_, Arc<AppState>>,
+    frame: &caption_renderer::CaptionPlaneFrame,
+    x: i32,
+    y: i32,
+) -> Result<(), String> {
+    platform_caption_overlay(
+        state,
+        frame.pixels.clone(),
+        frame.width as i32,
+        frame.height as i32,
+        x,
+        y,
+    )
 }
 
 #[tauri::command]
@@ -122,16 +134,30 @@ pub fn render_preview_at(
 pub fn sync_preview_overlay(
     state: State<'_, Arc<AppState>>,
     archive: String,
+    media_time_ms: Option<i64>,
 ) -> Result<PreviewOverlaySyncResult, String> {
-    let Some(player_time) = platform_preview_time(state.clone())? else {
-        return Ok(PreviewOverlaySyncResult {
-            action: "awaiting-player-time".into(),
-            media_time_ms: None,
-            project_time_ms: None,
-            snapshot: None,
-        });
+    let media_time_ms = match media_time_ms {
+        Some(value) => value.max(0),
+        None => {
+            let Some(player_time) = platform_preview_time(state.clone())? else {
+                return Ok(PreviewOverlaySyncResult {
+                    action: "awaiting-player-time".into(),
+                    media_time_ms: None,
+                    project_time_ms: None,
+                    snapshot: None,
+                });
+            };
+            seconds_to_milliseconds(player_time)
+        }
     };
-    let media_time_ms = seconds_to_milliseconds(player_time);
+    sync_preview_overlay_at_media_time(state, archive, media_time_ms)
+}
+
+fn sync_preview_overlay_at_media_time(
+    state: State<'_, Arc<AppState>>,
+    archive: String,
+    media_time_ms: i64,
+) -> Result<PreviewOverlaySyncResult, String> {
     let project_time_ms = state
         .playback_time_mapping
         .lock()
@@ -148,30 +174,39 @@ pub fn sync_preview_overlay(
             snapshot: None,
         });
     }
-    let snapshot = render_at(archive.clone(), project_time_ms)?;
-    let fingerprint = snapshot_overlay_fingerprint(&snapshot);
-    let action = {
-        let sync = state
-            .preview_overlay_sync
-            .lock()
-            .map_err(|_| "Preview overlay state is unavailable")?;
-        decide_overlay_action(&sync, &archive, fingerprint)
-    };
+    let sync_revision = state
+        .preview_overlay_sync
+        .lock()
+        .map_err(|_| "Preview overlay state is unavailable")?
+        .revision;
+    let render = render_overlay_at(archive.clone(), project_time_ms)?;
+    let fingerprint = render.fingerprint;
+    let mut sync = state
+        .preview_overlay_sync
+        .lock()
+        .map_err(|_| "Preview overlay state is unavailable")?;
+    if sync.revision != sync_revision {
+        return Ok(PreviewOverlaySyncResult {
+            action: "superseded".into(),
+            media_time_ms: Some(media_time_ms),
+            project_time_ms: Some(project_time_ms),
+            snapshot: None,
+        });
+    }
+    let action = decide_overlay_action(&sync, &archive, fingerprint);
 
     match action {
         OverlayAction::Apply => {
-            let encoded = snapshot_overlay_png(&snapshot)
+            let frame = render
+                .overlay
+                .as_ref()
                 .ok_or("Caption renderer produced an invalid overlay state.")?;
-            set_caption_overlay_impl(state.clone(), encoded, 0, 0)?;
+            set_caption_overlay_frame(state.clone(), frame, 0, 0)?;
         }
         OverlayAction::Clear => platform_clear_caption_overlay(state.clone())?,
         OverlayAction::Unchanged => {}
     }
 
-    let mut sync = state
-        .preview_overlay_sync
-        .lock()
-        .map_err(|_| "Preview overlay state is unavailable")?;
     sync.archive = archive;
     sync.fingerprint = fingerprint;
     sync.overlay_visible = fingerprint.is_some();
@@ -179,7 +214,10 @@ pub fn sync_preview_overlay(
         action: action.as_str().into(),
         media_time_ms: Some(media_time_ms),
         project_time_ms: Some(project_time_ms),
-        snapshot: Some(snapshot),
+        // The native host has already consumed the caption plane. Returning
+        // its PNG/base64 payload to WebView would duplicate a large image over
+        // IPC every polling cycle, while the UI only needs the action/times.
+        snapshot: None,
     })
 }
 
@@ -215,24 +253,6 @@ pub(super) fn decide_overlay_action(
     }
 }
 
-fn snapshot_overlay_png(snapshot: &CaptionRenderSnapshot) -> Option<&str> {
-    snapshot.composed_png_base64.as_deref().or_else(|| {
-        snapshot.intervals.iter().find_map(|interval| {
-            interval
-                .get("rendered_image")
-                .and_then(|image| image.get("png_base64").or_else(|| image.get("pngBase64")))
-                .and_then(serde_json::Value::as_str)
-        })
-    })
-}
-
-fn snapshot_overlay_fingerprint(snapshot: &CaptionRenderSnapshot) -> Option<u64> {
-    let image = snapshot_overlay_png(snapshot)?;
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    image.hash(&mut hasher);
-    Some(hasher.finish())
-}
-
 pub(crate) fn playback_file_offset(
     file_size: u64,
     time_seconds: Option<f64>,
@@ -261,6 +281,10 @@ pub(super) fn seconds_to_milliseconds(seconds: f64) -> i64 {
 
 pub(crate) fn reset_overlay_sync(state: &AppState) {
     if let Ok(mut sync) = state.preview_overlay_sync.lock() {
-        *sync = crate::state::PreviewOverlaySyncState::default();
+        let revision = sync.revision.wrapping_add(1);
+        *sync = crate::state::PreviewOverlaySyncState {
+            revision,
+            ..Default::default()
+        };
     }
 }

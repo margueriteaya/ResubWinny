@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeSet,
     fs::File,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Seek},
 };
 
 use serde::Serialize;
@@ -11,10 +11,20 @@ use crate::{
     caption_features::{accessibility_ranges, gaiji_ranges},
 };
 
-const MAX_WINDOW_SIZE: usize = 200;
+const MAX_WINDOW_SIZE: usize = 512;
+const OPEN_SCENE_SENTINEL: i64 = i64::MAX;
+const DEFAULT_OPEN_SCENE_SPAN_MS: i64 = 5_000;
 
 mod cache;
 use cache::{collect_cached_time_window, collect_recent_timeline_window};
+
+pub(crate) fn approximate_archive_time_offset(
+    archive: &str,
+    size: u64,
+    target_ms: i64,
+) -> Result<u64, String> {
+    cache::find_timeline_time_offset(archive, size, target_ms)
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -107,13 +117,26 @@ fn collect_timeline_window(
     let mut has_intervals = false;
     let mut skipped = 0_usize;
     let mut has_more = false;
-    let mut items = Vec::with_capacity(requested.saturating_add(1));
+    let mut items: Vec<TimelineEvent> = Vec::with_capacity(requested.saturating_add(1));
     scan_timeline_events(archive, |event| {
         if event.kind != "scene" && !has_intervals {
             has_intervals = true;
             skipped = 0;
             has_more = false;
             items.clear();
+        }
+        if event.kind == "scene"
+            && !has_intervals
+            && let Some(previous) = items
+                .iter_mut()
+                .rev()
+                .find(|previous| previous.kind == "scene")
+            && event.begin_ms > previous.begin_ms
+        {
+            // B24 scenes are complete caption-plane snapshots. An open scene
+            // ends when the next snapshot replaces it, even when the worker
+            // encoded its wait duration as open-ended.
+            previous.end_ms = previous.end_ms.min(event.begin_ms);
         }
         if (has_intervals && event.kind == "scene")
             || (!features.is_empty()
@@ -140,29 +163,80 @@ fn collect_timeline_window(
         true
     })?;
     items.truncate(requested);
+    materialize_open_scene_bounds(&mut items, None);
     Ok(TimelineWindow { items, has_more })
+}
+
+/// The native preview keeps an open B24 scene alive until a later snapshot
+/// replaces it. A timeline still needs a finite bar so its ruler, zoom and
+/// scrollbar remain usable when an archive contains only scene snapshots.
+/// Materialize that sentinel only in the response copy; the cache keeps the
+/// original open-ended value for correct preview composition and later range
+/// queries.
+pub(super) fn materialize_open_scene_bounds(
+    items: &mut [TimelineEvent],
+    requested_end_ms: Option<i64>,
+) {
+    for index in 0..items.len() {
+        if items[index].kind != "scene" || items[index].end_ms < OPEN_SCENE_SENTINEL / 2 {
+            continue;
+        }
+        let next_scene = items[index + 1..]
+            .iter()
+            .find(|item| item.kind == "scene" && item.begin_ms > items[index].begin_ms)
+            .map(|item| item.begin_ms);
+        let fallback = requested_end_ms
+            .filter(|end| *end > items[index].begin_ms)
+            .unwrap_or_else(|| {
+                items[index]
+                    .begin_ms
+                    .saturating_add(DEFAULT_OPEN_SCENE_SPAN_MS)
+            });
+        items[index].end_ms = next_scene
+            .unwrap_or(fallback)
+            .max(items[index].begin_ms + 1);
+    }
 }
 
 fn scan_timeline_events(
     archive: &str,
     mut on_event: impl FnMut(TimelineEvent) -> bool,
 ) -> Result<(), String> {
-    let mut index = 0_usize;
-    scan_archive_lines(archive, |line| {
-        let Some(event) = parse_timeline_event(line, index) else {
+    let mut has_intervals = false;
+    scan_archive_lines(archive, |line, line_start| {
+        // Once an authoritative interval stream has appeared, later B24
+        // scene snapshots are redundant for the timeline. Avoid touching
+        // their often multi-hundred-kilobyte image payloads at all.
+        let kind = timeline_record_kind(line);
+        if has_intervals && kind == Some("scene") {
+            return true;
+        }
+        if kind.is_some_and(|kind| !matches!(kind, "scene" | "caption" | "region_interval")) {
+            return true;
+        }
+        redact_timeline_payloads(line);
+        let Some(event) = parse_timeline_event(line, timeline_event_id(line_start)) else {
             return true;
         };
-        index = index.saturating_add(1);
+        if event.kind != "scene" {
+            has_intervals = true;
+        }
         on_event(event)
     })
 }
 
-fn scan_archive_lines(archive: &str, mut on_line: impl FnMut(&str) -> bool) -> Result<(), String> {
+fn scan_archive_lines(
+    archive: &str,
+    mut on_line: impl FnMut(&mut String, u64) -> bool,
+) -> Result<(), String> {
     let file =
         File::open(archive).map_err(|error| format!("Could not open caption archive: {error}"))?;
     let mut reader = BufReader::new(file);
     let mut line = String::new();
     loop {
+        let line_start = reader
+            .stream_position()
+            .map_err(|error| format!("Could not inspect caption archive: {error}"))?;
         line.clear();
         let bytes = reader
             .read_line(&mut line)
@@ -170,11 +244,127 @@ fn scan_archive_lines(archive: &str, mut on_line: impl FnMut(&str) -> bool) -> R
         if bytes == 0 || !line.ends_with('\n') {
             break;
         }
-        if !on_line(&line) {
+        if !on_line(&mut line, line_start) {
             break;
         }
     }
     Ok(())
+}
+
+/// The JSONL byte position is stable across pagination, time-window and tail
+/// queries. The UI uses this value as a keyed-rendering identity; an ordinal
+/// fabricated from a binary-seek byte offset changes whenever the cache is
+/// rebuilt and causes hundreds of subtitle nodes to be unnecessarily remade.
+pub(super) fn timeline_event_id(line_start: u64) -> usize {
+    usize::try_from(line_start).unwrap_or(usize::MAX)
+}
+
+/// Read the envelope discriminator without deserializing the complete JSONL
+/// record. Worker records put `type`/`kind` near the beginning of the line;
+/// limiting the scan to a small prefix keeps this probe cheap even when a
+/// scene carries a several-megabyte raster payload.
+pub(super) fn timeline_record_kind(line: &str) -> Option<&'static str> {
+    let bytes = line.as_bytes();
+    let prefix_len = bytes.len().min(1_024);
+    let prefix = &bytes[..prefix_len];
+    for key in [b"\"type\"".as_slice(), b"\"kind\"".as_slice()] {
+        let Some(position) = prefix.windows(key.len()).position(|window| window == key) else {
+            continue;
+        };
+        let mut cursor = position + key.len();
+        while prefix.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+            cursor += 1;
+        }
+        if prefix.get(cursor) != Some(&b':') {
+            continue;
+        }
+        cursor += 1;
+        while prefix.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+            cursor += 1;
+        }
+        if prefix.get(cursor) != Some(&b'"') {
+            continue;
+        }
+        let start = cursor + 1;
+        let end = prefix[start..]
+            .iter()
+            .position(|byte| *byte == b'"')
+            .map(|relative| start + relative)?;
+        return match &prefix[start..end] {
+            b"scene" => Some("scene"),
+            b"caption" => Some("caption"),
+            b"region_interval" => Some("region_interval"),
+            b"resource_evidence" => Some("resource_evidence"),
+            _ => Some("other"),
+        };
+    }
+    None
+}
+
+/// Timeline rows need timing, text and style metadata, never multi-megabyte
+/// image payloads. Remove those JSON string values before deserializing the
+/// envelope so the event index does not allocate/copy caption bitmaps.
+pub(super) fn redact_timeline_payloads(line: &mut String) {
+    // The vast majority of interval records contain no image payload. Avoid
+    // six full-string scans (and temporary key allocations) for those lines;
+    // only scene snapshots and resource records need redaction.
+    if !line.contains("base64") && !line.contains("DataUri") && !line.contains("data_uri") {
+        return;
+    }
+    for field in [
+        "rgba_base64",
+        "rgbaBase64",
+        "png_base64",
+        "pngBase64",
+        "preview_data_uri",
+        "previewDataUri",
+    ] {
+        redact_json_string_field(line, field);
+    }
+}
+
+fn redact_json_string_field(line: &mut String, field: &str) {
+    let needle = format!("\"{field}\"");
+    let mut search_from = 0;
+    while let Some(relative) = line[search_from..].find(&needle) {
+        let key_end = search_from + relative + needle.len();
+        let bytes = line.as_bytes();
+        let mut value_start = key_end;
+        while bytes.get(value_start).is_some_and(u8::is_ascii_whitespace) {
+            value_start += 1;
+        }
+        if bytes.get(value_start) != Some(&b':') {
+            search_from = key_end;
+            continue;
+        }
+        value_start += 1;
+        while bytes.get(value_start).is_some_and(u8::is_ascii_whitespace) {
+            value_start += 1;
+        }
+        if bytes.get(value_start) != Some(&b'"') {
+            search_from = value_start;
+            continue;
+        }
+        let mut cursor = value_start + 1;
+        let mut escaped = false;
+        let mut value_end = None;
+        while let Some(byte) = bytes.get(cursor).copied() {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                value_end = Some(cursor);
+                break;
+            }
+            cursor += 1;
+        }
+        let Some(value_end) = value_end else {
+            break;
+        };
+        line.replace_range(value_start..=value_end, "null");
+        search_from = value_start + 4;
+    }
 }
 
 fn parse_timeline_event(line: &str, index: usize) -> Option<TimelineEvent> {
@@ -230,14 +420,31 @@ fn bounds(value: &serde_json::Value, kind: &str) -> Option<(i64, i64)> {
         .or_else(|| value.get("startMs"))
         .or_else(|| (kind == "scene").then(|| value.get("pts_ms")).flatten())
         .and_then(serde_json::Value::as_i64)?;
-    let end = value
+    let explicit_end = value
         .get("end_ms")
         .or_else(|| value.get("endMs"))
         .or_else(|| value.get("finish_ms"))
         .or_else(|| value.get("finishMs"))
-        .and_then(serde_json::Value::as_i64)
-        .unwrap_or(begin);
-    Some((begin, end.max(begin)))
+        .and_then(serde_json::Value::as_i64);
+    let end = explicit_end.unwrap_or_else(|| {
+        if kind == "scene" {
+            let wait = value
+                .get("wait_duration_ms")
+                .or_else(|| value.get("waitDurationMs"))
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(5_000);
+            if wait > 0 && wait < i64::MAX / 2 {
+                begin.saturating_add(wait)
+            } else {
+                i64::MAX
+            }
+        } else {
+            // Match the native preview fallback for an otherwise valid open
+            // caption record instead of turning it into a zero-width event.
+            begin.saturating_add(5_000)
+        }
+    });
+    (end > begin).then_some((begin, end))
 }
 
 fn event_presentation(
@@ -328,6 +535,13 @@ fn event_presentation(
     };
     let mut text = String::new();
     for character in characters {
+        // Timeline labels are intentionally capped. B24 scene snapshots may
+        // contain thousands of character objects (plus a large rendered
+        // image); stop walking once enough display text has been collected so
+        // indexing never pays for the full raster-sized scene payload.
+        if text.chars().count() >= 240 {
+            break;
+        }
         let value = character
             .get("text")
             .or_else(|| character.get("character"))
@@ -462,17 +676,96 @@ mod tests {
         ).unwrap();
         let page = get_timeline_window(path.to_string_lossy().into_owned(), 1, 1).unwrap();
         assert_eq!(page.items.len(), 1);
-        assert_eq!(page.items[0].index, 1);
         assert_eq!(page.items[0].text, "second");
         assert!(!page.has_more);
         let first = get_timeline_window(path.to_string_lossy().into_owned(), 0, 1).unwrap();
         assert_eq!(first.items[0].text, "first");
         assert_eq!(first.items[0].region_x, Some(12));
+        assert!(page.items[0].index > first.items[0].index);
         let timed =
             get_timeline_time_window(path.to_string_lossy().into_owned(), 250, 450, 10).unwrap();
         assert_eq!(timed.items.len(), 1);
         assert_eq!(timed.items[0].text, "second");
+        assert_eq!(timed.items[0].index, page.items[0].index);
         fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn scene_timing_matches_preview_and_the_next_scene_closes_an_open_snapshot() {
+        let open = serde_json::json!({
+            "pts_ms": 2_000,
+            "wait_duration_ms": i64::MAX,
+        });
+        let bounded = serde_json::json!({
+            "pts_ms": 4_000,
+            "wait_duration_ms": 1_500,
+        });
+        assert_eq!(bounds(&open, "scene"), Some((2_000, i64::MAX)));
+        assert_eq!(bounds(&bounded, "scene"), Some((4_000, 5_500)));
+        assert_eq!(
+            bounds(&serde_json::json!({"start_ms": 7_000}), "caption"),
+            Some((7_000, 12_000))
+        );
+
+        let path = std::env::temp_dir().join(format!(
+            "resubwinny-timeline-scene-duration-{}.jsonl",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::write(
+            &path,
+            concat!(
+                "{\"type\":\"scene\",\"value\":{\"pts_ms\":2000,\"wait_duration_ms\":9223372036854775807,\"text\":\"old\"}}\n",
+                "{\"type\":\"scene\",\"value\":{\"pts_ms\":4000,\"wait_duration_ms\":1500,\"text\":\"new\"}}\n"
+            ),
+        )
+        .unwrap();
+        let window =
+            get_timeline_time_window(path.to_string_lossy().into_owned(), 0, 6_000, 10).unwrap();
+        assert_eq!(window.items.len(), 2);
+        assert_eq!(
+            (window.items[0].begin_ms, window.items[0].end_ms),
+            (2_000, 4_000)
+        );
+        assert_eq!(
+            (window.items[1].begin_ms, window.items[1].end_ms),
+            (4_000, 5_500)
+        );
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn open_scene_response_always_has_a_finite_timeline_bar() {
+        let mut items = vec![TimelineEvent {
+            index: 1,
+            kind: "scene".into(),
+            begin_ms: 2_000,
+            end_ms: i64::MAX,
+            text: "open".into(),
+            region_x: None,
+            region_y: None,
+            track_id: None,
+            features: Vec::new(),
+            highlights: Vec::new(),
+            colors: Vec::new(),
+        }];
+        materialize_open_scene_bounds(&mut items, Some(9_000));
+        assert_eq!(items[0].end_ms, 9_000);
+    }
+
+    #[test]
+    fn timeline_parser_discards_large_image_strings_before_deserializing() {
+        let payload = "A".repeat(1_000_000);
+        let mut line = format!(
+            r#"{{"type":"scene","value":{{"pts_ms":1000,"text":"subtitle","rendered_image":{{"rgba_base64":"{payload}"}}}}}}"#
+        );
+        redact_timeline_payloads(&mut line);
+        assert!(line.len() < 200);
+        let event = parse_timeline_event(&line, 7).expect("timeline event");
+        assert_eq!(event.index, 7);
+        assert_eq!(event.text, "subtitle");
     }
 
     #[test]

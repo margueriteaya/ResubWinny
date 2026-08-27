@@ -292,6 +292,7 @@
     "timeline.zoomIn": "放大时间轴",
     "timeline.zoomOut": "缩小时间轴",
     "timeline.fit": "显示完整节目时长",
+    "timeline.followPlayhead": "跟随播放指针",
     "timeline.previousWindow": "移至较早时间段",
     "timeline.nextWindow": "移至较晚时间段",
     "timeline.visibleRange": "时间轴可见范围",

@@ -1,6 +1,7 @@
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use fontdue::{Font, FontSettings};
 use serde_json::Value;
+use std::sync::Arc;
 
 const MAX_LAYERS: usize = 128;
 const MAX_PIXELS: u64 = 33_177_600;
@@ -13,11 +14,17 @@ const MAX_TEXT_PIXELS: usize = 2_000_000;
 pub(crate) struct CaptionPlaneFrame {
     pub(crate) width: u32,
     pub(crate) height: u32,
-    pub(crate) png_base64: String,
+    pub(crate) pixels: Arc<[u8]>,
     pub(crate) layer_count: usize,
     pub(crate) mode: &'static str,
     pub(crate) missing_glyph_count: usize,
     pub(crate) rendered_ruby_count: usize,
+}
+
+impl CaptionPlaneFrame {
+    pub(crate) fn png_base64(&self) -> Option<String> {
+        encode_png(self.width, self.height, &self.pixels).map(|png| BASE64.encode(png))
+    }
 }
 
 struct StyledRun {
@@ -66,6 +73,12 @@ fn ruby_style(run: &StyledRun) -> RubyStyle {
 }
 
 pub(crate) fn compose(intervals: &[Value]) -> Option<CaptionPlaneFrame> {
+    // Caption gaps are the common case while scrubbing. Do not initialize the
+    // embedded font or allocate a full 1920x1080 RGBA plane merely to discover
+    // that there is nothing to draw.
+    if intervals.is_empty() {
+        return None;
+    }
     let mut layers = Vec::new();
     let mut canvas_width = 0_u32;
     let mut canvas_height = 0_u32;
@@ -92,20 +105,7 @@ pub(crate) fn compose(intervals: &[Value]) -> Option<CaptionPlaneFrame> {
         let Some(image) = value.get("rendered_image") else {
             continue;
         };
-        let Some(encoded) = image
-            .get("png_base64")
-            .or_else(|| image.get("pngBase64"))
-            .and_then(Value::as_str)
-        else {
-            continue;
-        };
-        let Ok(bytes) = BASE64.decode(encoded) else {
-            continue;
-        };
-        if bytes.len() > MAX_IMAGE_BYTES {
-            continue;
-        }
-        let Some((pixels, width, height)) = decode_png(&bytes) else {
+        let Some((pixels, width, height)) = decode_rendered_image(image) else {
             continue;
         };
         let x = image
@@ -149,11 +149,10 @@ pub(crate) fn compose(intervals: &[Value]) -> Option<CaptionPlaneFrame> {
             pixels,
         );
     }
-    let png = encode_png(canvas_width, canvas_height, &canvas)?;
     Some(CaptionPlaneFrame {
         width: canvas_width,
         height: canvas_height,
-        png_base64: BASE64.encode(png),
+        pixels: canvas.into(),
         layer_count: layers.len(),
         mode: "b24-native-rgba",
         missing_glyph_count: 0,
@@ -319,11 +318,10 @@ fn compose_ttml_horizontal(intervals: &[Value]) -> Option<CaptionPlaneFrame> {
     if layer_count == 0 {
         return None;
     }
-    let png = encode_png(TTML_PLANE_WIDTH, TTML_PLANE_HEIGHT, &canvas)?;
     Some(CaptionPlaneFrame {
         width: TTML_PLANE_WIDTH,
         height: TTML_PLANE_HEIGHT,
-        png_base64: BASE64.encode(png),
+        pixels: canvas.into(),
         layer_count,
         mode: if has_vertical && rendered_ruby_count > 0 {
             "ttml-vertical-ruby-basic-native"
@@ -337,6 +335,58 @@ fn compose_ttml_horizontal(intervals: &[Value]) -> Option<CaptionPlaneFrame> {
         missing_glyph_count,
         rendered_ruby_count,
     })
+}
+
+fn decode_rendered_image(image: &Value) -> Option<(Vec<u8>, u32, u32)> {
+    if let Some(encoded) = image
+        .get("rgba_base64")
+        .or_else(|| image.get("rgbaBase64"))
+        .and_then(Value::as_str)
+    {
+        if encoded.len() > MAX_IMAGE_BYTES.saturating_mul(4).div_ceil(3) {
+            return None;
+        }
+        let width = image
+            .get("width")?
+            .as_u64()
+            .and_then(|value| u32::try_from(value).ok())?;
+        let height = image
+            .get("height")?
+            .as_u64()
+            .and_then(|value| u32::try_from(value).ok())?;
+        let packed_stride = u64::from(width).checked_mul(4)?;
+        let stride = image
+            .get("stride")
+            .and_then(Value::as_u64)
+            .unwrap_or(packed_stride);
+        let expected = stride
+            .checked_mul(u64::from(height))
+            .and_then(|value| usize::try_from(value).ok())?;
+        if width == 0 || height == 0 || stride < packed_stride || expected > MAX_IMAGE_BYTES {
+            return None;
+        }
+        let rgba = BASE64.decode(encoded).ok()?;
+        if rgba.len() < expected || rgba.len() > MAX_IMAGE_BYTES {
+            return None;
+        }
+        let row_bytes = usize::try_from(packed_stride).ok()?;
+        let stride = usize::try_from(stride).ok()?;
+        let mut packed = Vec::with_capacity(row_bytes.checked_mul(height as usize)?);
+        for row in 0..height as usize {
+            let start = row.checked_mul(stride)?;
+            packed.extend_from_slice(rgba.get(start..start + row_bytes)?);
+        }
+        return Some((packed, width, height));
+    }
+    let encoded = image
+        .get("png_base64")
+        .or_else(|| image.get("pngBase64"))
+        .and_then(Value::as_str)?;
+    let bytes = BASE64.decode(encoded).ok()?;
+    if bytes.len() > MAX_IMAGE_BYTES {
+        return None;
+    }
+    decode_png(&bytes)
 }
 
 mod layout;

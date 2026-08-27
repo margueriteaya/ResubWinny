@@ -383,10 +383,25 @@ impl PlaybackTimeMapping {
         if self.rate_numerator <= 0 || self.rate_denominator <= 0 {
             return Err("Playback time mapping rate must be positive.".into());
         }
-        let delta = media_time_ms.saturating_sub(self.media_anchor_ms) as i128;
+        // Convert to a wide signed type before subtracting.  Saturating the
+        // `i64` values first would clamp timestamps before the anchor to zero,
+        // making the desktop mapping disagree with the WebView's signed math.
+        let delta = (media_time_ms as i128) - (self.media_anchor_ms as i128);
         let scaled =
             delta.saturating_mul(self.rate_numerator as i128) / self.rate_denominator as i128;
         Ok((self.project_anchor_ms as i128)
+            .saturating_add(scaled)
+            .clamp(i64::MIN as i128, i64::MAX as i128) as i64)
+    }
+
+    pub fn media_time_ms(&self, project_time_ms: i64) -> Result<i64, String> {
+        if self.rate_numerator <= 0 || self.rate_denominator <= 0 {
+            return Err("Playback time mapping rate must be positive.".into());
+        }
+        let delta = (project_time_ms as i128) - (self.project_anchor_ms as i128);
+        let scaled =
+            delta.saturating_mul(self.rate_denominator as i128) / self.rate_numerator as i128;
+        Ok((self.media_anchor_ms as i128)
             .saturating_add(scaled)
             .clamp(i64::MIN as i128, i64::MAX as i128) as i64)
     }
@@ -406,6 +421,37 @@ mod tests {
             rate_denominator: 1000,
         };
         assert_eq!(mapping.project_time_ms(11_000).unwrap(), 26_001);
+        assert_eq!(mapping.media_time_ms(26_001).unwrap(), 11_000);
+    }
+
+    #[test]
+    fn preserves_signed_offsets_before_each_anchor() {
+        let mapping = PlaybackTimeMapping {
+            segment_id: "offset-segment".into(),
+            media_anchor_ms: 10_000,
+            project_anchor_ms: 25_000,
+            rate_numerator: 2,
+            rate_denominator: 1,
+        };
+
+        // A timestamp before the media anchor must map before the project
+        // anchor instead of being clamped to the anchor itself.
+        assert_eq!(mapping.project_time_ms(9_500).unwrap(), 24_000);
+        assert_eq!(mapping.media_time_ms(24_000).unwrap(), 9_500);
+    }
+
+    #[test]
+    fn maps_both_directions_with_non_default_rate_and_anchors() {
+        let mapping = PlaybackTimeMapping {
+            segment_id: "programme-3".into(),
+            media_anchor_ms: 123_456,
+            project_anchor_ms: -20_000,
+            rate_numerator: 3,
+            rate_denominator: 2,
+        };
+
+        assert_eq!(mapping.project_time_ms(124_456).unwrap(), -18_500);
+        assert_eq!(mapping.media_time_ms(-18_500).unwrap(), 124_456);
     }
 
     #[test]

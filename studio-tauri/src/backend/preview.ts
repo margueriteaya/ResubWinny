@@ -18,10 +18,15 @@ export const previewApi = {
   getPreviewPlaybackState: () => call<PreviewPlaybackState>('get_preview_playback_state'),
   getPreviewBroadcastMetadata: (serviceId?: number) => call<BroadcastMetadata>('get_preview_broadcast_metadata', { serviceId }),
   seekPreviewAbsolute: (seconds: number) => call<void>('preview_command', { command: `seek-absolute:${Math.max(0, seconds)}` }),
+  seekPreviewProject: (projectTimeMs: number, exact = true) => call<number>('seek_preview_project', { projectTimeMs: Math.round(projectTimeMs), exact }),
+  setPreviewPaused: (paused: boolean) => call<void>('preview_command', { command: `set-pause:${paused ? 'yes' : 'no'}` }),
   setPreviewVolume: (volume: number) => call<void>('preview_command', { command: `set-volume:${Math.min(100, Math.max(0, volume))}` }),
   getPlaybackTimeMapping: () => call<PlaybackTimeMapping>('get_playback_time_mapping'),
   updatePlaybackTimeMapping: (mapping: PlaybackTimeMapping) => call<void>('update_playback_time_mapping', { mapping }),
   renderAt: (archive: string, timeMs: number) => call<CaptionRenderSnapshot>('render_at', { archive, timeMs }),
   renderPreviewAt: (archive: string, timeMs: number) => call<CaptionRenderSnapshot>('render_preview_at', { archive, timeMs, x: 0, y: 0 }),
-  syncPreviewOverlay: (archive: string) => call<PreviewOverlaySyncResult>('sync_preview_overlay', { archive }),
+  syncPreviewOverlay: (archive: string, mediaTimeMs?: number | null) => call<PreviewOverlaySyncResult>('sync_preview_overlay', {
+    archive,
+    ...(mediaTimeMs == null ? {} : { mediaTimeMs: Math.round(mediaTimeMs) }),
+  }),
 }

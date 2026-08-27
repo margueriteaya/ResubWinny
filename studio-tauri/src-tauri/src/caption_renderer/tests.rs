@@ -9,7 +9,9 @@ use fontdue::{Font, FontSettings};
 use serde_json::json;
 
 fn visible_alpha_bounds(frame: &super::CaptionPlaneFrame) -> Option<(u32, u32, u32, u32)> {
-    let bytes = BASE64.decode(&frame.png_base64).expect("PNG base64");
+    let bytes = BASE64
+        .decode(frame.png_base64().expect("encoded PNG"))
+        .expect("PNG base64");
     let (pixels, width, height) = super::decode_png(&bytes).expect("decoded PNG");
     let mut bounds: Option<(u32, u32, u32, u32)> = None;
     for pixel_y in 0..height {
@@ -30,6 +32,11 @@ fn visible_alpha_bounds(frame: &super::CaptionPlaneFrame) -> Option<(u32, u32, u
         }
     }
     bounds
+}
+
+#[test]
+fn empty_caption_plane_returns_without_a_frame() {
+    assert!(compose(&[]).is_none());
 }
 
 fn pixel_png(pixel: [u8; 4]) -> String {
@@ -71,7 +78,7 @@ fn composes_active_layers_with_positions() {
     ])
     .expect("composed frame");
     assert_eq!((frame.width, frame.height, frame.layer_count), (2, 1, 2));
-    assert!(!frame.png_base64.is_empty());
+    assert!(!frame.png_base64().expect("encoded PNG").is_empty());
 }
 
 #[test]
@@ -104,7 +111,7 @@ fn renders_rtl_horizontal_runs_from_the_region_end() {
         "style": {"font_size": "96px", "writing_mode": "horizontal-tb", "direction": "rtl"}
     })])
     .expect("RTL frame");
-    assert_ne!(ltr.png_base64, rtl.png_base64);
+    assert_ne!(ltr.pixels, rtl.pixels);
 }
 
 #[test]
@@ -435,7 +442,7 @@ fn preserves_explicit_ruby_annotation_style_without_changing_base_metrics() {
             "rich_body": "<ruby><span tts:ruby='base'>漢</span><rt><span tts:ruby='text'>かん</span></rt></ruby>"
         })])
         .expect("plain ruby frame");
-    assert_ne!(styled.png_base64, plain.png_base64);
+    assert_ne!(styled.pixels, plain.pixels);
 }
 
 #[test]
@@ -610,7 +617,7 @@ fn applies_a_supported_direct_ttml_outline_to_the_native_rgba_plane() {
             "style": {"font_size": "96px", "writing_mode": "horizontal-tb", "color": "#FFFFFFFF", "text_outline": "3px #000000"}
         })])
         .expect("outlined frame");
-    assert_ne!(plain.png_base64, outlined.png_base64);
+    assert_ne!(plain.pixels, outlined.pixels);
     let (plain_left, plain_top, plain_right, plain_bottom) =
         visible_alpha_bounds(&plain).expect("plain bounds");
     let (outline_left, outline_top, outline_right, outline_bottom) =

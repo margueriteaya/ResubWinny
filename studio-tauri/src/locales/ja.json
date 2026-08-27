@@ -292,6 +292,7 @@
     "timeline.zoomIn": "タイムラインを拡大",
     "timeline.zoomOut": "タイムラインを縮小",
     "timeline.fit": "番組全体を表示",
+    "timeline.followPlayhead": "再生位置を追従",
     "timeline.previousWindow": "前の時間範囲へ移動",
     "timeline.nextWindow": "次の時間範囲へ移動",
     "timeline.visibleRange": "タイムラインの表示範囲",
