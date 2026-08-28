@@ -39,8 +39,6 @@
   let refreshTimer: ReturnType<typeof setInterval> | undefined;
   let loadedEditorStartMs = Number.NaN;
   let loadedEditorEndMs = Number.NaN;
-  let loadedEditorSpanMs = 0;
-  let loadedEditorHasMore = false;
   let editorRequestKey = "";
   let loadedFilterKey = "";
   let loadedLive = false;
@@ -58,7 +56,6 @@
   let scrubbing = false;
   let dragStartX = 0;
   let dragStartTimeMs = 0;
-  let dragWindowStartMs = 0;
   let dragWindowSpanMs = 0;
   let dragWidth = 1;
   let dragMoved = false;
@@ -73,6 +70,8 @@
   let resumeFollowAfterScrub = false;
   let scrollStartMs = 0;
   let followPlayhead = true;
+  let layoutStartMs = 0;
+  let layoutSpanMs = 120_000;
   let scrollbar: HTMLDivElement;
   let scrollbarThumb: HTMLSpanElement;
   let scrollbarDragging = false;
@@ -115,37 +114,59 @@
   $: minimumZoom = Math.min(.25, 120_000 / timelineSpanMs);
   $: viewSpanMs = Math.min(timelineSpanMs, Math.max(5_000, 120_000 / zoom));
   $: scrollMaximumMs = Math.max(0, timelineSpanMs - viewSpanMs);
-  // Follow at the edges instead of recentering on every playback sample.
-  // Re-centering every 100 ms invalidates every event bar's percentage and
-  // forces a dense archive to repaint continuously. Keeping a safety band
-  // makes the playhead feel anchored while still bringing it back into view.
-  $: if (followPlayhead) {
-    const maximumStart = timelineStartMs + scrollMaximumMs;
-    const boundedStart = Math.max(timelineStartMs, Math.min(maximumStart, scrollStartMs));
-    if (Math.abs(boundedStart - scrollStartMs) > 1) scrollStartMs = boundedStart;
-    const lowerEdge = boundedStart + viewSpanMs * .2;
-    const upperEdge = boundedStart + viewSpanMs * .8;
-    if (timelineTimeMs < lowerEdge || timelineTimeMs > upperEdge) {
-      const nextStart = Math.max(timelineStartMs, Math.min(maximumStart, timelineTimeMs - viewSpanMs / 2));
-      if (Math.abs(nextStart - scrollStartMs) > 1) scrollStartMs = nextStart;
-    }
-  }
-  $: viewStartMs = Math.max(timelineStartMs, Math.min(timelineStartMs + scrollMaximumMs, scrollStartMs));
+  const clampViewStart = (value: number) =>
+    Math.max(timelineStartMs, Math.min(timelineStartMs + scrollMaximumMs, value));
+  // In follow and drag modes the time axis moves beneath a normally fixed
+  // centre playhead. Programme boundaries are the only natural exception.
+  $: viewStartMs = followPlayhead || scrubbing
+    ? clampViewStart(timelineTimeMs - viewSpanMs / 2)
+    : clampViewStart(scrollStartMs);
   $: visibleEndMs = viewStartMs + viewSpanMs;
+  function ensureLayoutWindow() {
+    const desiredSpan = Math.min(timelineSpanMs, viewSpanMs * 3);
+    // Keep three viewports mounted and rebase only after three quarters of a
+    // viewport have passed. At the normal 30 second zoom this turns playback
+    // window I/O into an occasional operation instead of a 10 Hz render cost.
+    const buffer = Math.min(viewSpanMs * .25, Math.max(0, (desiredSpan - viewSpanMs) / 2));
+    const layoutEnd = layoutStartMs + layoutSpanMs;
+    const needsRebase = Math.abs(layoutSpanMs - desiredSpan) > 1
+      || viewStartMs < layoutStartMs + buffer
+      || visibleEndMs > layoutEnd - buffer
+      || layoutStartMs < timelineStartMs
+      || layoutEnd > timelineEndMs;
+    if (!needsRebase) return;
+    layoutSpanMs = desiredSpan;
+    layoutStartMs = Math.max(
+      timelineStartMs,
+      Math.min(timelineEndMs - desiredSpan, viewStartMs - (desiredSpan - viewSpanMs) / 2),
+    );
+  }
+  $: { viewStartMs; visibleEndMs; viewSpanMs; timelineStartMs; timelineEndMs; ensureLayoutWindow(); }
+  $: layoutEndMs = layoutStartMs + layoutSpanMs;
+  // `hasMore` means the native 500-item density cap was reached; it must not
+  // cause an immediate retry of the identical range. Coverage changes are
+  // the sole trigger, otherwise a dense archive becomes an infinite IPC loop.
   $: editorWindowNeedsLoad = loadedArchive !== archivePath
     || !Number.isFinite(loadedEditorStartMs)
-    || viewStartMs < loadedEditorStartMs
-    || visibleEndMs > loadedEditorEndMs
-    || (loadedEditorHasMore && loadedEditorSpanMs > 0 && viewSpanMs < loadedEditorSpanMs / 3);
-  $: visibleRecords = records.filter((item) => item.endMs > viewStartMs && item.beginMs < viewStartMs + viewSpanMs && (!item.trackId || !trackLabel || item.trackId === trackLabel));
-  $: ticks = Array.from({ length: 5 }, (_, index) => ({ percent: index * 25, time: viewStartMs + viewSpanMs * index / 4 }));
+    || layoutStartMs < loadedEditorStartMs
+    || layoutEndMs > loadedEditorEndMs;
+  $: visibleRecords = records.filter((item) => item.endMs > layoutStartMs && item.beginMs < layoutEndMs && (!item.trackId || !trackLabel || item.trackId === trackLabel));
   $: tickStepMs = viewSpanMs / 4;
   $: tickPrecision = tickStepMs % 1_000 === 0 ? 0 : tickStepMs % 100 === 0 ? 1 : tickStepMs % 10 === 0 ? 2 : 3;
+  $: firstLayoutTickMs = Math.ceil(layoutStartMs / tickStepMs) * tickStepMs;
+  $: ticks = Array.from(
+    { length: Math.max(0, Math.floor((layoutEndMs - firstLayoutTickMs) / tickStepMs) + 1) },
+    (_, index) => {
+      const time = firstLayoutTickMs + index * tickStepMs;
+      return { time, percent: (time - layoutStartMs) / layoutSpanMs * 100 };
+    },
+  );
   $: zoomPercent = Math.max(1, Math.round(zoom * 50));
   $: scrollbarThumbPercent = Math.max(7, Math.min(100, viewSpanMs / timelineSpanMs * 100));
   $: scrollbarThumbLeft = scrollMaximumMs <= 0 ? 0 : (viewStartMs - timelineStartMs) / scrollMaximumMs * (100 - scrollbarThumbPercent);
   $: cursorPositionPercent = Math.max(0, Math.min(100, ((timelineTimeMs - viewStartMs) / viewSpanMs) * 100));
   $: playheadVisible = timelineTimeMs >= viewStartMs && timelineTimeMs <= visibleEndMs;
+  $: motionLayerStyle = `width:${layoutSpanMs / viewSpanMs * 100}%;transform:translate3d(${(layoutStartMs - viewStartMs) / layoutSpanMs * 100}%,0,0);`;
   $: activeRecordIndex = buildActiveRecordIndex(visibleRecords);
   $: activeRecord = findActiveRecord(activeRecordIndex, timelineTimeMs);
   const eventNodes = new Map<number, HTMLButtonElement>();
@@ -225,7 +246,7 @@
   $: positionedRecords = visibleRecords.map((item) => ({
     item,
     features: visibleFeatures(item),
-    style: `${barStyle(item, viewStartMs, viewSpanMs)}--event-color:${eventColor(item)};`,
+    style: `${barStyle(item, layoutStartMs, layoutSpanMs)}--event-color:${eventColor(item)};`,
   }));
   // The event-list view is also mounted while playback is active. Precompute
   // rich-text segments only when records change so a playhead update does not
@@ -264,8 +285,8 @@
     if (!desktopRuntime || !archivePath || loading || (!force && editorWindowCovered())) return;
     const requestedArchive = archivePath;
     const bufferMs = Math.max(5_000, Math.round(viewSpanMs * .75));
-    const requestStartMs = Math.max(timelineStartMs, Math.floor(viewStartMs - bufferMs));
-    const requestEndMs = Math.min(timelineEndMs, Math.ceil(viewStartMs + viewSpanMs + bufferMs));
+    const requestStartMs = Math.max(timelineStartMs, Math.floor(layoutStartMs - bufferMs));
+    const requestEndMs = Math.min(timelineEndMs, Math.ceil(layoutEndMs + bufferMs));
     const requestKey = `${requestedArchive}:${requestStartMs}:${requestEndMs}`;
     if (!force && requestKey === editorRequestKey) return;
     editorRequestKey = requestKey;
@@ -282,8 +303,6 @@
         loadedArchive = requestedArchive;
         loadedEditorStartMs = requestStartMs;
         loadedEditorEndMs = requestEndMs;
-        loadedEditorSpanMs = requestEndMs - requestStartMs;
-        loadedEditorHasMore = next.hasMore;
         exhausted = !next.hasMore;
       }
     } catch (reason) {
@@ -320,27 +339,21 @@
     filters = next;
   }
 
-  function pointerTime(event: PointerEvent, windowStart = viewStartMs, windowSpan = viewSpanMs, source?: HTMLElement) {
-    const element = source ?? event.currentTarget as HTMLElement;
-    const bounds = element.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left) / Math.max(1, bounds.width)));
-    return Math.max(timelineStartMs, Math.min(timelineEndMs, Math.round(windowStart + ratio * windowSpan)));
-  }
-
   function beginScrub(event: PointerEvent, startedOnEvent = false) {
     const source = (event.currentTarget as HTMLElement).closest<HTMLElement>(".timeline-track")
       ?? event.currentTarget as HTMLElement;
     resumeFollowAfterScrub = followPlayhead;
     followPlayhead = false;
-    scrubbing = true;
     dragStartX = event.clientX;
-    dragStartTimeMs = pointerTime(event, viewStartMs, viewSpanMs, source);
-    dragWindowStartMs = viewStartMs;
+    // Grab the axis at its current playhead anchor; the pointer's absolute
+    // landing position must not teleport the locator line.
+    dragStartTimeMs = timelineTimeMs;
     dragWindowSpanMs = viewSpanMs;
     dragWidth = Math.max(1, source.getBoundingClientRect().width);
     dragMoved = false;
     scrubStartedOnEvent = startedOnEvent;
-    dragTargetTimeMs = dragStartTimeMs;
+    dragTargetTimeMs = timelineTimeMs;
+    scrubbing = true;
     source.setPointerCapture(event.pointerId);
   }
 
@@ -391,25 +404,29 @@
     if (seekFrame === undefined) seekFrame = requestAnimationFrame(flushSeekFrame);
   }
 
+  function seekAndFollow(timeMs: number) {
+    followPlayhead = true;
+    scheduleSeek(timeMs, true);
+  }
+
   function moveScrub(event: PointerEvent) {
     if (!scrubbing) return;
     const delta = event.clientX - dragStartX;
     if (Math.abs(delta) >= 3) dragMoved = true;
     if (!dragMoved) return;
-    const next = dragStartTimeMs + delta / dragWidth * dragWindowSpanMs;
+    // The user is moving the film, not the playhead: pulling the axis right
+    // brings earlier time under the fixed locator, and pulling left advances.
+    const next = dragStartTimeMs - delta / dragWidth * dragWindowSpanMs;
     scheduleSeek(next);
   }
 
   function endScrub(event: PointerEvent) {
-    const finalTime = dragMoved
-      ? dragTargetTimeMs
-      : pointerTime(event, dragWindowStartMs, dragWindowSpanMs);
     scrubbing = false;
-    if (dragMoved || !scrubStartedOnEvent) scheduleSeek(finalTime, true);
-    if (resumeFollowAfterScrub) {
-      resumeFollowAfterScrub = false;
+    if (dragMoved) {
+      scheduleSeek(dragTargetTimeMs, true);
       followPlayhead = true;
-    }
+    } else followPlayhead = resumeFollowAfterScrub;
+    resumeFollowAfterScrub = false;
     const element = event.currentTarget as HTMLElement;
     if (dragMoved) suppressEventClickUntil = performance.now() + 250;
     scrubStartedOnEvent = false;
@@ -420,37 +437,39 @@
     scrubbing = false;
     if (dragMoved || pendingSeekTarget !== null) {
       scheduleSeek(dragTargetTimeMs, true);
-    }
-    if (resumeFollowAfterScrub) {
-      resumeFollowAfterScrub = false;
       followPlayhead = true;
-    }
+    } else followPlayhead = resumeFollowAfterScrub;
+    resumeFollowAfterScrub = false;
     scrubStartedOnEvent = false;
     const element = event.currentTarget as HTMLElement;
     if (element.hasPointerCapture(event.pointerId)) element.releasePointerCapture(event.pointerId);
   }
 
   function setZoom(nextZoom: number) {
-    const center = viewStartMs + viewSpanMs / 2;
+    const center = followPlayhead ? timelineTimeMs : viewStartMs + viewSpanMs / 2;
     const clampedZoom = Math.max(minimumZoom, Math.min(24, nextZoom));
     const nextViewSpan = Math.min(timelineSpanMs, Math.max(5_000, 120_000 / clampedZoom));
     zoom = clampedZoom;
-    followPlayhead = false;
-    scrollStartMs = Math.max(timelineStartMs, Math.min(timelineEndMs - nextViewSpan, center - nextViewSpan / 2));
+    if (!followPlayhead)
+      scrollStartMs = Math.max(timelineStartMs, Math.min(timelineEndMs - nextViewSpan, center - nextViewSpan / 2));
   }
 
   function panView(ratio: number) {
+    const nextStart = Math.max(timelineStartMs, Math.min(timelineStartMs + scrollMaximumMs, Math.round(viewStartMs + viewSpanMs * ratio)));
+    scrollStartMs = nextStart;
     followPlayhead = false;
-    scrollStartMs = Math.max(timelineStartMs, Math.min(timelineStartMs + scrollMaximumMs, Math.round(viewStartMs + viewSpanMs * ratio)));
   }
 
   function toggleFollowPlayhead() {
-    followPlayhead = !followPlayhead;
+    if (followPlayhead) {
+      scrollStartMs = viewStartMs;
+      followPlayhead = false;
+    } else followPlayhead = true;
   }
 
   function setViewStart(value: number) {
-    followPlayhead = false;
     scrollStartMs = Math.max(timelineStartMs, Math.min(timelineStartMs + scrollMaximumMs, value));
+    followPlayhead = false;
   }
 
   function scrollbarValue(event: PointerEvent) {
@@ -504,12 +523,12 @@
   }
 
   function timelineKeydown(event: KeyboardEvent) {
-    if (event.key === "ArrowLeft") scheduleSeek(Math.max(timelineStartMs, timelineTimeMs - 1000), true);
-    else if (event.key === "ArrowRight") scheduleSeek(Math.min(timelineEndMs, timelineTimeMs + 1000), true);
+    if (event.key === "ArrowLeft") seekAndFollow(Math.max(timelineStartMs, timelineTimeMs - 1000));
+    else if (event.key === "ArrowRight") seekAndFollow(Math.min(timelineEndMs, timelineTimeMs + 1000));
     else if (event.key === "PageUp") panView(-.8);
     else if (event.key === "PageDown") panView(.8);
-    else if (event.key === "Home") scheduleSeek(timelineStartMs, true);
-    else if (event.key === "End") scheduleSeek(timelineEndMs, true);
+    else if (event.key === "Home") seekAndFollow(timelineStartMs);
+    else if (event.key === "End") seekAndFollow(timelineEndMs);
     else return;
     event.preventDefault();
   }
@@ -598,7 +617,9 @@
     <div class="timeline-ruler-row">
       <span class="timeline-ruler-gutter" aria-hidden="true"></span>
       <div class="timeline-ruler" class:playing role="slider" tabindex="0" aria-label={t("preview.seekTimeline")} aria-valuemin={timelineStartMs} aria-valuemax={timelineEndMs} aria-valuenow={timelineTimeMs} onkeydown={timelineKeydown} onpointerdown={beginScrub} onpointermove={moveScrub} onpointerup={endScrub} onpointercancel={cancelScrub}>
-        {#each ticks as tick, index}{#if tick.time >= timelineStartMs && tick.time <= timelineEndMs}<span class:first-tick={index === 0} class:middle-tick={index === 2} class:last-tick={index === ticks.length - 1} style={`left:${tick.percent}%`}><i></i><small>{rulerTime(tick.time, tickPrecision)}</small></span>{/if}{/each}
+        <div class="timeline-ruler-motion" style={motionLayerStyle}>
+          {#each ticks as tick}{#if tick.time >= timelineStartMs && tick.time <= timelineEndMs}<span style={`left:${tick.percent}%`}><i></i><small>{rulerTime(tick.time, tickPrecision)}</small></span>{/if}{/each}
+        </div>
         {#if playheadVisible}<em style={`left:${cursorPositionPercent}%`}></em>{/if}
       </div>
     </div>
@@ -606,17 +627,20 @@
       <div class="timeline-lane">
         <div class="timeline-lane-label"><b>{trackName || t("timeline.selectedTrack")}</b>{#if trackDetail || trackLabel}<small>{trackDetail || trackLabel}</small>{/if}</div>
         <div class="timeline-track" class:playing role="slider" tabindex="0" aria-label={t("preview.seekTimeline")} aria-valuemin={timelineStartMs} aria-valuemax={timelineEndMs} aria-valuenow={timelineTimeMs} onkeydown={timelineKeydown} onpointerdown={beginScrub} onpointermove={moveScrub} onpointerup={endScrub} onpointercancel={cancelScrub}>
-          {#each positionedRecords as positioned (positioned.item.index)}
-            {@const item = positioned.item}
-            {@const features = positioned.features}
-            <button use:registerEventNode={item.index} class:ttml={item.kind === "caption"} class:scene={item.kind === "scene"} data-tooltip={`${timestamp(item.beginMs)} · ${item.text || kind(item.kind)}`} aria-label={`${timestamp(item.beginMs)} · ${item.text || kind(item.kind)}`} style={positioned.style} onpointerdown={beginEventScrub} onclick={(event) => { event.stopPropagation(); if (performance.now() < suppressEventClickUntil) return; scheduleSeek(item.beginMs, true); }}>
-              <span class="timeline-event-features">
-                {#each features.slice(0, 2) as feature}<span class="timeline-event-feature" style={`--feature-color:${featureMeta[feature].color}`}><img src={featureMeta[feature].icon} alt="" /><span>{t(`feature.${feature}`)}</span></span>{/each}
-                {#if features.length > 2}<span class="timeline-feature-overflow">+{features.length - 2}</span>{/if}
-              </span>
-              <span class="timeline-event-text">{item.text || kind(item.kind)}</span>
-            </button>
-          {/each}
+          <div class="timeline-track-motion" style={motionLayerStyle}>
+            {#each ticks as tick}<span class="timeline-grid-line" style={`left:${tick.percent}%`}></span>{/each}
+            {#each positionedRecords as positioned (positioned.item.index)}
+              {@const item = positioned.item}
+              {@const features = positioned.features}
+              <button use:registerEventNode={item.index} class:ttml={item.kind === "caption"} class:scene={item.kind === "scene"} data-tooltip={`${timestamp(item.beginMs)} · ${item.text || kind(item.kind)}`} aria-label={`${timestamp(item.beginMs)} · ${item.text || kind(item.kind)}`} style={positioned.style} onpointerdown={beginEventScrub} onclick={(event) => { event.stopPropagation(); if (performance.now() < suppressEventClickUntil) return; seekAndFollow(item.beginMs); }}>
+                <span class="timeline-event-features">
+                  {#each features.slice(0, 2) as feature}<span class="timeline-event-feature" style={`--feature-color:${featureMeta[feature].color}`}><img src={featureMeta[feature].icon} alt="" /><span>{t(`feature.${feature}`)}</span></span>{/each}
+                  {#if features.length > 2}<span class="timeline-feature-overflow">+{features.length - 2}</span>{/if}
+                </span>
+                <span class="timeline-event-text">{item.text || kind(item.kind)}</span>
+              </button>
+            {/each}
+          </div>
           {#if playheadVisible}<i class="timeline-playhead" style={`left:${cursorPositionPercent}%`}></i>{/if}
         </div>
       </div>
@@ -641,7 +665,7 @@
       {#each featureOptions as feature}<span class:active={filters.has(feature)}><MacCheckbox checked={filters.has(feature)} label={t(`feature.${feature}`)} onChange={() => toggleFilter(feature)} /></span>{/each}
     </div>
     {#if !archivePath}<div class="event-empty"><FileText size={30} /><p>{live ? t("workspace.eventsEmpty") : t("timeline.archiveRequired")}</p></div>
-    {:else if records.length}<ol>{#each eventListItems as entry (entry.item.index)}{@const item = entry.item}<li><time>{timestamp(item.beginMs)}<small>{eventEndTimestamp(item.endMs)}</small></time><button class="event-content" onclick={() => scheduleSeek(item.beginMs, true)}><strong>{kind(item.kind)}{#if item.regionX !== null && item.regionY !== null}<small>{t("timeline.region").replace("{0}", String(item.regionX)).replace("{1}", String(item.regionY))}</small>{/if}</strong><span class="feature-badges">{#each item.features as feature}{#if feature === "color" && item.colors?.length}{#each item.colors as color}<i class="feature-color" data-tooltip={t(`feature.color.${color.role}`)}><span class="color-swatch" style={`background:${color.value}`}></span>{color.value}</i>{/each}{:else}<i class={`feature-${feature}`}>{t(`feature.${feature}`)}</i>{/if}{/each}</span><small>{#each entry.segments as segment}{#if segment.features.length}<mark class={segment.features.map((feature) => `feature-${feature}`).join(" ")} data-tooltip={segment.features.map((feature) => t(`feature.${feature}`)).join(" · ")}>{segment.text}</mark>{:else}{segment.text}{/if}{/each}</small></button></li>{/each}</ol>{#if !exhausted}<button class="load-more" onclick={() => loadPage(false)} disabled={loading}><RefreshCw size={15} /> {loading ? t("workspace.loading") : t("workspace.loadMore")}</button>{/if}
+    {:else if records.length}<ol>{#each eventListItems as entry (entry.item.index)}{@const item = entry.item}<li><time>{timestamp(item.beginMs)}<small>{eventEndTimestamp(item.endMs)}</small></time><button class="event-content" onclick={() => seekAndFollow(item.beginMs)}><strong>{kind(item.kind)}{#if item.regionX !== null && item.regionY !== null}<small>{t("timeline.region").replace("{0}", String(item.regionX)).replace("{1}", String(item.regionY))}</small>{/if}</strong><span class="feature-badges">{#each item.features as feature}{#if feature === "color" && item.colors?.length}{#each item.colors as color}<i class="feature-color" data-tooltip={t(`feature.color.${color.role}`)}><span class="color-swatch" style={`background:${color.value}`}></span>{color.value}</i>{/each}{:else}<i class={`feature-${feature}`}>{t(`feature.${feature}`)}</i>{/if}{/each}</span><small>{#each entry.segments as segment}{#if segment.features.length}<mark class={segment.features.map((feature) => `feature-${feature}`).join(" ")} data-tooltip={segment.features.map((feature) => t(`feature.${feature}`)).join(" · ")}>{segment.text}</mark>{:else}{segment.text}{/if}{/each}</small></button></li>{/each}</ol>{#if !exhausted}<button class="load-more" onclick={() => loadPage(false)} disabled={loading}><RefreshCw size={15} /> {loading ? t("workspace.loading") : t("workspace.loadMore")}</button>{/if}
     {:else}<div class="event-empty"><Clock3 size={30} /><p>{loading ? t("workspace.loading") : live ? t("workspace.eventsEmpty") : t("timeline.empty")}</p></div>{/if}
   </section>
 {/if}
@@ -722,18 +746,16 @@
   .timeline-tools .timeline-follow.active { color: var(--rw-accent) !important; border-color: color-mix(in srgb, var(--rw-accent) 45%, var(--rw-border)); background: color-mix(in srgb, var(--rw-accent) 9%, transparent); }
   .timeline-ruler-row { display: grid; grid-template-columns: var(--timeline-gutter) minmax(0, 1fr); height: 30px; padding-inline: var(--timeline-axis-inset); border-bottom: 1px solid var(--rw-border-subtle); background: var(--rw-surface-muted); }
   .timeline-ruler-gutter { border-right: 1px solid var(--rw-border-subtle); }
-  .timeline-ruler { position: relative; min-width: 0; height: 30px; margin-inline: var(--timeline-thumb-inset); cursor: grab; touch-action: none; user-select: none; }
-  .timeline-ruler > span { position: absolute; top: 0; bottom: 0; }
-  .timeline-ruler > span > i { display: block; width: 1px; height: 8px; background: color-mix(in srgb, var(--rw-text) 24%, transparent); }
-  .timeline-ruler > span > small { position: absolute; top: 11px; left: 0; color: var(--rw-muted); font: 8px/11px var(--rw-font-mono); white-space: nowrap; transform: translateX(-50%); }
-  .timeline-ruler > span.first-tick > small { left: 4px; transform: none; }
-  .timeline-ruler > span.last-tick > small { right: 4px; left: auto; transform: none; }
-  .timeline-ruler > span.middle-tick > i { height: 11px; background: color-mix(in srgb, var(--rw-text) 38%, transparent); }
-  .timeline-ruler > span.middle-tick > small { color: var(--rw-text-secondary); font-weight: 600; }
+  .timeline-ruler { position: relative; min-width: 0; height: 30px; margin-inline: var(--timeline-thumb-inset); overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
+  .timeline-ruler-motion, .timeline-track-motion { position: absolute; top: 0; bottom: 0; left: 0; contain: layout style; }
+  .timeline-ruler-motion > span { position: absolute; top: 0; bottom: 0; }
+  .timeline-ruler-motion > span > i { display: block; width: 1px; height: 9px; background: color-mix(in srgb, var(--rw-text) 28%, transparent); }
+  .timeline-ruler-motion > span > small { position: absolute; top: 11px; left: 0; color: var(--rw-muted); font: 8px/11px var(--rw-font-mono); white-space: nowrap; transform: translateX(-50%); }
   .timeline-ruler > em, .timeline-playhead { position: absolute; z-index: 6; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--rw-accent); pointer-events: none; }
-  .timeline-ruler.playing > em, .timeline-track.playing > .timeline-playhead { transition: left 100ms linear; }
-  .caption-timeline.dragging .timeline-ruler > em,
-  .caption-timeline.dragging .timeline-track > .timeline-playhead { transition: none; }
+  .timeline-ruler.playing .timeline-ruler-motion,
+  .timeline-track.playing .timeline-track-motion { transition: transform 100ms linear; will-change: transform; }
+  .caption-timeline.dragging .timeline-ruler-motion,
+  .caption-timeline.dragging .timeline-track-motion { transition: none; will-change: transform; }
   .timeline-ruler > em::before { position: absolute; top: 0; left: -4px; border-top: 6px solid var(--rw-accent); border-right: 5px solid transparent; border-left: 5px solid transparent; content: ""; }
   .timeline-lanes { min-width: 0; }
   .timeline-lane { display: grid; grid-template-columns: var(--timeline-gutter) minmax(0, 1fr); min-height: 72px; padding-inline: var(--timeline-axis-inset); background: var(--rw-content); }
@@ -746,11 +768,12 @@
     height: 72px;
     margin-inline: var(--timeline-thumb-inset);
     overflow: hidden;
-    background: repeating-linear-gradient(90deg, transparent 0, transparent calc(25% - 1px), color-mix(in srgb, var(--rw-border-subtle) 76%, transparent) calc(25% - 1px), color-mix(in srgb, var(--rw-border-subtle) 76%, transparent) 25%);
+    background: var(--rw-content);
     cursor: grab;
     touch-action: none;
     user-select: none;
   }
+  .timeline-grid-line { position: absolute; z-index: 0; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--rw-border-subtle) 76%, transparent); pointer-events: none; }
   .timeline-track button {
     position: absolute;
     z-index: 2;
