@@ -105,6 +105,7 @@ pub fn get_preview_runtime(app: AppHandle) -> PreviewRuntime {
 }
 
 #[tauri::command]
+#[cfg(windows)]
 pub fn get_preview_render_diagnostics(
     state: State<'_, Arc<AppState>>,
 ) -> Result<PreviewRenderDiagnostics, String> {
@@ -157,6 +158,27 @@ pub fn get_preview_render_diagnostics(
         decoder_mode: Some(stats.decoder_mode),
         fallback_reason: None,
         last_error: stats.last_error,
+    })
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn get_preview_render_diagnostics(
+    _: State<'_, Arc<AppState>>,
+) -> Result<PreviewRenderDiagnostics, String> {
+    Ok(PreviewRenderDiagnostics {
+        route: "none".into(),
+        active: false,
+        frames_presented: 0,
+        presents_per_second: 0.0,
+        caption_texture_uploads: 0,
+        caption_texture_clears: 0,
+        video_aspect: None,
+        surface_width: None,
+        surface_height: None,
+        decoder_mode: None,
+        fallback_reason: Some("Native preview is only implemented on Windows.".into()),
+        last_error: None,
     })
 }
 #[cfg(test)]
