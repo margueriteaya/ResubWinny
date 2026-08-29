@@ -40,7 +40,7 @@ jobs:
       - name: Lint Worker
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Lint desktop service
-        run: cargo clippy --manifest-path studio-tauri/src-tauri/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --manifest-path studio-tauri/src-tauri/Cargo.toml --all-targets --target x86_64-pc-windows-msvc -- -D warnings
       - name: Build and check desktop frontend
         run: npm run build --prefix studio-tauri
       - name: Verify pinned sources and generated licenses
@@ -83,7 +83,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install musl C toolchain
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools libfontconfig1-dev libfreetype6-dev
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
