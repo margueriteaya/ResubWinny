@@ -144,8 +144,8 @@ jobs:
         with:
           tool: cargo-deny
       - name: Check Worker dependency policy
-        run: cargo deny --manifest-path Cargo.toml check
+        run: cargo deny --manifest-path Cargo.toml --config deny.toml check
       - name: Check desktop dependency policy
-        run: cargo deny --manifest-path studio-tauri/src-tauri/Cargo.toml check
+        run: cargo deny --manifest-path studio-tauri/src-tauri/Cargo.toml --config deny.toml check
       - name: Check fuzz dependency policy
-        run: cargo deny --manifest-path fuzz/Cargo.toml check
+        run: cargo deny --manifest-path fuzz/Cargo.toml --config deny.toml check
