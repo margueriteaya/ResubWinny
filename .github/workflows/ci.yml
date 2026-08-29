@@ -59,6 +59,10 @@ jobs:
         os: [windows-latest, macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v7
+      - name: Install pinned Windows libmpv runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/setup-libmpv.ps1
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.97.1

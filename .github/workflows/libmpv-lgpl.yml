@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 360
     steps:
       - name: Checkout ResubWinny
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Read the canonical dependency pins
         id: pins
@@ -168,7 +168,7 @@ jobs:
             -OutputDirectory build/libmpv/corresponding-source
 
       - name: Upload binary and source as one release candidate
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: libmpv-lgpl-windows-x86_64-release-candidate
           if-no-files-found: error

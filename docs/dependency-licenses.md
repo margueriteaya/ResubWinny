@@ -560,11 +560,11 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `macos-traffic-lights` | `1.1.0` | MIT |
 | `magic-string` | `0.30.21` | MIT |
 | `mri` | `1.2.0` | MIT |
-| `nanoid` | `3.3.16` | MIT |
+| `nanoid` | `3.3.18` | MIT |
 | `obug` | `2.1.4` | MIT |
 | `picocolors` | `1.1.1` | ISC |
 | `picomatch` | `4.0.5` | MIT |
-| `postcss` | `8.5.22` | MIT |
+| `postcss` | `8.5.26` | MIT |
 | `readdirp` | `4.1.2` | MIT |
 | `rollup` | `4.62.2` | MIT |
 | `sade` | `1.8.1` | MIT |
