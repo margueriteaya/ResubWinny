@@ -87,6 +87,8 @@ jobs:
           tool: cargo-fuzz
       - name: Build every declared fuzz target
         shell: bash
+        env:
+          RUSTUP_TOOLCHAIN: nightly
         run: |
           set -euo pipefail
           mapfile -t targets < <(

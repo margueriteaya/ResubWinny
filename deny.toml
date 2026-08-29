@@ -3,6 +3,12 @@ all-features = true
 
 [advisories]
 yanked = "deny"
+unmaintained = "warn"
+# `ttf-parser` is a transitive dependency of the current caption/font stack.
+# The RustSec advisory is informational (the crate is unmaintained), and no
+# compatible drop-in upgrade is available yet; keep it visible in audits
+# without blocking the dependency-policy gate.
+ignore = ["RUSTSEC-2026-0192"]
 
 [licenses]
 confidence-threshold = 0.8

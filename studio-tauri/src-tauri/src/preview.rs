@@ -186,6 +186,7 @@ fn mpv_overlay_command(path: &Path, x: i32, y: i32, width: i32, height: i32) -> 
 }
 
 #[path = "preview/native.rs"]
+#[cfg(windows)]
 mod native;
 #[cfg(test)]
 #[path = "preview/tests.rs"]

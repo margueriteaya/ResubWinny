@@ -21,6 +21,8 @@ jobs:
           tool: cargo-fuzz
       - name: Run every declared target
         shell: bash
+        env:
+          RUSTUP_TOOLCHAIN: nightly
         run: |
           set -euo pipefail
           mapfile -t targets < <(
