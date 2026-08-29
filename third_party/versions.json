@@ -19,18 +19,18 @@
     "libmpvWindowsX86_64": {
       "mode": "bundled-dynamic-library",
       "buildUpstream": "https://github.com/zhongfly/mpv-winbuild.git",
-      "buildTag": "2026-07-24-0fb136f685",
+        "buildTag": "2026-08-29-e8673660ab",
       "releaseTagCommit": "9b6ccd6abbfcd6bb2dcad8946d445f670b0555ef",
       "buildRecipeCommit": "b4b1088c30e8821e012fd20052de4c2d3a8eaad4",
       "buildRunId": 30091573485,
       "toolchainUpstream": "https://github.com/shinchiro/mpv-winbuild-cmake.git",
       "toolchainCommit": "04283f7e911149809c46bc236a834cf7134ba133",
-      "asset": "mpv-dev-lgpl-x86_64-20260724-git-0fb136f685.7z",
-      "assetSha256": "4B1B9450086ABCE02C6EAA44C6F7E72B7D7CC1C28F0486A03B844A9E6CB09EE4",
+        "asset": "mpv-dev-lgpl-x86_64-20260829-git-e8673660ab.7z",
+        "assetSha256": "78260166265FBC09B3BEE75EE3464EB0F6BBAA8ECD172786E33C22BBF8A3CB47",
       "mpvCommit": "0fb136f685c21ec10943f682bec1c90220d2d90f",
       "ffmpegCommit": "2f209337fc66b58bf0495265880bb37580c3f981",
       "license": "LGPL-2.1-or-later",
-      "dllSha256": "2FDF6BF2AD4354F26A191C12EBA02492DC5A2F024AAC018494C85192DAE84E80",
+        "dllSha256": "92CA673870C425E0A539B854231F75E71BF7FB6E72FE86A6CE315CDF57DC0F16",
       "importLibrarySha256": "BEF1B89F534BC86B33135E1F04FA2D5064B9D48B5DE8BC9866665BBF43DEF793"
     },
     "roundedMplus1mArib": {
