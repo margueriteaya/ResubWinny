@@ -19,6 +19,9 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
+      - name: Select nightly toolchain for cargo-fuzz
+        shell: bash
+        run: mv rust-toolchain.toml rust-toolchain.toml.ci-backup
       - name: Run every declared target
         shell: bash
         env:
