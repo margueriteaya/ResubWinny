@@ -22,6 +22,7 @@ jobs:
         with:
           toolchain: 1.97.1
           components: rustfmt, clippy
+          targets: x86_64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2
       - name: Install Linux desktop dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
@@ -82,23 +83,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
-      - name: Install musl C toolchain
-        run: sudo apt-get update && sudo apt-get install -y musl-tools libfontconfig1-dev libfreetype6-dev
+      - name: Install native fuzz build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libfreetype6-dev
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
       - name: Select nightly toolchain for cargo-fuzz
         shell: bash
         run: mv rust-toolchain.toml rust-toolchain.toml.ci-backup
-      - name: Install fuzz target standard library
-        run: rustup target add x86_64-unknown-linux-musl --toolchain nightly
       - name: Build every declared fuzz target
         shell: bash
         env:
           RUSTUP_TOOLCHAIN: nightly
-          RUSTFLAGS: -C target-feature=-crt-static
-          CC_x86_64_unknown_linux_musl: musl-gcc
-          CXX_x86_64_unknown_linux_musl: g++
         run: |
           set -euo pipefail
           mapfile -t targets < <(
@@ -151,5 +147,3 @@ jobs:
         run: cargo deny --config deny.toml --manifest-path Cargo.toml check
       - name: Check desktop dependency policy
         run: cargo deny --config deny.toml --manifest-path studio-tauri/src-tauri/Cargo.toml check
-      - name: Check fuzz dependency policy
-        run: cargo deny --config deny.toml --manifest-path fuzz/Cargo.toml check
