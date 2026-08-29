@@ -82,6 +82,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
+      - name: Install musl C toolchain
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
@@ -95,6 +97,8 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: nightly
           RUSTFLAGS: -C target-feature=-crt-static
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CXX_x86_64_unknown_linux_musl: g++
         run: |
           set -euo pipefail
           mapfile -t targets < <(
@@ -144,8 +148,8 @@ jobs:
         with:
           tool: cargo-deny
       - name: Check Worker dependency policy
-        run: cargo deny --manifest-path Cargo.toml --config deny.toml check
+        run: cargo deny --config deny.toml --manifest-path Cargo.toml check
       - name: Check desktop dependency policy
-        run: cargo deny --manifest-path studio-tauri/src-tauri/Cargo.toml --config deny.toml check
+        run: cargo deny --config deny.toml --manifest-path studio-tauri/src-tauri/Cargo.toml check
       - name: Check fuzz dependency policy
-        run: cargo deny --manifest-path fuzz/Cargo.toml --config deny.toml check
+        run: cargo deny --config deny.toml --manifest-path fuzz/Cargo.toml check
