@@ -37,6 +37,8 @@ try {
             if ($item.Length -gt $limit) {
                 "$path ($([math]::Round($item.Length / 1MB, 2)) MiB)"
             }
+        } elseif ($path -notmatch '(^|/)\.') {
+            throw "Tracked file is missing from the checkout: $path"
         }
     }
     if ($oversized) {
