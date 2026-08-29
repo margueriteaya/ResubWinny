@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 360
     steps:
       - name: Checkout ResubWinny
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Read the canonical dependency pins
         id: pins
