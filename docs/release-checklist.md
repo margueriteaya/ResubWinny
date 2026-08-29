@@ -4,6 +4,14 @@ ResubWinny distinguishes a public source release from a public Windows binary
 release. Source publication does not imply that the current private-test
 installer is ready for redistribution.
 
+The absence of redistributable broadcast recordings is not a release defect.
+Real recordings are legally held and tested only in the private validation
+environment; public CI uses constructed protocol fixtures and publishes test
+results without recording bytes, captions derived from those recordings, or
+screenshots. A release may proceed with a skipped private-corpus gate when
+the release notes identify the skipped gate and the public synthetic checks
+pass.
+
 ## Public source release
 
 - [ ] The tagged revision passes `scripts/check.ps1`.

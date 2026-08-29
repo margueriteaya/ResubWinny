@@ -11,21 +11,22 @@
   import MacCheckbox from "../../components/MacCheckbox.svelte";
   import MacSlider from "../../components/MacSlider.svelte";
   import { getFilteredTimelineWindow, getRecentTimelineWindow, getTimelineTimeWindow } from "./timeline-controller";
+  import { projectTimeMs as asProjectTimeMs, type ProjectTimeMs } from "./time-mapping";
 
   export let archivePath = "";
   export let desktopRuntime = false;
   export let live = false;
   export let editor = false;
-  export let currentTimeMs = 0;
-  export let rangeStartMs = 0;
-  export let rangeEndMs = 120_000;
+  export let projectTimeMs: ProjectTimeMs = 0 as ProjectTimeMs;
+  export let rangeStartMs: ProjectTimeMs = 0 as ProjectTimeMs;
+  export let rangeEndMs: ProjectTimeMs = 120_000 as ProjectTimeMs;
   export let playing = false;
   export let trackLabel = "";
   export let trackName = "";
   export let trackDetail = "";
   export let expectedCount = 0;
-  export let onSeek: (milliseconds: number, final: boolean) => void | Promise<void> = () => {};
-  export let onSeekTarget: (milliseconds: number, final?: boolean) => void = () => {};
+  export let onSeek: (milliseconds: ProjectTimeMs, final: boolean) => void | Promise<void> = () => {};
+  export let onSeekTarget: (milliseconds: ProjectTimeMs, final?: boolean) => void = () => {};
   export let onOpenMapping: () => void = () => {};
   export let onError: (message: string) => void = () => {};
 
@@ -86,28 +87,28 @@
     accessibility: { color: "#168247", icon: accessibilityIcon },
   };
 
-  const timestamp = (timeMs: number) => {
-    const whole = Math.max(0, Math.floor(timeMs));
+  const timestamp = (projectTimeMs: number) => {
+    const whole = Math.max(0, Math.floor(projectTimeMs));
     const seconds = Math.floor(whole / 1000);
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const remainder = seconds % 60;
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}.${String(whole % 1000).padStart(3, "0")}`;
   };
-  const rulerTime = (timeMs: number, precision: number) => {
+  const rulerTime = (projectTimeMs: number, precision: number) => {
     const unitMs = 10 ** (3 - precision);
-    const value = timestamp(Math.round(timeMs / unitMs) * unitMs);
+    const value = timestamp(Math.round(projectTimeMs / unitMs) * unitMs);
     if (precision === 0) return value.slice(0, -4);
     if (precision === 3) return value;
     return value.slice(0, -(3 - precision));
   };
-  const eventEndTimestamp = (timeMs: number) => timeMs >= Number.MAX_SAFE_INTEGER ? "—" : timestamp(timeMs);
+  const eventEndTimestamp = (projectTimeMs: number) => projectTimeMs >= Number.MAX_SAFE_INTEGER ? "—" : timestamp(projectTimeMs);
   const kind = (value: TimelineEvent["kind"]) => t(`timeline.kind.${value}`, value);
   // The parent supplies this exact mapped range to both the player slider and
   // the timeline. Do not let whichever events arrived first expand the ruler:
   // that makes the same timestamp occupy different percentages in each
   // control and is the source of the apparent ruler/player drift.
-  $: timelineTimeMs = scrubbing ? dragTargetTimeMs : currentTimeMs;
+  $: timelineTimeMs = scrubbing ? dragTargetTimeMs : projectTimeMs;
   $: timelineStartMs = Math.max(0, Math.min(rangeStartMs, rangeEndMs));
   $: timelineEndMs = Math.max(timelineStartMs + 5_000, rangeEndMs);
   $: timelineSpanMs = timelineEndMs - timelineStartMs;
@@ -368,7 +369,7 @@
 
   function dispatchSeek(timeMs: number, final: boolean) {
     try {
-      const operation = onSeek(timeMs, final);
+      const operation = onSeek(asProjectTimeMs(timeMs), final);
       if (operation && typeof (operation as Promise<void>).catch === "function")
         void Promise.resolve(operation).catch((reason) => onError(String(reason)));
     } catch (reason) {
@@ -386,7 +387,7 @@
 
   function scheduleSeek(timeMs: number, final = false) {
     dragTargetTimeMs = Math.max(timelineStartMs, Math.min(timelineEndMs, Math.round(timeMs)));
-    onSeekTarget(dragTargetTimeMs, final);
+    onSeekTarget(asProjectTimeMs(dragTargetTimeMs), final);
     if (final) {
       pendingSeekTarget = null;
       if (seekFrame !== undefined) {
@@ -594,7 +595,7 @@
     if (seekFrame !== undefined) cancelAnimationFrame(seekFrame);
     if (scrubbing || pendingSeekTarget !== null) {
       scrubbing = false;
-      onSeekTarget(dragTargetTimeMs, true);
+      onSeekTarget(asProjectTimeMs(dragTargetTimeMs), true);
       dispatchSeek(dragTargetTimeMs, true);
     }
   });

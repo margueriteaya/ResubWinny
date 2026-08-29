@@ -22,6 +22,12 @@ TLV/MMTP has no equivalent local release fixture at present; its parser,
 signalling limits, and raw-evidence contract are covered by bounded
 constructed tests until a lawful real capture becomes available.
 
+Public protocol fixtures are available from the worker's `synthetic` module:
+`make_ts_packet`, `make_pat`, `make_pmt`, `make_pes`, `make_b24_data_group`, and
+`make_mmtp_packet` construct deterministic
+packet and section boundaries for parser tests without embedding broadcast
+recordings or claiming broadcaster-specific semantics.
+
 For a release-artifact smoke check without a full scan, run:
 
 ```powershell
@@ -51,7 +57,8 @@ parsing, and MMTP/TLV payload
 envelopes. `cargo check --manifest-path fuzz/Cargo.toml`
 provides a stable-toolchain compile check; CI additionally builds all targets
 with `cargo-fuzz` on Linux nightly. PSI/PES/B24 state-machine and deeper
-signalling/MPU fuzz targets remain future corpus work.
+signalling/MPU semantic fuzz targets remain future corpus work; the weekly
+workflow runs every declared target for a bounded interval.
 
 For visual or format changes, create outputs in an ignored validation directory
 and compare the project archive, ASS, TTML, raw PES evidence, and unresolved

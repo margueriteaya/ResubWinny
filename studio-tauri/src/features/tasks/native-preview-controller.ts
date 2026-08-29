@@ -4,13 +4,14 @@ import {
   type PlaybackTimeMapping,
   type PreviewRect,
 } from "../../backend";
+import { mediaTimeMs as asMediaTimeMs, type MediaTimeMs } from "./time-mapping";
 
-type PreviewCallbacks = {
+export type PreviewCallbacks = {
   archivePath: () => string;
   renderBusy: () => boolean;
   setRenderBusy: (value: boolean) => void;
-  setMediaTime: (timeMs: number | null) => void;
-  setDuration: (timeMs: number | null) => void;
+  setMediaTime: (timeMs: MediaTimeMs | null) => void;
+  setDuration: (timeMs: MediaTimeMs | null) => void;
   setPaused: (paused: boolean) => void;
   setBroadcastMetadata: (metadata: BroadcastMetadata) => void;
   selectedServiceId: () => number | undefined;
@@ -89,7 +90,7 @@ export class NativePreviewController {
     this.lastCaptionSyncAt = 0;
   }
 
-  finishSeek(mediaTimeMs: number | null) {
+  finishSeek(mediaTimeMs: MediaTimeMs | null) {
     if (mediaTimeMs != null && Number.isFinite(mediaTimeMs))
       this.lastTimeSeconds = Math.max(0, mediaTimeMs) / 1_000;
     this.syncRevision += 1;
@@ -98,7 +99,7 @@ export class NativePreviewController {
     this.requestSync();
   }
 
-  finishScrub(mediaTimeMs: number | null) {
+  finishScrub(mediaTimeMs: MediaTimeMs | null) {
     // Release the scrub guard before requesting the authoritative sample.
     // finishSeek() schedules an immediate poll; doing this in the opposite
     // order caused that poll to be rejected by `scrubbing` and left the UI
@@ -286,7 +287,7 @@ export class NativePreviewController {
   }
 
   private async syncPlaybackState(callbacks: PreviewCallbacks, generation = this.generation): Promise<{
-    mediaTimeMs: number;
+    mediaTimeMs: MediaTimeMs;
     revision: number;
   } | null> {
     if (!this.isCurrent(callbacks, generation) || this.playbackSyncing || this.scrubbing || this.seeking) return null;
@@ -299,9 +300,9 @@ export class NativePreviewController {
       this.consecutiveSyncFailures = 0;
       this.lastTimeSeconds = state.timeSeconds ?? this.lastTimeSeconds;
       this.lastPaused = state.paused ?? this.lastPaused;
-      const mediaTimeMs = state.timeSeconds == null ? null : Math.round(state.timeSeconds * 1000);
+      const mediaTimeMs = state.timeSeconds == null ? null : asMediaTimeMs(state.timeSeconds * 1000);
       callbacks.setMediaTime(mediaTimeMs);
-      callbacks.setDuration(state.durationSeconds == null ? null : Math.round(state.durationSeconds * 1000));
+      callbacks.setDuration(state.durationSeconds == null ? null : asMediaTimeMs(state.durationSeconds * 1000));
       if (state.paused != null) callbacks.setPaused(state.paused);
       return mediaTimeMs == null ? null : { mediaTimeMs, revision };
     } catch (reason) {
@@ -339,7 +340,7 @@ export class NativePreviewController {
 
   private async syncCaptionOverlay(
     callbacks: PreviewCallbacks,
-    mediaTimeMs: number,
+    mediaTimeMs: MediaTimeMs,
     revision: number,
     generation = this.generation,
   ) {

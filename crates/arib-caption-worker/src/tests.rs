@@ -484,6 +484,9 @@ fn archive_is_json_lines_with_a_header_and_summary() {
         .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("json line"))
         .collect::<Vec<_>>();
     assert_eq!(lines.len(), 2);
+    assert_eq!(lines[0]["type"], "arib_caption_studio_archive");
+    assert_eq!(lines[0]["schemaVersion"], CAPTION_ARCHIVE_SCHEMA_VERSION);
+    assert_eq!(lines[0]["version"], CAPTION_ARCHIVE_SCHEMA_VERSION);
     assert_eq!(lines[0]["format"], "jsonl");
     assert_eq!(lines[0]["source"], "sample.ts");
     assert_eq!(lines[1]["type"], "summary");

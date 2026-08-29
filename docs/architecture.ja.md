@@ -9,6 +9,19 @@
 > 2K/8K・DPI・screenshot difference gate の品質収束です。zero-copy の
 > WGL/D3D interop は現在の製品保証ではありません。
 
+## 収束期の境界（2026-08-29）
+
+この段階ではフロントエンドの技術スタックと Rust crate の構成を固定する。
+Svelte、Tauri、既存の `arib-caption-worker` は変更しない。中央状態の整理は
+feature session を優先する。Worker は入力、probe/demux、decode、Caption IR、
+export、archive、evidence を担当し、Tauri は task history、queue、settings、
+window lifecycle、native preview を担当する。`resubwinny-core` crate の分割は、
+Caption IR、time model、transport API が安定し複数の consumer が現れた後に再評価する。
+
+同じ収束期では、BD/DVD bitmap subtitle OCR、plugin system、AI translation、
+macOS/Linux native preview を明示的に延期する。DRCS は local hash → Unicode
+mapping の改善に限定し、汎用 OCR system へ拡張しない。
+
 ## 対象と非対象
 
 日本の ISDB 録画ファイル向け、オープンソースかつクロスプラットフォームの字幕抽出・変換・保存・診断ツールです。伝送層では従来の MPEG-2 TS と BS4K/8K native TLV/MMT を区別します。`.ts`、`.m2ts`、`.tlv`、`.mmts` はファイル名の手掛かりに過ぎず、伝送形式の証拠にはしません。現在の release fixture は従来 TS と 192-byte MPEG-TS/TTML 録画です。native TLV/MMT は BS4K/8K の規範的 route ですが、合法な実 capture が得られるまで実装は実験的とします。対応できる route では ARIB 字幕の意味、レイアウト、特殊文字、出所情報を可能な限り保持します。録画管理、プレーヤー、映像/音声復号、EPG、CAS、汎用 MMT フレームワーク、ライブ受信は対象外です。旧ツール、`bs4kass.exe`、Caption2Ass は調査・比較用に限り、配布物へ同梱しません。

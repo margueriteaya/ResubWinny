@@ -2,7 +2,19 @@
 
 The Tauri/Svelte UI is a client of the Rust backend. It does not parse TS/TLV data, decode ARIB, render high-resolution video, or decide conversion semantics.
 
-The backend surface is intentionally small:
+The durable `.caption.jsonl` format is specified separately in
+[`contracts/archive.md`](contracts/archive.md), including its explicit schema
+version and streaming-reader compatibility rules.
+
+The contract is split into focused reading guides: [`contracts/tauri-api.md`](contracts/tauri-api.md),
+[`contracts/worker-protocol.md`](contracts/worker-protocol.md),
+[`contracts/preview.md`](contracts/preview.md), and
+[`contracts/timeline.md`](contracts/timeline.md). This file remains the
+compatibility index and detailed reference.
+
+The backend surface is a bounded, stable application contract. During the
+current convergence phase, prefer consolidating related queries over adding
+new one-off command variants:
 
 | Command | Responsibility |
 | --- | --- |

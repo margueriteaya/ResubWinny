@@ -10,6 +10,22 @@
 > screenshot-difference gates. Zero-copy WGL/D3D interop is not a current
 > product claim.
 
+## Convergence boundary (2026-08-29)
+
+This phase freezes the frontend stack and Rust crate layout: Svelte, Tauri, and
+the existing `arib-caption-worker` remain in place. Frontend feature sessions
+are the preferred way to consolidate central state. The Worker remains
+responsible for input, probe/demux, decode, Caption IR, export, archive, and
+evidence; Tauri remains responsible for task history, queue, settings, window
+lifetime, and native preview. Splitting a `resubwinny-core` crate is deferred
+until the Caption IR, time model, or transport API is stable and has multiple
+consumers.
+
+The same convergence phase explicitly defers BD/DVD bitmap-subtitle OCR, a
+plugin system, AI translation, and native macOS/Linux preview. DRCS work is
+limited to the local hash-to-Unicode mapping path rather than a general OCR
+system.
+
 ## Scope
 
 An open-source, cross-platform extractor, converter, archive, and diagnostic tool for captions in Japanese ISDB recordings. The transport layer distinguishes conventional MPEG-2 TS from native BS4K/8K TLV/MMT; `.ts`, `.m2ts`, `.tlv`, and `.mmts` are filename hints only and are never treated as transport evidence. Current release fixtures include conventional TS and 192-byte MPEG-TS/TTML recordings. Native TLV/MMT remains the normative BS4K/8K route with an experimental implementation until lawful real captures are available. The tool preserves ARIB semantics, layout, special characters, and provenance where the selected route supports them. It is not a recorder manager, player, video/audio decoder, EPG browser, CAS tool, generic MMT framework, or live receiver. Legacy tools, `bs4kass.exe`, and Caption2Ass are research/comparison references only and must never ship.

@@ -29,7 +29,7 @@ fn flush_ass_ttml_group(
     associate_standalone_ttml_ruby(pending);
     for caption in pending.iter() {
         if let Some(archive_writer) = archive_writer.as_mut() {
-            write_archive_record(archive_writer, "caption", caption)?;
+            write_caption_archive_record(archive_writer, CaptionCueRef::AribTtml(caption))?;
         }
         if let Some(ttml_writer) = ttml_writer.as_mut() {
             write_ttml_caption(ttml_writer, caption, options)?;

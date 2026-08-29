@@ -6,6 +6,7 @@
   import { trackDisplayDetail, trackDisplayLabel, trackKey } from "../tracks";
   import TaskPreviewPanel from "./TaskPreviewPanel.svelte";
   import TaskSourcePanel from "./TaskSourcePanel.svelte";
+  import type { MediaTimeMs, ProjectTimeMs } from "./time-mapping";
 
   type Format = { name: ExportFormat; description: string };
   type TaskTab = "preview" | "events" | "diagnostics";
@@ -23,8 +24,8 @@
   export let diagnosticsCount = 0;
   export let bytesRead = 0;
   export let progress = 0;
-  export let projectTimeMs = 0;
-  export let durationMs: number | null = null;
+  export let projectTimeMs: ProjectTimeMs = 0 as ProjectTimeMs;
+  export let durationMs: MediaTimeMs | null = null;
   export let playerRunning = false;
   export let playerPaused = true;
   export let previewAvailable: boolean | null = null;
@@ -45,8 +46,8 @@
   export let onStartPreview: () => void = () => {};
   export let onStopPreview: () => void = () => {};
   export let onResizePreview: () => void = () => {};
-  export let onSeekProject: (milliseconds: number, final?: boolean) => void | Promise<void> = () => {};
-  export let onSeekTarget: (milliseconds: number, final?: boolean) => void = () => {};
+  export let onSeekProject: (milliseconds: ProjectTimeMs, final?: boolean) => void | Promise<void> = () => {};
+  export let onSeekTarget: (milliseconds: ProjectTimeMs, final?: boolean) => void = () => {};
   export let onSetVolume: (volume: number) => void = () => {};
   export let onSaveMapping: () => void = () => {};
   export let onDiagnosticsCount: (count: number) => void = () => {};

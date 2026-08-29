@@ -76,6 +76,7 @@ pub(super) fn render_overlay_at(
     archive: String,
     time_ms: i64,
 ) -> Result<Arc<CachedCaptionRender>, String> {
+    validate_archive_schema(&archive)?;
     let metadata = fs::metadata(&archive)
         .map_err(|error| format!("Could not inspect caption archive: {error}"))?;
     let size = metadata.len();
@@ -341,6 +342,48 @@ pub(super) fn render_overlay_at(
         .expect("preview composition must be populated")
         .render
         .clone())
+}
+
+fn validate_archive_schema(archive: &str) -> Result<(), String> {
+    let file = fs::File::open(archive)
+        .map_err(|error| format!("Could not open caption archive: {error}"))?;
+    let mut reader = BufReader::new(file);
+    let mut line = String::new();
+    if reader
+        .read_line(&mut line)
+        .map_err(|error| format!("Could not read caption archive header: {error}"))?
+        == 0
+        || !line.ends_with('\n')
+    {
+        return Ok(());
+    }
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else {
+        return Ok(());
+    };
+    if value.get("type").and_then(serde_json::Value::as_str) != Some("arib_caption_studio_archive")
+    {
+        return Ok(());
+    }
+    let explicit = value
+        .get("schemaVersion")
+        .or_else(|| value.get("schema_version"));
+    if let (Some(explicit), Some(legacy)) = (explicit, value.get("version"))
+        && explicit != legacy
+    {
+        return Err("Caption archive schema version fields disagree".into());
+    }
+    let Some(schema) = explicit
+        .or_else(|| value.get("version"))
+        .and_then(serde_json::Value::as_u64)
+    else {
+        return Ok(());
+    };
+    if schema != 1 {
+        return Err(format!(
+            "Unsupported caption archive schema version {schema}"
+        ));
+    }
+    Ok(())
 }
 
 fn json_i64_field(line: &str, field: &str) -> Option<i64> {
@@ -644,4 +687,44 @@ pub(super) fn scene_bounds(value: &serde_json::Value, kind: Option<&str>) -> Opt
         i64::MAX
     };
     (end > begin).then_some((begin, end))
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::validate_archive_schema;
+    use std::fs;
+
+    #[test]
+    fn preview_reader_rejects_unsupported_schema() {
+        let path = std::env::temp_dir().join(format!(
+            "resubwinny-preview-schema-{}.jsonl",
+            std::process::id()
+        ));
+        fs::write(
+            &path,
+            "{\"type\":\"arib_caption_studio_archive\",\"schemaVersion\":99}\n",
+        )
+        .expect("archive fixture");
+        let error = validate_archive_schema(path.to_str().expect("utf-8 path"))
+            .expect_err("unsupported schema");
+        assert!(error.contains("Unsupported caption archive schema version 99"));
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn preview_reader_rejects_conflicting_schema_aliases() {
+        let path = std::env::temp_dir().join(format!(
+            "resubwinny-preview-schema-conflict-{}.jsonl",
+            std::process::id()
+        ));
+        fs::write(
+            &path,
+            "{\"type\":\"arib_caption_studio_archive\",\"schemaVersion\":1,\"version\":2}\n",
+        )
+        .expect("archive fixture");
+        let error = validate_archive_schema(path.to_str().expect("utf-8 path"))
+            .expect_err("conflicting schema aliases");
+        assert!(error.contains("schema version fields disagree"));
+        let _ = fs::remove_file(path);
+    }
 }

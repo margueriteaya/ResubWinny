@@ -4,6 +4,19 @@
 
 > 本文件是项目的唯一规范性架构文档。英语与日语版本是同步译文；歧义或冲突一律以本文件为准。
 
+## 收敛期边界（2026-08-29）
+
+当前阶段冻结前端技术栈与 Rust crate 拆分：Svelte、Tauri 与现有
+`arib-caption-worker` 保持不变。前端优先通过 feature session 收拢中央状态；
+Worker 继续负责输入、探测/解复用、解码、Caption IR、导出、archive 与证据，
+Tauri 继续负责任务历史、队列、设置、窗口生命周期和原生预览。只有在
+Caption IR、时间模型或 transport API 稳定且出现多个消费者后，才重新评估
+拆分 `resubwinny-core`。
+
+同一收敛期明确延期 BD/DVD 图形字幕 OCR、插件系统、AI 翻译以及
+macOS/Linux 原生预览。DRCS 只继续完善本地 hash → Unicode 映射，
+不扩建通用 OCR 系统。
+
 ## 1. 项目定位与边界
 
 本项目是面向日本 ISDB 广播录制文件的开源、跨平台字幕抽出与转换工具。传输层主线必须区分传统 MPEG-2 TS 与 BS4K/8K 原生 TLV/MMT；`.ts`、`.m2ts`、`.tlv`、`.mmts` 只作为文件名提示，最终一律按内容探测。当前可验证语料包括传统 TS 与 192-byte MPEG-TS/TTML 录制；原生 TLV/MMT 保留为规范主线和实验性输入，直到获得足够真实样本后再宣称完整支持。所有路径都尽可能保留 ARIB 字幕的语义、版式、特殊字符和诊断来源。

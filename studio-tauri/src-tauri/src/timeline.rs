@@ -233,6 +233,7 @@ fn scan_archive_lines(
         File::open(archive).map_err(|error| format!("Could not open caption archive: {error}"))?;
     let mut reader = BufReader::new(file);
     let mut line = String::new();
+    let mut first_line = true;
     loop {
         let line_start = reader
             .stream_position()
@@ -244,9 +245,41 @@ fn scan_archive_lines(
         if bytes == 0 || !line.ends_with('\n') {
             break;
         }
+        if first_line {
+            first_line = false;
+            validate_archive_schema(&line)?;
+        }
         if !on_line(&mut line, line_start) {
             break;
         }
+    }
+    Ok(())
+}
+
+fn validate_archive_schema(line: &str) -> Result<(), String> {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
+        return Ok(());
+    };
+    if value.get("type").and_then(serde_json::Value::as_str) != Some("arib_caption_studio_archive")
+    {
+        return Ok(());
+    }
+    let explicit = value
+        .get("schemaVersion")
+        .or_else(|| value.get("schema_version"));
+    if let (Some(explicit), Some(legacy)) = (explicit, value.get("version"))
+        && explicit != legacy
+    {
+        return Err("Caption archive schema version fields disagree".into());
+    }
+    let schema = explicit.or_else(|| value.get("version"));
+    let Some(schema) = schema.and_then(serde_json::Value::as_u64) else {
+        return Ok(());
+    };
+    if schema != 1 {
+        return Err(format!(
+            "Unsupported caption archive schema version {schema}"
+        ));
     }
     Ok(())
 }
@@ -766,6 +799,40 @@ mod tests {
         let event = parse_timeline_event(&line, 7).expect("timeline event");
         assert_eq!(event.index, 7);
         assert_eq!(event.text, "subtitle");
+    }
+
+    #[test]
+    fn timeline_rejects_an_unsupported_archive_schema() {
+        let path = std::env::temp_dir().join(format!(
+            "resubwinny-timeline-schema-{}.jsonl",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            "{\"type\":\"arib_caption_studio_archive\",\"schemaVersion\":99}\n",
+        )
+        .expect("archive fixture");
+        let error = get_timeline_window(path.to_string_lossy().into_owned(), 0, 1)
+            .expect_err("unsupported schema");
+        assert!(error.contains("Unsupported caption archive schema version 99"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn timeline_rejects_conflicting_archive_schema_aliases() {
+        let path = std::env::temp_dir().join(format!(
+            "resubwinny-timeline-schema-conflict-{}.jsonl",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            "{\"type\":\"arib_caption_studio_archive\",\"schemaVersion\":1,\"version\":2}\n",
+        )
+        .expect("archive fixture");
+        let error = get_timeline_window(path.to_string_lossy().into_owned(), 0, 1)
+            .expect_err("conflicting schema aliases");
+        assert!(error.contains("schema version fields disagree"));
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

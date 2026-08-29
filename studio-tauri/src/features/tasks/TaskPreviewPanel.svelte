@@ -7,7 +7,7 @@
   import TaskTimeline from "./TaskTimeline.svelte";
   import MacSlider from "../../components/MacSlider.svelte";
   import MacSegmentedControl from "../../components/MacSegmentedControl.svelte";
-  import { projectRangeForMedia } from "./time-mapping";
+  import { projectRangeForMedia, projectTimeMs as asProjectTimeMs, type MediaTimeMs, type ProjectTimeMs } from "./time-mapping";
 
   type TaskTab = "preview" | "events" | "diagnostics";
   export let taskTab: TaskTab = "preview";
@@ -26,8 +26,8 @@
   export let playbackMapping: PlaybackTimeMapping;
   export let appliedPlaybackMapping: PlaybackTimeMapping;
   export let playbackMappingBusy = false;
-  export let projectTimeMs = 0;
-  export let durationMs: number | null = null;
+  export let projectTimeMs: ProjectTimeMs = 0 as ProjectTimeMs;
+  export let durationMs: MediaTimeMs | null = null;
   export let trackLabel = "";
   export let trackName = "";
   export let trackDetail = "";
@@ -36,8 +36,8 @@
   export let onStartPreview: () => void = () => {};
   export let onStopPreview: () => void = () => {};
   export let onResizePreview: () => void = () => {};
-  export let onSeekProject: (milliseconds: number, final?: boolean) => void | Promise<void> = () => {};
-  export let onSeekTarget: (milliseconds: number, final?: boolean) => void = () => {};
+  export let onSeekProject: (milliseconds: ProjectTimeMs, final?: boolean) => void | Promise<void> = () => {};
+  export let onSeekTarget: (milliseconds: ProjectTimeMs, final?: boolean) => void = () => {};
   export let onSetVolume: (volume: number) => void = () => {};
   export let onSaveMapping: () => void = () => {};
   export let onDiagnosticsCount: (count: number) => void = () => {};
@@ -67,7 +67,7 @@
 
   function queueScrubberSeek(timeMs: number, final: boolean) {
     scrubberTargetMs = Math.max(projectRange.startMs, Math.min(projectRange.endMs, Math.round(timeMs)));
-    onSeekTarget(scrubberTargetMs, final);
+    onSeekTarget(asProjectTimeMs(scrubberTargetMs), final);
     scrubberActive = !final;
     if (final) {
       pendingScrubberTarget = null;
@@ -85,7 +85,7 @@
 
   function dispatchScrubberSeek(timeMs: number, final: boolean) {
     try {
-      const operation = onSeekProject(timeMs, final);
+      const operation = onSeekProject(asProjectTimeMs(timeMs), final);
       if (operation && typeof (operation as Promise<void>).catch === "function")
         void Promise.resolve(operation).catch((reason) => onError(String(reason)));
     } catch (reason) {
@@ -116,7 +116,7 @@
     if (scrubberFrame !== undefined) cancelAnimationFrame(scrubberFrame);
     if (scrubberActive || pendingScrubberTarget !== null) {
       scrubberActive = false;
-      onSeekTarget(scrubberTargetMs, true);
+      onSeekTarget(asProjectTimeMs(scrubberTargetMs), true);
       dispatchScrubberSeek(scrubberTargetMs, true);
     }
   });
@@ -136,11 +136,11 @@
       </div>
     </div>
     <div class="preview-status"><span>{t("workspace.scanned").replace("{0}", (bytesRead / 1024 ** 3).toFixed(2))}</span><span>{progress.toFixed(1)}%</span></div>
-    <TaskTimeline {archivePath} {desktopRuntime} live={isExporting} editor {trackLabel} {trackName} {trackDetail} currentTimeMs={projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} playing={playerRunning && !playerPaused} expectedCount={captions} onSeek={onSeekProject} {onSeekTarget} onOpenMapping={openPlaybackMapping} {onError} />
+    <TaskTimeline {archivePath} {desktopRuntime} live={isExporting} editor {trackLabel} {trackName} {trackDetail} projectTimeMs={projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} playing={playerRunning && !playerPaused} expectedCount={captions} onSeek={onSeekProject} {onSeekTarget} onOpenMapping={openPlaybackMapping} {onError} />
     <details class="playback-mapping" bind:this={playbackMappingDetails}><summary tabindex="-1">{t("preview.mappingTitle")}</summary><p>{t("preview.mappingDescription")}</p><label>{t("preview.mappingSegment")}<input bind:value={playbackMapping.segmentId} /></label><label>{t("preview.mappingMediaAnchor")}<input type="number" step="1" bind:value={playbackMapping.mediaAnchorMs} /></label><label>{t("preview.mappingProjectAnchor")}<input type="number" step="1" bind:value={playbackMapping.projectAnchorMs} /></label><label>{t("preview.mappingRateNumerator")}<input type="number" min="1" step="1" bind:value={playbackMapping.rateNumerator} /></label><label>{t("preview.mappingRateDenominator")}<input type="number" min="1" step="1" bind:value={playbackMapping.rateDenominator} /></label><button class="quiet-button" onclick={onSaveMapping} disabled={playbackMappingBusy}>{playbackMappingBusy ? t("preview.mappingApplying") : t("preview.mappingApply")}</button></details>
     {#if previewAvailable === false}<p class="preview-unavailable">{t("preview.runtimeUnavailable")}</p>{/if}
   {:else if taskTab === "events"}
-    <TaskTimeline {archivePath} {desktopRuntime} live={isExporting} {trackLabel} {trackName} {trackDetail} expectedCount={captions} currentTimeMs={projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} playing={playerRunning && !playerPaused} onSeek={onSeekProject} {onSeekTarget} {onError} />
+    <TaskTimeline {archivePath} {desktopRuntime} live={isExporting} {trackLabel} {trackName} {trackDetail} expectedCount={captions} projectTimeMs={projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} playing={playerRunning && !playerPaused} onSeek={onSeekProject} {onSeekTarget} {onError} />
   {:else}<TaskDiagnostics jobId={currentJobId} {desktopRuntime} onCountChange={onDiagnosticsCount} {onError} />{/if}
 </section>
 

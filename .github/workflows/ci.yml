@@ -116,3 +116,20 @@ jobs:
           cache-dependency-path: studio-tauri/package-lock.json
       - name: Audit frontend dependencies
         run: npm audit --prefix studio-tauri --audit-level=high
+
+  dependency-policy:
+    name: Dependency policy (cargo-deny)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+      - uses: taiki-e/install-action@cargo-deny
+      - name: Check Worker dependency policy
+        run: cargo deny check --manifest-path Cargo.toml
+      - name: Check desktop dependency policy
+        run: cargo deny check --manifest-path studio-tauri/src-tauri/Cargo.toml
+      - name: Check fuzz dependency policy
+        run: cargo deny check --manifest-path fuzz/Cargo.toml

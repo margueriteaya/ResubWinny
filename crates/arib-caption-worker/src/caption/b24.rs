@@ -1,6 +1,6 @@
 use crate::*;
 
-pub(crate) fn b24_payload_from_pes(pes: &[u8]) -> Option<(&[u8], Option<i64>)> {
+pub(crate) fn b24_payload_from_pes(pes: &[u8]) -> Option<(&[u8], Option<Pts90k>)> {
     if pes.len() < 9 || pes[..4] != [0, 0, 1, 0xbd] {
         return None;
     }
@@ -12,7 +12,7 @@ pub(crate) fn b24_payload_from_pes(pes: &[u8]) -> Option<(&[u8], Option<i64>)> {
     Some((payload, pes_pts_from_header(pes)))
 }
 
-pub(crate) fn pes_pts_from_header(pes: &[u8]) -> Option<i64> {
+pub(crate) fn pes_pts_from_header(pes: &[u8]) -> Option<Pts90k> {
     if pes.len() < 14 || pes[..3] != [0, 0, 1] || pes[7] & 0x80 == 0 {
         return None;
     }
@@ -27,12 +27,12 @@ pub(crate) fn pes_pts_from_header(pes: &[u8]) -> Option<i64> {
     {
         return None;
     }
-    let value = (i64::from(pes[9] & 0x0e) << 29)
-        | (i64::from(pes[10]) << 22)
-        | (i64::from(pes[11] & 0xfe) << 14)
-        | (i64::from(pes[12]) << 7)
-        | i64::from(pes[13] >> 1);
-    Some(value / 90)
+    let value = (u64::from(pes[9] & 0x0e) << 29)
+        | (u64::from(pes[10]) << 22)
+        | (u64::from(pes[11] & 0xfe) << 14)
+        | (u64::from(pes[12]) << 7)
+        | u64::from(pes[13] >> 1);
+    Pts90k::new(value)
 }
 
 pub(crate) fn normalise_pts(pts_ms: i64, origin_ms: i64) -> i64 {
@@ -94,7 +94,7 @@ where
         if timeline_origin_ms.is_none()
             && let Some((_, true, payload)) = packet_payload
         {
-            timeline_origin_ms = pes_pts_from_header(payload);
+            timeline_origin_ms = pes_pts_from_header(payload).map(Pts90k::to_millis);
         }
         let Some((pid, payload_start, payload)) = packet_payload else {
             continue;

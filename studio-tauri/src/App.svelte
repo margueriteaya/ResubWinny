@@ -1,9 +1,17 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
   import HomePage from "./features/home/HomePage.svelte";
-  import { NativePreviewController } from "./features/tasks/native-preview-controller";
-  import { reduceTaskEvent } from "./features/tasks/event-state";
-  import { mediaToProjectTime, projectToMediaTime } from "./features/tasks/time-mapping";
+  import { PreviewSession } from "./features/tasks/preview-session";
+  import { SourceSession } from "./features/tasks/source-session";
+  import { ExportSession } from "./features/tasks/export-session";
+  import { TaskEventSession } from "./features/tasks/event-session";
+  import {
+    mediaTimeMs as asMediaTimeMs,
+    mediaToProjectTime,
+    projectTimeMs as asProjectTimeMs,
+    type MediaTimeMs,
+    type ProjectTimeMs,
+  } from "./features/tasks/time-mapping";
   import {
     createExportPlan,
     inspectTaskSource,
@@ -16,16 +24,20 @@
   import AppSidebar from "./components/AppSidebar.svelte";
   import type { Page } from "./components/navigation";
   import {
-    beginWindowDrag,
-    beginWindowResize,
     chooseDirectory,
     chooseRecordingPaths,
     isDesktopRuntime,
-    performWindowAction,
     type ResizeDirection,
-    type WindowAction,
   } from "./shell/desktop";
-  import { installDesktopLifecycle } from "./shell/desktop-lifecycle";
+  import { WindowSession } from "./shell/window-session";
+  import { ApplicationLifecycleSession } from "./shell/application-lifecycle-session";
+  import { LayoutSession } from "./shell/layout-session";
+  import { NavigationSession } from "./shell/navigation-session";
+  import { FeedbackSession } from "./shell/feedback-session";
+  import { BootstrapSession } from "./shell/bootstrap-session";
+  import { TaskSelectionSession } from "./features/tasks/selection-session";
+  import { RecoverySession } from "./features/tasks/recovery-session";
+  import { TaskRuntimeSession, resetTaskRuntime, type RuntimeReset } from "./features/tasks/runtime-session";
   import StatusBar from "./components/StatusBar.svelte";
   import WindowChrome from "./components/WindowChrome.svelte";
   import {
@@ -40,7 +52,6 @@
     type Inspection,
     type PlaybackTimeMapping,
     type PreviewCommand,
-    type TaskHistoryRecord,
     type Track,
   } from "./backend";
   import { formatOptions } from "./features/tasks/formats";
@@ -48,46 +59,108 @@
     basename,
     formatBytes,
     routeLabel,
-    upsertHistory,
     type TaskRecord,
   } from "./features/tasks/presentation";
+  import { HistorySession } from "./features/tasks/history-session";
   import {
     DrcsDictionaryController,
     serialiseDrcsMappings,
     type SavedDrcsMapping,
   } from "./features/drcs/controller";
-  import {
-    applyTheme,
-    resolveLocale,
-    restoreCachedTheme,
-  } from "./features/settings/preferences";
-
-  function settleWithin(operation: Promise<unknown> | null, timeoutMs = 1_500) {
-    if (!operation) return Promise.resolve();
-    return new Promise<void>((resolve) => {
-      const timeout = window.setTimeout(resolve, timeoutMs);
-      void operation.then(
-        () => { window.clearTimeout(timeout); resolve(); },
-        () => { window.clearTimeout(timeout); resolve(); },
-      );
-    });
-  }
+  import { restoreCachedTheme } from "./features/settings/preferences";
+  import { PreferencesSession } from "./features/settings/session";
 
   let page: Page = "home";
+  const navigationSession = new NavigationSession(page);
   let TaskWorkspaceComponent: any = null;
   let BatchPageComponent: any = null;
   let DrcsPageComponent: any = null;
   let SettingsPageComponent: any = null;
   const sidebarCompactQuery = "(max-width: 1250px)";
-  let sidebarCollapsed = typeof window !== "undefined" && window.matchMedia(sidebarCompactQuery).matches;
-  let sidebarAutoCollapsed = sidebarCollapsed;
-  let compactTaskViewport = false;
-  let compactSourceOpen = false;
-  let compactOutputOpen = false;
+  const layoutSession = new LayoutSession(typeof window !== "undefined" && window.matchMedia(sidebarCompactQuery).matches);
+  let { sidebarCollapsed, sidebarAutoCollapsed, compactTaskViewport, compactSourceOpen, compactOutputOpen } = layoutSession.state;
+  function syncLayout() {
+    ({ sidebarCollapsed, sidebarAutoCollapsed, compactTaskViewport, compactSourceOpen, compactOutputOpen } = layoutSession.state);
+  }
   let inspection: Inspection | null = null;
   let error = "";
   let isInspecting = false;
-  let sourceLoadGeneration = 0;
+  const exportSession = new ExportSession({
+    beginExport: () => {
+      isExporting = true;
+      previewIndexing = false;
+      isPaused = false;
+      bytesRead = 0;
+      progress = 0;
+    },
+    setJob: (jobId) => (currentJobId = jobId),
+    completeExportStart: (jobId) => {
+      currentJobId = jobId;
+      diagnosticsCount = 0;
+    },
+    failExport: (reason) => {
+      isExporting = false;
+      previewIndexing = false;
+      reportBackendFailure(reason);
+    },
+    beginIndex: () => {
+      isExporting = true;
+      previewIndexing = true;
+    },
+    completeIndex: (path) => {
+      archivePath = path.replace(/\.jsonl$/i, ".jsonl.part");
+      appendNotice("notice.previewIndexStarted");
+    },
+    failIndex: (reason) => {
+      isExporting = false;
+      reportBackendFailure(reason);
+    },
+  });
+  const sourceSession = new SourceSession({
+    prepare: async () => {
+      exportSession.invalidate();
+      await stopPreview();
+      if (isExporting || previewIndexing) await backend.cancelExportAndWait();
+      applyRuntimeReset(resetTaskRuntime());
+    },
+    inspect: inspectTaskSource,
+    defaultFormat: () => savedPreferences().defaultFormat,
+    message: formatMessage,
+    apply: (discovered, setup, jobId) => {
+      inspection = discovered;
+      outputDirectory = setup.outputDirectory;
+      batchController.endEditing();
+      currentJobId = jobId;
+      canResumeCurrentJob = false;
+      selectedTracks = setup.selectedTrackKeys;
+      if (setup.selectedFormats) selectedFormats = setup.selectedFormats;
+      page = "tasks";
+      taskTab = "preview";
+      logs = setup.logs;
+      applyRuntimeReset(resetTaskRuntime({ logs: setup.logs }));
+    },
+    afterApply: tick,
+    activate: (path) => {
+      void startPreview();
+      void startPreviewIndex(path);
+    },
+    setBusy: (busy) => (isInspecting = busy),
+    fail: reportBackendFailure,
+  });
+  const taskEventSession = new TaskEventSession({
+    currentJobId: () => currentJobId,
+    previewIndexing: () => previewIndexing,
+    batchRunning: () => batchRunning,
+    sourceSize: () => inspection?.size ?? 0,
+    state: () => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings }),
+    setState: (state) => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings } = state),
+    onEffects: (effects) => {
+      if (effects.addHistory) addHistory(effects.addHistory);
+      if (effects.refreshResume) void refreshResumeAvailability();
+      if (effects.refreshBatch) void refreshBatchJobs();
+    },
+    refreshBatch: () => void refreshBatchJobs(),
+  });
   let isExporting = false;
   let previewIndexing = false;
   let isPaused = false;
@@ -137,8 +210,7 @@
   let playerRunning = false;
   let playerPaused = true;
   let previewAvailable: boolean | null = null;
-  const nativePreviewController = new NativePreviewController();
-  let projectTimeMs = 0;
+  let projectCursorMs: ProjectTimeMs = asProjectTimeMs(0);
   let renderBusy = false;
   let archivePath = "";
   let playbackMapping: PlaybackTimeMapping = {
@@ -150,17 +222,49 @@
   };
   let appliedPlaybackMapping: PlaybackTimeMapping = { ...playbackMapping };
   let playbackMappingBusy = false;
-  let mediaTimeMs: number | null = null;
-  let previewDurationMs: number | null = null;
-  let previewResizeFrame = 0;
-  let previewResizeInFlight = false;
-  let previewResizePending = false;
-
+  let mediaTimeMs: MediaTimeMs | null = null;
+  let previewDurationMs: MediaTimeMs | null = null;
+  const runtimeSession = new TaskRuntimeSession({
+    setEventState: (state) => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings } = state),
+    setMediaTime: (value) => (mediaTimeMs = value),
+    setProjectTime: (value) => (projectCursorMs = value),
+    setDuration: (value) => (previewDurationMs = value),
+  });
+  const previewSession = new PreviewSession(
+    () => nativePreview,
+    {
+      desktopRuntime: () => desktopRuntime,
+      running: () => playerRunning,
+      paused: () => playerPaused,
+      mediaTimeMs: () => mediaTimeMs,
+      mapping: () => appliedPlaybackMapping,
+      setMappings: (draft, applied) => {
+        playbackMapping = draft;
+        appliedPlaybackMapping = applied;
+      },
+      setMappingBusy: (busy) => (playbackMappingBusy = busy),
+      setTimes: (media, project) => {
+        mediaTimeMs = media;
+        projectCursorMs = project;
+      },
+      setProjectTime: (project) => (projectCursorMs = project),
+      setRunning: (running) => (playerRunning = running),
+      setPaused: (paused) => (playerPaused = paused),
+      onNotice: (code, parameters) => appendNotice(code, parameters),
+      onError: reportBackendFailure,
+    },
+  );
   function setAppliedPlaybackMapping(mapping: PlaybackTimeMapping) {
-    appliedPlaybackMapping = { ...mapping };
-    playbackMapping = { ...mapping };
-    if (mediaTimeMs != null)
-      projectTimeMs = mediaToProjectTime(mediaTimeMs, appliedPlaybackMapping);
+    previewSession.applyMapping(mapping);
+  }
+
+  function applyRuntimeReset(next: RuntimeReset) {
+    runtimeSession.reset({
+      ...next,
+      projectTimeMs: asProjectTimeMs(next.projectTimeMs),
+      mediaTimeMs: next.mediaTimeMs == null ? null : asMediaTimeMs(next.mediaTimeMs),
+      previewDurationMs: next.previewDurationMs == null ? null : asMediaTimeMs(next.previewDurationMs),
+    });
   }
 
   $: if (page === "batch" && !BatchPageComponent)
@@ -180,7 +284,6 @@
   // replacement placeholder immediately instead of leaving a stale rectangle.
   $: if (playerRunning && nativePreview) void resizePreview();
   let batchInputs: BatchItem[] = [];
-  let batchEditingPath: string | null = null;
   let batchRunning = false;
   let multiTaskOutputDirectory = "";
   let drcsGlyphs: DrcsGlyph[] = [];
@@ -190,15 +293,61 @@
   // releases and can incorrectly disable every real desktop action.
   const desktopRuntime = isDesktopRuntime();
   restoreCachedTheme();
+  const feedbackSession = new FeedbackSession();
+  const selectionSession = new TaskSelectionSession();
+  const historySession = new HistorySession({
+    desktopRuntime,
+    load: () => backend.loadTaskHistory(),
+    save: (records) => backend.saveTaskHistory(records),
+    onError: reportBackendFailure,
+  });
+  const preferencesSession = new PreferencesSession({
+    desktopRuntime,
+    getSettings: () => backend.getSettings(),
+    updateSettings: (settings) => backend.updateSettings(settings),
+    setCaptionFont: (font) => backend.setCaptionFont(font),
+    listLanguagePacks: () => backend.listLanguagePacks(),
+    registerLanguagePacks,
+    locale,
+    setLocale,
+    onError: reportBackendFailure,
+  });
+  const bootstrapSession = new BootstrapSession({
+    desktopRuntime,
+    getPlaybackTimeMapping: () => backend.getPlaybackTimeMapping(),
+    getPreviewRuntime: () => backend.getPreviewRuntime(),
+    loadTaskHistory: () => backend.loadTaskHistory(),
+    loadDrcsMappings: () => backend.loadDrcsMappings(),
+    onError: reportBackendFailure,
+  });
+  const recoverySession = new RecoverySession({
+    desktopRuntime,
+    getJob: (jobId) => backend.getJob(jobId),
+    getCheckpoint: (jobId) => backend.getJobCheckpoint(jobId),
+    resumeJob: (jobId) => backend.resumeJob(jobId),
+    setAvailable: (available) => (canResumeCurrentJob = available),
+    setBusy: (busy) => (resumeBusy = busy),
+    setExporting: (exporting) => (isExporting = exporting),
+    setPaused: (paused) => (isPaused = paused),
+    onError: reportBackendFailure,
+    notice: appendNotice,
+  });
+  const lifecycleSession = new ApplicationLifecycleSession({
+    desktopRuntime,
+    subscribeTaskEvents: (handler) => backend.subscribeTaskEvents(handler),
+    onTaskEvent: (payload) => taskEventSession.handle(payload),
+    playerRunning: () => playerRunning,
+    onRecordingDrop: (source) => void loadSource(source),
+    onPlayerCommand: (command) => void playerCommand(command),
+    onSurfaceChange: () => void resizePreview(),
+  });
 
   async function applyPreferences(settings: AppSettings, refreshLanguagePacks = false) {
-    if (desktopRuntime && refreshLanguagePacks)
-      registerLanguagePacks(await backend.listLanguagePacks());
-    const selected = resolveLocale(settings.locale);
-    if (locale() !== selected) setLocale(selected);
-    applyTheme(settings.theme);
+    await preferencesSession.apply(settings, refreshLanguagePacks);
     appSettings = { ...settings };
   }
+
+  const saveCaptionFont = (font: string) => preferencesSession.saveCaptionFont(font);
 
   let supportedFormats = formatOptions(t);
   $: {
@@ -214,7 +363,7 @@
 
   function updateWorkspaceLayout(workspaceLayout: AppSettings["workspaceLayout"]) {
     appSettings = { ...appSettings, workspaceLayout };
-    if (desktopRuntime) void backend.updateSettings(appSettings).catch(reportBackendFailure);
+    preferencesSession.persist(appSettings);
   }
 
   $: sourceInspectorCollapsed = compactTaskViewport ? !compactSourceOpen : appSettings.workspaceLayout.sourceCollapsed;
@@ -222,9 +371,8 @@
 
   function toggleSourceInspector() {
     if (compactTaskViewport) {
-      const opening = !compactSourceOpen;
-      compactSourceOpen = opening;
-      if (opening) compactOutputOpen = false;
+      layoutSession.toggleInspector("source");
+      syncLayout();
       void tick().then(resizePreview);
       return;
     }
@@ -233,9 +381,8 @@
 
   function toggleOutputInspector() {
     if (compactTaskViewport) {
-      const opening = !compactOutputOpen;
-      compactOutputOpen = opening;
-      if (opening) compactSourceOpen = false;
+      layoutSession.toggleInspector("output");
+      syncLayout();
       void tick().then(resizePreview);
       return;
     }
@@ -243,25 +390,22 @@
   }
 
   function setSidebarCollapsed(collapsed: boolean, automatic = false) {
-    if (sidebarCollapsed === collapsed) {
-      sidebarAutoCollapsed = automatic && collapsed;
-      return;
-    }
-    sidebarCollapsed = collapsed;
-    sidebarAutoCollapsed = automatic && collapsed;
+    if (sidebarCollapsed === collapsed && sidebarAutoCollapsed === automatic && !automatic) return;
+    layoutSession.setSidebarCollapsed(collapsed, automatic);
+    syncLayout();
     void tick().then(resizePreview);
   }
 
   function toggleSidebar() {
-    setSidebarCollapsed(!sidebarCollapsed);
+    layoutSession.toggleSidebar();
+    syncLayout();
   }
 
   onMount(() => {
     const query = window.matchMedia("(max-width: 980px)");
     const update = () => {
-      compactTaskViewport = query.matches;
-      compactSourceOpen = false;
-      compactOutputOpen = false;
+      layoutSession.setCompactViewport(query.matches);
+      syncLayout();
     };
     update();
     query.addEventListener("change", update);
@@ -283,19 +427,11 @@
   });
 
   function reportBackendFailure(reason: unknown) {
-    const message = reason instanceof Error ? reason.message : String(reason);
-    error = formatMessage("error.backend", { message });
+    error = feedbackSession.error(reason);
   }
 
   function appendNotice(code: string, parameters: Record<string, unknown> = {}) {
-    logs = [...logs, formatMessage(code, parameters)].slice(-1000);
-  }
-
-  function persistHistory() {
-    const records: TaskHistoryRecord[] = history
-      .slice(0, 25)
-      .map((item) => ({ ...item, captions: item.captions ?? 0 }));
-    if (desktopRuntime) void backend.saveTaskHistory(records);
+    logs = feedbackSession.append(logs, code, parameters);
   }
 
   async function selectTrack(track: Track) {
@@ -303,7 +439,7 @@
     if (selectedTracks.has(nextKey) || (isExporting && !previewIndexing)) return;
     if (previewIndexing) {
       try {
-        await backend.cancelExportAndWait();
+        await exportSession.cancel(() => backend.cancelExportAndWait());
       } catch (reason) {
         reportBackendFailure(reason);
         return;
@@ -311,19 +447,12 @@
       isExporting = false;
       previewIndexing = false;
     }
-    selectedTracks = new Set([nextKey]);
+    selectedTracks = selectionSession.singleTrack(nextKey);
     archivePath = "";
     captions = 0;
     bytesRead = 0;
     progress = 0;
-    if (batchEditingPath) {
-      const selectedTrackKey = taskTrackKey(track);
-      batchInputs = batchInputs.map((item) =>
-        item.inspection.path === batchEditingPath
-          ? { ...item, selectedTrackKey }
-          : item,
-      );
-    }
+    batchController.selectEditingTrack(taskTrackKey(track));
     if (inspection) await startPreviewIndex(inspection.path);
   }
   function addHistory(status: TaskRecord["status"]) {
@@ -339,8 +468,7 @@
       captions,
       jobId: currentJobId || undefined,
     };
-    history = upsertHistory(history, record);
-    persistHistory();
+    history = historySession.add(history, record);
   }
 
   async function loadSource(path: string, jobId = "") {
@@ -348,59 +476,8 @@
       error = t("error.desktopInspect");
       return;
     }
-    const generation = ++sourceLoadGeneration;
-    isInspecting = true;
     error = "";
-    try {
-      await stopPreview();
-      if (isExporting || previewIndexing) await backend.cancelExportAndWait();
-      if (generation !== sourceLoadGeneration) return;
-      isExporting = false;
-      previewIndexing = false;
-      isPaused = false;
-      const discovered = await inspectTaskSource(path);
-      if (generation !== sourceLoadGeneration) return;
-      inspection = discovered;
-      outputDirectory = discovered.path.replace(/[\\/][^\\/]+$/, "");
-      batchEditingPath = null;
-      currentJobId = jobId;
-      canResumeCurrentJob = false;
-      selectedTracks = inspection.tracks[0]
-        ? new Set([taskTrackKey(inspection.tracks[0])])
-        : new Set();
-      const preferences = savedPreferences();
-      if (
-        preferences.defaultFormat &&
-        ["ASS", "TTML", "JSON", "Raw Data"].includes(preferences.defaultFormat)
-      )
-        selectedFormats = new Set([preferences.defaultFormat as ExportFormat]);
-      page = "tasks";
-      taskTab = "preview";
-      logs = [
-        formatMessage("notice.sourceSelected", { name: inspection.name }),
-        formatMessage("notice.container", { container: inspection.container }),
-        formatMessage("notice.captionTracks", { count: inspection.tracks.length }),
-      ];
-      lastLoggedProgressBucket = -1;
-      progress = 0;
-      warnings = 0;
-      captions = 0;
-      archivePath = "";
-      projectTimeMs = 0;
-      mediaTimeMs = null;
-      previewDurationMs = null;
-      // Start the native player and the bounded caption index independently.
-      // The first frame, stream metadata and the initial timeline window can
-      // arrive in parallel; neither waits for the other to finish.
-      await tick();
-      if (generation !== sourceLoadGeneration) return;
-      void startPreview();
-      void startPreviewIndex(path);
-    } catch (reason) {
-      if (generation === sourceLoadGeneration) reportBackendFailure(reason);
-    } finally {
-      if (generation === sourceLoadGeneration) isInspecting = false;
-    }
+    await sourceSession.load(path, jobId);
   }
 
   async function chooseSource() {
@@ -426,18 +503,13 @@
       return;
     }
     if (!inspection || isExporting) return;
+    const activeInspection = inspection;
     error = "";
-    isExporting = true;
-    previewIndexing = false;
-    isPaused = false;
-    bytesRead = 0;
-    progress = 0;
     if (!outputDirectory.trim()) {
-      isExporting = false;
       error = t("workspace.outputDirectoryRequired");
       return;
     }
-    const plan = createExportPlan(inspection, selectedFormats, preservation, selectedTracks, outputDirectory);
+    const plan = createExportPlan(activeInspection, selectedFormats, preservation, selectedTracks, outputDirectory);
     logs = [
       ...logs,
       formatMessage("notice.exportStarted", { format: plan?.formats.join(", ") ?? "" }),
@@ -445,23 +517,17 @@
     ];
     lastLoggedProgressBucket = -1;
     if (!plan) {
-      isExporting = false;
       error = t("tracks.selectionRequired");
       return;
     }
-    try {
-      currentJobId = await startTaskExport(
-        inspection,
-        plan,
-        exportMappings(),
-        (jobId) => (currentJobId = jobId),
-      );
-      diagnosticsCount = 0;
-    } catch (reason) {
-      isExporting = false;
-      previewIndexing = false;
-      reportBackendFailure(reason);
-    }
+    await exportSession.runExport(
+      (onCreated) => startTaskExport(
+          activeInspection,
+          plan,
+          exportMappings(),
+          onCreated,
+      ),
+    );
   }
 
   async function chooseOutputDirectory() {
@@ -473,25 +539,18 @@
   async function startPreviewIndex(expectedPath = inspection?.path ?? "") {
     if (!desktopRuntime || !inspection || isExporting) return;
     if (!expectedPath || inspection.path !== expectedPath) return;
+    const sourcePath = inspection.path;
     const selected = inspection.tracks.find((track) => selectedTracks.has(taskTrackKey(track)));
-    isExporting = true;
-    previewIndexing = true;
-    try {
-      const index = await backend.startPreviewIndex(inspection.path, taskTrackId(selected));
-      if (inspection?.path !== expectedPath) {
-        await backend.cancelExportAndWait().catch(() => {});
-        return;
-      }
-      archivePath = index.archivePath.replace(/\.jsonl$/i, ".jsonl.part");
-      appendNotice("notice.previewIndexStarted");
-    } catch (reason) {
-      isExporting = false;
-      reportBackendFailure(reason);
-    }
+    await exportSession.runPreviewIndex(
+        () => backend.startPreviewIndex(sourcePath, taskTrackId(selected)),
+        () => inspection?.path === sourcePath,
+        () => backend.cancelExportAndWait(),
+    );
   }
 
   async function cancelExport() {
-    if (desktopRuntime) await backend.cancelExport();
+    if (!desktopRuntime) return;
+    await exportSession.cancel(() => backend.cancelExport());
   }
   async function pauseExport() {
     if (desktopRuntime) await backend.pauseExport();
@@ -500,45 +559,11 @@
     if (desktopRuntime) await backend.resumeExport();
   }
   async function refreshResumeAvailability() {
-    if (!desktopRuntime || !currentJobId) {
-      canResumeCurrentJob = false;
-      return;
-    }
-    try {
-      const [job, checkpoint] = await Promise.all([backend.getJob(currentJobId), backend.getJobCheckpoint(currentJobId)]);
-      canResumeCurrentJob = Boolean(checkpoint && job && ["Interrupted", "Failed", "Cancelled"].includes(job.state));
-    } catch {
-      canResumeCurrentJob = false;
-    }
+    await recoverySession.refresh(currentJobId);
   }
   async function resumeCheckpoint() {
-    if (!desktopRuntime || !canResumeCurrentJob || !currentJobId) return;
-    resumeBusy = true;
     error = "";
-    try {
-      await backend.resumeJob(currentJobId);
-      isExporting = true;
-      isPaused = false;
-      canResumeCurrentJob = false;
-      appendNotice("notice.checkpointReplayStarted");
-    } catch (reason) {
-      reportBackendFailure(reason);
-      await refreshResumeAvailability();
-    } finally {
-      resumeBusy = false;
-    }
-  }
-
-  function previewRect() {
-    if (!nativePreview) throw new Error("Native preview host is not mounted.");
-    const bounds = nativePreview.getBoundingClientRect();
-    const scale = window.devicePixelRatio;
-    return {
-      x: Math.round(bounds.left * scale),
-      y: Math.round(bounds.top * scale),
-      width: Math.round(bounds.width * scale),
-      height: Math.round(bounds.height * scale),
-    };
+    await recoverySession.resume(currentJobId, canResumeCurrentJob);
   }
 
   async function startPreview() {
@@ -546,21 +571,19 @@
       error = t("error.desktopPreview");
       return;
     }
-    if (!inspection || playerRunning || !nativePreview) return;
+    if (!inspection) return;
     error = "";
-    try {
-      const started = await nativePreviewController.start(
-        inspection.path,
-        previewRect(),
-        setAppliedPlaybackMapping,
-        {
+    const started = await previewSession.startManaged(
+      inspection.path,
+      setAppliedPlaybackMapping,
+      {
           archivePath: () => archivePath,
           renderBusy: () => renderBusy,
           setRenderBusy: (value) => (renderBusy = value),
           setMediaTime: (timeMs) => {
-            mediaTimeMs = timeMs;
+            mediaTimeMs = timeMs == null ? null : asMediaTimeMs(timeMs);
             if (timeMs != null)
-              projectTimeMs = mediaToProjectTime(timeMs, appliedPlaybackMapping);
+              projectCursorMs = mediaToProjectTime(asMediaTimeMs(timeMs), appliedPlaybackMapping);
           },
           setDuration: (timeMs) => (previewDurationMs = timeMs),
           setPaused: (paused) => (playerPaused = paused),
@@ -584,198 +607,45 @@
             )?.serviceId,
           onError: reportBackendFailure,
           onNotice: appendNotice,
-        },
-      );
-      if (!started || page !== "tasks" || taskTab !== "preview") return;
-      playerRunning = true;
-      playerPaused = true;
-      // The controller performs an authoritative first playback poll before
-      // resolving start(). Do not overwrite that sample with a synthetic zero
-      // (which made the ruler briefly jump away from the native player).
-      if (mediaTimeMs == null)
-        projectTimeMs = mediaToProjectTime(0, appliedPlaybackMapping);
-    } catch (reason) {
-      reportBackendFailure(reason);
-    }
+      },
+    );
+    if (!started || page !== "tasks" || taskTab !== "preview") return;
   }
 
   function resizePreview() {
-    previewResizePending = true;
-    if (previewResizeFrame || previewResizeInFlight) return;
-    previewResizeFrame = requestAnimationFrame(() => {
-      previewResizeFrame = 0;
-      void flushPreviewResize();
-    });
-  }
-
-  async function flushPreviewResize() {
-    if (!previewResizePending || !desktopRuntime || !playerRunning || !nativePreview) return;
-    previewResizePending = false;
-    previewResizeInFlight = true;
-    try {
-      await nativePreviewController.resize(previewRect());
-    } finally {
-      previewResizeInFlight = false;
-      if (previewResizePending) resizePreview();
-    }
+    previewSession.queueResize();
   }
 
   async function stopPreview() {
-    const scrubInitialization = previewScrubInitPromise;
-    const activeSeek = previewProjectSeekActivePromise;
-    cancelPreviewSeek();
-    // A pause command already sent for a scrub must settle before stop; this
-    // keeps it from reaching a newly started native session after teardown.
-    await Promise.all([settleWithin(scrubInitialization), settleWithin(activeSeek)]);
-    if (!playerRunning && !nativePreviewController.isRunning()) return;
-    try {
-      if (desktopRuntime) await nativePreviewController.stop({ onNotice: appendNotice });
-    } finally {
-      // A failed IPC acknowledgement cannot leave the UI believing that a
-      // previous page's HWND still owns the current preview surface.
-      playerRunning = false;
-      playerPaused = true;
-      previewScrubWasPaused = null;
-    }
+    await previewSession.stopManaged({ onNotice: appendNotice });
   }
 
-  let previewGeneration = 0;
-  let previewStopPromise: Promise<void> = Promise.resolve();
-  let previewResumeTimeMs: number | null = null;
-  let previewScrubWasPaused: boolean | null = null;
-  let previewScrubInitPromise: Promise<void> | null = null;
-  let previewScrubGesture = 0;
-  let previewSeekIntent = 0;
-
   function queuePreviewStop() {
-    previewStopPromise = previewStopPromise
-      .catch(() => {})
-      .then(() => stopPreview())
-      .catch((reason) => reportBackendFailure(reason));
-    return previewStopPromise;
+    return previewSession.queueStop(stopPreview);
   }
 
   async function seekRunningPreview(
-    milliseconds: number,
+    milliseconds: MediaTimeMs,
     waitForReady = false,
     isCurrent: () => boolean = () => true,
   ) {
-    if (!desktopRuntime || !playerRunning) return;
-    if (waitForReady) {
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        if (!isCurrent()) return;
-        if (await backend.getPreviewDuration() != null) break;
-        await new Promise((resolve) => window.setTimeout(resolve, 100));
-      }
-    }
-    if (!isCurrent() || !playerRunning) return;
-    nativePreviewController.beginSeek();
-    mediaTimeMs = milliseconds;
-    projectTimeMs = mediaToProjectTime(milliseconds, appliedPlaybackMapping);
-    try {
-      await backend.seekPreviewAbsolute(milliseconds / 1000);
-    } finally {
-      nativePreviewController.finishSeek(milliseconds);
-    }
-  }
-
-  async function preparePreviewScrub() {
-    if (previewScrubWasPaused === null) {
-      const gesture = ++previewScrubGesture;
-      const wasPaused = playerPaused;
-      previewScrubWasPaused = wasPaused;
-      nativePreviewController.beginScrub();
-      const initialization = (async () => {
-        await backend.clearCaptionOverlay().catch(() => {});
-        if (!wasPaused) await backend.setPreviewPaused(true);
-        if (gesture === previewScrubGesture && previewScrubWasPaused !== null)
-          playerPaused = true;
-      })();
-      previewScrubInitPromise = initialization;
-      try {
-        await initialization;
-      } catch (reason) {
-        if (gesture === previewScrubGesture) {
-          previewScrubWasPaused = null;
-          nativePreviewController.finishScrub(mediaTimeMs);
-        }
-        throw reason;
-      } finally {
-        if (previewScrubInitPromise === initialization) previewScrubInitPromise = null;
-      }
-      return;
-    }
-    if (previewScrubInitPromise) await previewScrubInitPromise;
+    await previewSession.seekMedia(milliseconds, waitForReady, isCurrent);
   }
 
   async function seekRunningPreviewProject(
-    milliseconds: number,
+    milliseconds: ProjectTimeMs,
     waitForReady = false,
     final = true,
-    intent = previewSeekIntent,
+    intent = previewSession.currentIntent(),
   ) {
-    if (!desktopRuntime || !playerRunning || intent !== previewSeekIntent) return;
-    // The pointer target is published by setPreviewSeekTarget before this
-    // function is reached. Keep the operation from writing an old target
-    // after a newer pointer move has already arrived.
-    if (waitForReady && final) {
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        if (intent !== previewSeekIntent) return;
-        if (await backend.getPreviewDuration() != null) break;
-        await new Promise((resolve) => window.setTimeout(resolve, 100));
-      }
-    }
-    if (previewScrubInitPromise) {
-      await previewScrubInitPromise;
-      if (intent !== previewSeekIntent) return;
-    }
-    const startingScrub = !final && previewScrubWasPaused === null;
-    if (startingScrub || (!final && previewScrubInitPromise)) {
-      await preparePreviewScrub();
-      if (intent !== previewSeekIntent) return;
-    } else if (final && previewScrubWasPaused === null) {
-      nativePreviewController.beginSeek();
-    }
-    let mappedMediaTimeMs = mediaTimeMs;
-    try {
-      mappedMediaTimeMs = await backend.seekPreviewProject(milliseconds, final);
-      if (intent === previewSeekIntent) {
-        mediaTimeMs = mappedMediaTimeMs;
-        projectTimeMs = mediaToProjectTime(mappedMediaTimeMs, appliedPlaybackMapping);
-      }
-    } finally {
-      // The broker serializes gestures, so an exact seek always completes its
-      // pause/scrub lifecycle before the next pending gesture starts. Its
-      // timestamp may be stale, but leaving mpv paused or polling guarded is
-      // never valid. stopPreview also awaits this operation before teardown.
-      if (final) {
-        const wasPaused = previewScrubWasPaused;
-        previewScrubWasPaused = null;
-        if (wasPaused !== null) {
-          try {
-            if (!wasPaused) {
-              await backend.setPreviewPaused(false);
-              if (playerRunning) playerPaused = false;
-            }
-          } finally {
-            // Playback restoration is an IPC operation and may fail during a
-            // native-player restart. Always release the controller's scrub
-            // guard so polling and caption sync cannot remain disabled.
-            nativePreviewController.finishScrub(mappedMediaTimeMs);
-          }
-        } else {
-          nativePreviewController.finishSeek(mappedMediaTimeMs);
-        }
-      }
-    }
+    await previewSession.seekProject(milliseconds, waitForReady, final, intent);
   }
 
   function switchTaskTab(next: typeof taskTab) {
     if (next === taskTab) return;
-    const generation = ++previewGeneration;
+    const generation = previewSession.beginPageTransition(next !== "preview");
     taskTab = next;
     if (next !== "preview") {
-      previewResumeTimeMs = mediaTimeMs;
       void queuePreviewStop();
       return;
     }
@@ -783,86 +653,35 @@
   }
 
   async function activateTabPreview(generation: number) {
-    await previewStopPromise;
+    await previewSession.whenStopped();
     await tick();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    if (generation !== previewGeneration || taskTab !== "preview" || page !== "tasks") return;
-    const resumeAt = previewResumeTimeMs;
+    if (!previewSession.isCurrentPageTransition(generation) || taskTab !== "preview" || page !== "tasks") return;
+    const resumeAt = previewSession.resumeTime();
     await startPreview();
-    if (resumeAt != null && resumeAt > 0 && generation === previewGeneration && playerRunning) {
+    if (resumeAt != null && resumeAt > 0 && previewSession.isCurrentPageTransition(generation) && playerRunning) {
       await seekRunningPreview(
         resumeAt,
         true,
-        () => generation === previewGeneration && taskTab === "preview" && page === "tasks",
+        () => previewSession.isCurrentPageTransition(generation) && taskTab === "preview" && page === "tasks",
       );
-      previewResumeTimeMs = null;
+      previewSession.clearResumeTime();
     }
   }
 
   async function playerCommand(command: PreviewCommand) {
-    if (!desktopRuntime || !playerRunning) return;
-    try {
-      await backend.previewCommand(command);
-      const label = t(`preview.command.${command}`);
-      appendNotice("notice.playerCommand", { label });
-    } catch (reason) {
-      reportBackendFailure(reason);
-    }
+    await previewSession.command(command, t(`preview.command.${command}`));
   }
-  let previewProjectSeekRunning = false;
-  let previewProjectSeekActivePromise: Promise<void> | null = null;
-  let previewProjectSeekPending: {
-    milliseconds: number;
-    final: boolean;
-    intent: number;
-    resolve: () => void;
-    reject: (reason: unknown) => void;
-  } | null = null;
-
-  function cancelPreviewSeek() {
-    previewSeekIntent += 1;
-    previewScrubGesture += 1;
-    if (previewProjectSeekPending) previewProjectSeekPending.resolve();
-    previewProjectSeekPending = null;
-    previewScrubWasPaused = null;
-    if (playerRunning) nativePreviewController.cancelSeek();
-  }
-
   // Seek requests are latest-wins. Pointer scrubbing can produce targets
   // faster than mpv/IPC can acknowledge them; serializing every intermediate
   // request creates a long queue and makes the playhead visibly lag behind
   // the pointer. Keep only the newest pending target and resolve superseded
   // callers immediately.
-  function seekPreviewProject(milliseconds: number, final = true) {
-    const intent = ++previewSeekIntent;
-    const operation = new Promise<void>((resolve, reject) => {
-      if (previewProjectSeekPending) previewProjectSeekPending.resolve();
-      previewProjectSeekPending = { milliseconds, final, intent, resolve, reject };
-    });
-    void pumpPreviewProjectSeek();
-    return operation;
+  function seekPreviewProject(milliseconds: ProjectTimeMs, final = true) {
+    return previewSession.enqueueProjectSeek(milliseconds, final, performSeekPreviewProject);
   }
 
-  async function pumpPreviewProjectSeek() {
-    if (previewProjectSeekRunning || !previewProjectSeekPending) return;
-    const next = previewProjectSeekPending;
-    previewProjectSeekPending = null;
-    previewProjectSeekRunning = true;
-    const execution = performSeekPreviewProject(next.milliseconds, next.final, next.intent);
-    previewProjectSeekActivePromise = execution;
-    try {
-      await execution;
-      next.resolve();
-    } catch (reason) {
-      next.reject(reason);
-    } finally {
-      if (previewProjectSeekActivePromise === execution) previewProjectSeekActivePromise = null;
-      previewProjectSeekRunning = false;
-      if (previewProjectSeekPending) void pumpPreviewProjectSeek();
-    }
-  }
-
-  function setPreviewSeekTarget(milliseconds: number, final = false) {
+  function setPreviewSeekTarget(milliseconds: ProjectTimeMs, final = false) {
     // Publish the target synchronously, before the native IPC round trip. The
     // same range value is then visible in both controls immediately, while
     // the controller revision prevents an old playback/overlay sample from
@@ -870,29 +689,23 @@
     // Invalidate an in-flight native result now, rather than waiting for the
     // next animation-frame broker dispatch. This prevents a one-frame snap
     // back between two fast pointer samples.
-    previewSeekIntent += 1;
-    projectTimeMs = milliseconds;
-    mediaTimeMs = Math.max(0, projectToMediaTime(milliseconds, appliedPlaybackMapping));
-    if (playerRunning) {
-      if (final) nativePreviewController.beginSeek();
-      else nativePreviewController.beginScrub();
-    }
+    previewSession.publishProjectTarget(milliseconds, final);
   }
 
-  async function performSeekPreviewProject(milliseconds: number, final = true, intent = previewSeekIntent) {
+  async function performSeekPreviewProject(milliseconds: ProjectTimeMs, final = true, intent = previewSession.currentIntent()) {
     if (!desktopRuntime) return;
     let restarted = false;
     if (taskTab !== "preview") {
-      const generation = ++previewGeneration;
+      const generation = previewSession.beginPageTransition(false);
       taskTab = "preview";
       await tick();
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      if (generation !== previewGeneration || page !== "tasks" || intent !== previewSeekIntent) return;
-      await previewStopPromise;
+      if (!previewSession.isCurrentPageTransition(generation) || page !== "tasks" || !previewSession.isCurrentIntent(intent)) return;
+      await previewSession.whenStopped();
       await startPreview();
       restarted = true;
     }
-    if (!playerRunning || intent !== previewSeekIntent) return;
+    if (!playerRunning || !previewSession.isCurrentIntent(intent)) return;
     try {
       await seekRunningPreviewProject(milliseconds, restarted, final, intent);
     } catch (reason) {
@@ -900,66 +713,17 @@
     }
   }
   async function setPreviewVolume(volume: number) {
-    if (!desktopRuntime || !playerRunning) return;
-    try {
-      await nativePreviewController.setVolume(volume);
-    } catch (reason) {
-      reportBackendFailure(reason);
-    }
+    await previewSession.setVolume(volume);
   }
 
   async function savePlaybackMapping() {
-    if (!desktopRuntime) return;
-    playbackMappingBusy = true;
-    try {
-      await backend.updatePlaybackTimeMapping({ ...playbackMapping });
-      appliedPlaybackMapping = { ...playbackMapping };
-      if (mediaTimeMs != null)
-        projectTimeMs = mediaToProjectTime(mediaTimeMs, appliedPlaybackMapping);
-      logs = [...logs, t("preview.mappingApplied")];
-    } catch (reason) {
-      reportBackendFailure(reason);
-    } finally {
-      playbackMappingBusy = false;
-    }
+    await previewSession.saveMapping(playbackMapping);
   }
 
-  async function saveCaptionFont(font: string) {
-    if (!desktopRuntime) return;
-    try {
-      await backend.setCaptionFont(font);
-    } catch (reason) {
-      reportBackendFailure(reason);
-    }
-  }
-
-  async function windowAction(action: WindowAction) {
-    // Window controls must remain usable even when the optional runtime
-    // capability probe is unavailable (for example in a bundled WebView).
-    // The Tauri API itself is the source of truth; surface failures instead
-    // of silently ignoring a click.
-    try {
-      await performWindowAction(action);
-    } catch (reason) {
-      error = formatMessage("error.windowAction", { message: String(reason) });
-    }
-  }
-
-  async function beginDrag() {
-    try {
-      await beginWindowDrag();
-    } catch (reason) {
-      error = formatMessage("error.windowDrag", { message: String(reason) });
-    }
-  }
-
-  async function beginResize(direction: ResizeDirection) {
-    try {
-      await beginWindowResize(direction);
-    } catch (reason) {
-      error = formatMessage("error.windowResize", { message: String(reason) });
-    }
-  }
+  const windowSession = new WindowSession({
+    onError: (message) => (error = message),
+    formatError: (kind, message) => formatMessage(`error.window${kind[0].toUpperCase()}${kind.slice(1)}`, { message }),
+  });
 
   const batchController = new BatchQueueController({
     desktopRuntime,
@@ -994,10 +758,8 @@
   const refreshBatchJobs = () => batchController.refresh();
   const startBatchQueue = () => batchController.start();
   const pauseBatchQueue = () => batchController.pause();
-  const clearBatchQueue = () =>
-    batchRunning ? Promise.resolve() : batchController.remove(() => true);
-  const clearCompletedBatchJobs = () =>
-    batchController.remove((item) => item.status === "Completed");
+  const clearBatchQueue = () => batchController.clearAll();
+  const clearCompletedBatchJobs = () => batchController.clearCompleted();
 
   async function chooseMultiTaskOutputDirectory() {
     if (!desktopRuntime) return;
@@ -1009,30 +771,23 @@
   }
 
   async function openMultiTaskItem(item: BatchItem) {
-    const generation = ++sourceLoadGeneration;
+    const generation = sourceSession.begin();
     await stopPreview();
-    if (generation !== sourceLoadGeneration) return;
+    if (!sourceSession.isCurrent(generation)) return;
     inspection = item.inspection;
     currentJobId = item.jobId ?? "";
-    batchEditingPath = item.inspection.path;
+    batchController.beginEditing(item);
     selectedTracks = item.inspection.tracks[0]
-      ? new Set([item.selectedTrackKey ?? taskTrackKey(item.inspection.tracks[0])])
+      ? selectionSession.singleTrack(item.selectedTrackKey ?? taskTrackKey(item.inspection.tracks[0]))
       : new Set();
     taskTab = "preview";
     page = "tasks";
-    logs = [];
-    lastLoggedProgressBucket = -1;
-    progress = item.progress;
-    bytesRead = Math.round((item.progress / 100) * item.inspection.size);
-    warnings = item.warnings;
-    captions = 0;
-    archivePath = "";
-    projectTimeMs = 0;
-    mediaTimeMs = null;
-    previewDurationMs = null;
-    previewIndexing = false;
-    isPaused = false;
-    isExporting = item.status === "Processing";
+    applyRuntimeReset(resetTaskRuntime({
+      progress: item.progress,
+      bytesRead: Math.round((item.progress / 100) * item.inspection.size),
+      warnings: item.warnings,
+      isExporting: item.status === "Processing",
+    }));
     if (item.jobId) {
       try {
         const artifacts = await backend.getJobArtifacts(item.jobId);
@@ -1045,7 +800,7 @@
       }
     }
     await tick();
-    if (generation !== sourceLoadGeneration) return;
+    if (!sourceSession.isCurrent(generation)) return;
     void startPreview();
     if (!batchRunning && !archivePath) void startPreviewIndex(item.inspection.path);
   }
@@ -1067,13 +822,11 @@
     text: string,
     action: SavedDrcsMapping["action"],
   ) => drcsController.save(id, text, action);
-  let navigationGeneration = 0;
-
   function selectView(target: typeof page) {
-    if (target === page) return;
-    const generation = ++navigationGeneration;
-    ++previewGeneration;
+    const generation = navigationSession.navigate(target);
+    if (generation == null) return;
     const leavingTasks = page === "tasks";
+    previewSession.beginPageTransition(leavingTasks);
 
     // Navigation is intentionally synchronous.  A native player is an
     // optional native surface, so its asynchronous teardown must never decide
@@ -1081,7 +834,6 @@
     page = target;
 
     if (leavingTasks) {
-      previewResumeTimeMs = mediaTimeMs;
       void queuePreviewStop();
     }
     if (target !== "tasks") {
@@ -1100,142 +852,53 @@
   }
 
   async function activateTaskPreview(generation: number) {
-    await previewStopPromise;
+    await previewSession.whenStopped();
     await tick();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    if (generation !== navigationGeneration || page !== "tasks" || taskTab !== "preview") return;
-    const resumeAt = previewResumeTimeMs;
+    if (!navigationSession.isCurrent(generation, "tasks") || page !== "tasks" || taskTab !== "preview") return;
+    const resumeAt = previewSession.resumeTime();
     await startPreview();
-    if (resumeAt != null && resumeAt > 0 && generation === navigationGeneration && playerRunning) {
+    if (resumeAt != null && resumeAt > 0 && navigationSession.isCurrent(generation, "tasks") && playerRunning) {
       await seekRunningPreview(
         resumeAt,
         true,
-        () => generation === navigationGeneration && page === "tasks" && taskTab === "preview",
+        () => navigationSession.isCurrent(generation, "tasks") && page === "tasks" && taskTab === "preview",
       );
-      previewResumeTimeMs = null;
+      previewSession.clearResumeTime();
     }
   }
 
   onMount(() => {
+    let disposeLifecycle = () => {};
+    void lifecycleSession.mount().then((dispose) => {
+      disposeLifecycle = dispose;
+    });
     if (desktopRuntime) {
-      void backend
-        .getSettings()
-        .then(async (settings) => {
-          await applyPreferences(settings, true);
+      void preferencesSession.load(true).then((settings) => {
+        if (settings) {
           selectedFormats = new Set([settings.defaultFormat as ExportFormat]);
-          void saveCaptionFont(settings.captionFont);
-        })
-        .catch((reason) => {
-          reportBackendFailure(reason);
-        });
-      void backend
-        .getPlaybackTimeMapping()
-        .then((mapping) => {
-          setAppliedPlaybackMapping(mapping);
-        })
-        .catch((reason) => {
-          reportBackendFailure(reason);
-        });
-      void backend
-        .getPreviewRuntime()
-        .then((runtime) => {
-          previewAvailable = runtime.available;
-        })
-        .catch((reason) => {
-          previewAvailable = false;
-          reportBackendFailure(reason);
-        });
-      void backend
-        .loadTaskHistory()
-        .then((records) => {
-          history = records as TaskRecord[];
-        })
-        .catch((reason) => {
-          reportBackendFailure(reason);
-        });
-      void backend
-        .loadDrcsMappings()
-        .then((records) => {
-          savedDrcsMappings = records.reduce<Record<string, SavedDrcsMapping>>(
-            (result, record) => {
-              result[record.id] = { text: record.text, action: record.action };
-              return result;
-            },
-            {},
-          );
-        })
-        .catch((reason) => {
-          reportBackendFailure(reason);
-        });
+          void preferencesSession.saveCaptionFont(settings.captionFont);
+        }
+      });
+      void bootstrapSession.load().then((state) => {
+        if (state.playbackMapping) setAppliedPlaybackMapping(state.playbackMapping);
+        previewAvailable = state.previewAvailable ?? false;
+        history = state.history as TaskRecord[];
+        savedDrcsMappings = state.drcsMappings.reduce<Record<string, SavedDrcsMapping>>(
+          (result, record) => ({ ...result, [record.id]: { text: record.text, action: record.action } }),
+          {},
+        );
+      });
     }
     if (!desktopRuntime) return;
-    let unlisten: (() => void) | undefined;
-    backend
-      .subscribeTaskEvents((payload) => {
-        const belongsToCurrentJob = Boolean(
-          payload.jobId && currentJobId && payload.jobId === currentJobId,
-        );
-        const belongsToPreviewIndex = !payload.jobId && previewIndexing;
-        if (!belongsToCurrentJob && !belongsToPreviewIndex) {
-          if (batchRunning) void refreshBatchJobs();
-          return;
-        }
-        const message = payload.code
-          ? formatMessage(payload.code, payload.parameters, payload.message)
-          : payload.message;
-        const transition = reduceTaskEvent(
-          {
-            archivePath,
-            bytesRead,
-            captions,
-            isExporting,
-            isPaused,
-            lastLoggedProgressBucket,
-            logs,
-            previewIndexing,
-            progress,
-            warnings,
-          },
-          payload,
-          inspection?.size ?? 0,
-          message,
-          batchRunning,
-        );
-        ({
-          archivePath,
-          bytesRead,
-          captions,
-          isExporting,
-          isPaused,
-          lastLoggedProgressBucket,
-          logs,
-          previewIndexing,
-          progress,
-          warnings,
-        } = transition.state);
-        if (transition.effects.addHistory) addHistory(transition.effects.addHistory);
-        if (transition.effects.refreshResume) void refreshResumeAvailability();
-        if (transition.effects.refreshBatch) void refreshBatchJobs();
-      })
-      .then((dispose) => {
-        unlisten = dispose;
-      });
-    const disposeDesktopLifecycle = installDesktopLifecycle({
-      playerRunning: () => playerRunning,
-      onRecordingDrop: (source) => void loadSource(source),
-      onPlayerCommand: (command) => void playerCommand(command),
-      onSurfaceChange: () => void resizePreview(),
-    });
     return () => {
-      unlisten?.();
-      disposeDesktopLifecycle();
+      disposeLifecycle();
       void stopPreview();
     };
   });
 
   onDestroy(() => {
-    if (previewResizeFrame) cancelAnimationFrame(previewResizeFrame);
-    void nativePreviewController.dispose();
+    void previewSession.dispose();
   });
 </script>
 
@@ -1250,9 +913,9 @@
       workspaceLayout={appSettings.workspaceLayout}
       {sourceInspectorCollapsed}
       {outputInspectorCollapsed}
-      onWindowAction={(action) => void windowAction(action)}
-      onBeginDrag={() => void beginDrag()}
-      onBeginResize={(direction) => void beginResize(direction as ResizeDirection)}
+      onWindowAction={(action) => void windowSession.action(action)}
+      onBeginDrag={() => void windowSession.beginDrag()}
+      onBeginResize={(direction) => void windowSession.beginResize(direction as ResizeDirection)}
       onToggleSidebar={toggleSidebar}
       onToggleSourceInspector={toggleSourceInspector}
       onToggleOutputInspector={toggleOutputInspector}
@@ -1294,7 +957,7 @@
         {diagnosticsCount}
         {bytesRead}
         {progress}
-        {projectTimeMs}
+        projectTimeMs={projectCursorMs}
         durationMs={previewDurationMs}
         {playerRunning}
         {playerPaused}
@@ -1335,11 +998,9 @@
         onError={(message: string) => (error = formatMessage("error.backend", { message }))}
         onStartExport={startExport}
         onToggleFormat={(next: ExportFormat) => {
-          const updated = new Set(selectedFormats);
-          if (updated.has(next)) updated.delete(next); else updated.add(next);
-          selectedFormats = updated;
+          selectedFormats = selectionSession.toggleFormat(selectedFormats, next);
         }}
-        onTogglePreservation={(feature: keyof ExportPreservation) => (preservation = { ...preservation, [feature]: !preservation[feature] })}
+        onTogglePreservation={(feature: keyof ExportPreservation) => (preservation = selectionSession.togglePreservation(preservation, feature))}
         onResume={resumeCheckpoint}
       />
       {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
@@ -1361,11 +1022,9 @@
         {selectedFormats}
         {preservation}
         onToggleFormat={(next: ExportFormat) => {
-          const updated = new Set(selectedFormats);
-          if (updated.has(next)) updated.delete(next); else updated.add(next);
-          selectedFormats = updated;
+          selectedFormats = selectionSession.toggleFormat(selectedFormats, next);
         }}
-        onTogglePreservation={(feature: keyof ExportPreservation) => (preservation = { ...preservation, [feature]: !preservation[feature] })}
+        onTogglePreservation={(feature: keyof ExportPreservation) => (preservation = selectionSession.togglePreservation(preservation, feature))}
       />
       {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
     {:else if page === "drcs"}

@@ -18,6 +18,13 @@ export type TaskExportPlan = {
   trackId?: number;
 };
 
+export type SourceTaskSetup = {
+  outputDirectory: string;
+  selectedTrackKeys: Set<string>;
+  selectedFormats: Set<ExportFormat> | null;
+  logs: string[];
+};
+
 export const taskTrackKey = trackKey;
 
 export function taskTrackId(track: Track | undefined) {
@@ -52,6 +59,29 @@ export function inspectTaskSource(path: string) {
   return backend.inspectSource(path);
 }
 
+export function createSourceTaskSetup(
+  inspection: Inspection,
+  defaultFormat: string,
+  message: (code: string, parameters: Record<string, unknown>) => string,
+): SourceTaskSetup {
+  const selectedTrack = inspection.tracks[0];
+  const supportedDefault = ["ASS", "TTML", "JSON", "Raw Data"].includes(defaultFormat)
+    ? defaultFormat as ExportFormat
+    : null;
+  return {
+    outputDirectory: inspection.path.replace(/[\\/][^\\/]+$/, ""),
+    selectedTrackKeys: selectedTrack
+      ? new Set([taskTrackKey(selectedTrack)])
+      : new Set(),
+    selectedFormats: supportedDefault ? new Set([supportedDefault]) : null,
+    logs: [
+      message("notice.sourceSelected", { name: inspection.name }),
+      message("notice.container", { container: inspection.container }),
+      message("notice.captionTracks", { count: inspection.tracks.length }),
+    ],
+  };
+}
+
 export async function startTaskExport(
   inspection: Inspection,
   plan: TaskExportPlan,
@@ -76,12 +106,12 @@ export async function startTaskExport(
 
 export function renderTaskSnapshot(
   archivePath: string,
-  timeMs: number,
+  mediaTimeMs: number,
   playerRunning: boolean,
 ): Promise<CaptionRenderSnapshot> {
   return playerRunning
-    ? backend.renderPreviewAt(archivePath, timeMs)
-    : backend.renderAt(archivePath, timeMs);
+    ? backend.renderPreviewAt(archivePath, mediaTimeMs)
+    : backend.renderAt(archivePath, mediaTimeMs);
 }
 
 export function loadTaskDrcs(path: string): Promise<DrcsGlyph[]> {
