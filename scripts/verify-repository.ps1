@@ -31,6 +31,7 @@ try {
 
     $limit = $MaxTrackedFileMiB * 1MB
     $oversized = foreach ($path in $tracked) {
+        if ($path -match '(^|/)\.') { continue }
         $absolutePath = Join-Path $root $path
         if (Test-Path -LiteralPath $absolutePath -PathType Leaf) {
             $item = Get-Item -LiteralPath $absolutePath

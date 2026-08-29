@@ -88,10 +88,13 @@ jobs:
       - name: Select nightly toolchain for cargo-fuzz
         shell: bash
         run: mv rust-toolchain.toml rust-toolchain.toml.ci-backup
+      - name: Install fuzz target standard library
+        run: rustup target add x86_64-unknown-linux-musl --toolchain nightly
       - name: Build every declared fuzz target
         shell: bash
         env:
           RUSTUP_TOOLCHAIN: nightly
+          RUSTFLAGS: -C target-feature=-crt-static
         run: |
           set -euo pipefail
           mapfile -t targets < <(
