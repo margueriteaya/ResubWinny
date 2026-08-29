@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Verify repository hygiene
         shell: pwsh
         run: ./scripts/verify-repository.ps1
@@ -25,7 +25,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install Linux desktop dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -58,7 +58,7 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.97.1
@@ -76,9 +76,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
-      - uses: taiki-e/install-action@cargo-fuzz
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
       - name: Build every declared fuzz target
         shell: bash
         run: |
@@ -98,7 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.97.1
@@ -109,7 +111,7 @@ jobs:
           cargo audit --file Cargo.lock
           cargo audit --file studio-tauri/src-tauri/Cargo.lock
           cargo audit --file fuzz/Cargo.lock
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -122,14 +124,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.97.1
-      - uses: taiki-e/install-action@cargo-deny
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
       - name: Check Worker dependency policy
-        run: cargo deny check --manifest-path Cargo.toml
+        run: cargo deny --manifest-path Cargo.toml check
       - name: Check desktop dependency policy
-        run: cargo deny check --manifest-path studio-tauri/src-tauri/Cargo.toml
+        run: cargo deny --manifest-path studio-tauri/src-tauri/Cargo.toml check
       - name: Check fuzz dependency policy
-        run: cargo deny check --manifest-path fuzz/Cargo.toml
+        run: cargo deny --manifest-path fuzz/Cargo.toml check

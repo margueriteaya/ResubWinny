@@ -31,8 +31,9 @@ try {
 
     $limit = $MaxTrackedFileMiB * 1MB
     $oversized = foreach ($path in $tracked) {
-        if (Test-Path -LiteralPath $path -PathType Leaf) {
-            $item = Get-Item -LiteralPath $path
+        $absolutePath = Join-Path $root $path
+        if (Test-Path -LiteralPath $absolutePath -PathType Leaf) {
+            $item = Get-Item -LiteralPath $absolutePath
             if ($item.Length -gt $limit) {
                 "$path ($([math]::Round($item.Length / 1MB, 2)) MiB)"
             }
