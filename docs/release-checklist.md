@@ -51,7 +51,8 @@ Complete every Source Release item, then also require:
 - [ ] Native preview smoke, seek/pause/resume, overlay timing, resize/DPI, and
   long 4K performance gates pass on the packaged executable.
 - [ ] Installation, uninstall, and clean-machine startup are tested; release
-  notes identify any Alpha limitations and skipped private-corpus gates.
+  notes identify any Alpha limitations and skipped private-corpus gates. Record
+  packaged workflow results using `windows-alpha-acceptance.md`.
 
 Code signing is not a prerequisite for this tier. Corresponding source and
 license compliance for the bundled libmpv build remain mandatory and cannot be
