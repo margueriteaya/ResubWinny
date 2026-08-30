@@ -37,7 +37,7 @@ jobs:
             libtool-bin gcc-multilib g++-multilib clang lld libc++-dev \
             libc++abi-dev libgmp-dev libmpfr-dev libmpc-dev libgcrypt20-dev \
             gperf ragel texinfo autopoint re2c asciidoc python3-roman \
-            python3-mako python3-jsonschema python3-rst2pdf python3-cairo \
+            python3-mako python3-jsonschema rst2pdf python3-cairo \
             docbook2x unzip p7zip-full curl wget libmimalloc-dev ccache glslc
 
       - name: Check out pinned build sources
