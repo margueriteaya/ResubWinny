@@ -87,6 +87,26 @@ try {
     $buildEnvironment = Resolve-SingleFile $libmpvPath 'BUILD-ENVIRONMENT.json' 'libmpv candidate directory'
 
     $receipt = Get-Content -Raw -LiteralPath $receiptPath | ConvertFrom-Json
+    if ($receipt.schemaVersion -ne 1) {
+        throw "Unsupported libmpv SOURCE-RECEIPT schema: $($receipt.schemaVersion)"
+    }
+    if ($receipt.binary.dll -cne (Split-Path -Leaf $libmpvDll) -or
+        $receipt.binary.importLibrary -cne (Split-Path -Leaf $importLibrary)) {
+        throw 'libmpv receipt binary names do not match the candidate files.'
+    }
+    if ($receipt.buildEnvironment.file -cne (Split-Path -Leaf $buildEnvironment)) {
+        throw 'libmpv receipt build environment name does not match the candidate file.'
+    }
+    $packages = @($receipt.packages)
+    if ($receipt.packageCount -lt 30 -or $packages.Count -ne $receipt.packageCount) {
+        throw 'libmpv receipt does not describe a complete source package set.'
+    }
+    $packageNames = @($packages | ForEach-Object { $_.name })
+    foreach ($requiredPackage in @('mpv', 'ffmpeg', 'libplacebo', 'libass', 'libaribcaption')) {
+        if ($packageNames -notcontains $requiredPackage) {
+            throw "libmpv receipt is missing required source package: $requiredPackage"
+        }
+    }
     Assert-Hash $libmpvDll $receipt.binary.dllSha256 'libmpv DLL receipt'
     Assert-Hash $importLibrary $receipt.binary.importLibrarySha256 'libmpv import library receipt'
     if ((Split-Path -Leaf $correspondingSource) -cne $receipt.archive.file) {
