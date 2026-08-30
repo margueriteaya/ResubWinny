@@ -33,12 +33,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential bison flex gettext git mercurial subversion \
-            ninja-build gyp cmake meson yasm nasm automake pkg-config libtool \
+            ninja-build gyp cmake yasm nasm automake pkg-config libtool \
             libtool-bin gcc-multilib g++-multilib clang lld libc++-dev \
             libc++abi-dev libgmp-dev libmpfr-dev libmpc-dev libgcrypt20-dev \
             gperf ragel texinfo autopoint re2c asciidoc python3-roman \
-            python3-mako python3-jsonschema rst2pdf python3-cairo \
+            python3-mako python3-jsonschema python3-venv rst2pdf python3-cairo \
             docbook2x unzip p7zip-full curl wget libmimalloc-dev ccache glslc
+
+      - name: Install pinned Python build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv build/libmpv-python-tools
+          build/libmpv-python-tools/bin/python -m pip install \
+            --disable-pip-version-check \
+            --require-hashes \
+            --requirement third_party/libmpv/build-requirements.txt
+          echo "$GITHUB_WORKSPACE/build/libmpv-python-tools/bin" >> "$GITHUB_PATH"
+          build/libmpv-python-tools/bin/meson --version
 
       - name: Check out pinned build sources
         shell: bash
@@ -64,10 +76,10 @@ jobs:
             build/libmpv/toolchain/src_packages
             build/libmpv/toolchain/clang_root
             build/libmpv/toolchain/install_rustup
-          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}-${{ github.run_id }}
+          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}-${{ github.run_id }}
           restore-keys: |
-            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}-
-            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}
+            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}-
+            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}
 
       - name: Sanitize restored source repositories
         shell: bash
@@ -158,7 +170,7 @@ jobs:
             build/libmpv/toolchain/src_packages
             build/libmpv/toolchain/clang_root
             build/libmpv/toolchain/install_rustup
-          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}-${{ github.run_id }}
+          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}-${{ github.run_id }}
 
       - name: Locate and extract binary artifact
         shell: bash
@@ -209,6 +221,7 @@ jobs:
               "tools": {
                   "clang": output("clang", "--version").splitlines()[0],
                   "cmake": output("cmake", "--version").splitlines()[0],
+                  "meson": output("meson", "--version"),
                   "ninja": output("ninja", "--version"),
                   "python": platform.python_version(),
               },
