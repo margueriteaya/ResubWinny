@@ -26,6 +26,19 @@ jobs:
           "mpv_commit=$($dependency.mpvCommit)" >> $env:GITHUB_OUTPUT
           "ffmpeg_commit=$($dependency.ffmpegCommit)" >> $env:GITHUB_OUTPUT
 
+      - name: Restore reusable libmpv build state
+        id: libmpv-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build/libmpv/toolchain/build64
+            build/libmpv/toolchain/src_packages
+            build/libmpv/toolchain/clang_root
+            build/libmpv/toolchain/install_rustup
+          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}
+          restore-keys: |
+            ${{ runner.os }}-libmpv-
+
       - name: Install native Ubuntu build prerequisites
         shell: bash
         run: |
@@ -118,6 +131,18 @@ jobs:
           path: |
             build/libmpv/toolchain/build*/**/*.log
             build/libmpv/toolchain/build*/**/CMakeCache.txt
+
+      - name: Save reusable libmpv build state
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build/libmpv/toolchain/build64
+            build/libmpv/toolchain/src_packages
+            build/libmpv/toolchain/clang_root
+            build/libmpv/toolchain/install_rustup
+          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}
 
       - name: Locate and extract binary artifact
         shell: bash
