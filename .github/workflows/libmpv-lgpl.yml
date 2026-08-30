@@ -63,6 +63,7 @@ jobs:
             git -C build/libmpv/toolchain am --3way "$GITHUB_WORKSPACE/$patch"
           done
           git -C build/libmpv/toolchain am --3way "$GITHUB_WORKSPACE/build/libmpv/recipe/compile-lgpl-libmpv.patch"
+          git -C build/libmpv/toolchain apply "$GITHUB_WORKSPACE/third_party/libmpv/patches/cppwinrt-winmd-path.patch"
 
       - name: Pin mpv and FFmpeg source commits
         shell: python
