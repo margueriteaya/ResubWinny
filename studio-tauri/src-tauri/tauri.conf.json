@@ -33,6 +33,7 @@
     "resources": {
       "../../build/cargo/release/arib-caption-worker.exe": "arib-caption-worker.exe",
       "../../LICENSE": "LICENSE",
+      "../../UNSIGNED-WINDOWS-ALPHA.txt": "UNSIGNED-WINDOWS-ALPHA.txt",
       "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
       "../../third_party/libaribcaption/LICENSE": "licenses/libaribcaption-MIT.txt",
       "../../third_party/libmpv/LICENSE.LGPL": "licenses/libmpv-LGPL-2.1.txt",
