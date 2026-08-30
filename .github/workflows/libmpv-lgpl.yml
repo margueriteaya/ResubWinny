@@ -175,6 +175,8 @@ jobs:
           retention-days: 30
           path: |
             build/libmpv/mpv-dev-lgpl-x86_64-*.7z
+            build/libmpv/binary/libmpv-2.dll
+            build/libmpv/binary/libmpv.dll.a
             build/libmpv/corresponding-source/libmpv-corresponding-source-*.tar.gz
             build/libmpv/corresponding-source/SOURCE-RECEIPT.json
             build/libmpv/corresponding-source/PATCHED-TOOLCHAIN.diff
