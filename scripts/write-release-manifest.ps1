@@ -24,7 +24,12 @@ function Resolve-GitCommit([string]$Reference) {
 
 Push-Location $root
 try {
-    $artifactPath = [IO.Path]::GetFullPath((Join-Path $root $ArtifactDirectory))
+    $artifactCandidate = if ([IO.Path]::IsPathRooted($ArtifactDirectory)) {
+        $ArtifactDirectory
+    } else {
+        Join-Path $root $ArtifactDirectory
+    }
+    $artifactPath = [IO.Path]::GetFullPath($artifactCandidate)
     if (-not (Test-Path -LiteralPath $artifactPath -PathType Container)) {
         throw "Artifact directory does not exist: $artifactPath"
     }
