@@ -83,6 +83,22 @@ try {
         }
     }
 
+    $dependencyManifest = Get-Content -Raw third_party/versions.json | ConvertFrom-Json
+    $libmpv = $dependencyManifest.dependencies.libmpvWindowsX86_64
+    $thirdPartyNotices = Get-Content -Raw THIRD_PARTY_NOTICES.md
+    $noticePins = [ordered]@{
+        buildTag = $libmpv.buildTag
+        asset = $libmpv.asset
+        assetSha256 = $libmpv.assetSha256
+        dllSha256 = $libmpv.dllSha256
+        importLibrarySha256 = $libmpv.importLibrarySha256
+    }
+    foreach ($pin in $noticePins.GetEnumerator()) {
+        if (-not $thirdPartyNotices.Contains([string]$pin.Value)) {
+            throw "THIRD_PARTY_NOTICES.md is missing the pinned libmpv $($pin.Key): $($pin.Value)"
+        }
+    }
+
     Write-Output "Repository hygiene verified for $($tracked.Count) tracked files."
 } finally {
     Pop-Location
