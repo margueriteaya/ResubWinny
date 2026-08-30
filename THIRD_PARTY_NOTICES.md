@@ -24,20 +24,24 @@ patches inside the vendored tree at this revision.
 ## libmpv for Windows x86_64
 
 - Build upstream: <https://github.com/zhongfly/mpv-winbuild>
-- Build tag: `2026-07-24-0fb136f685`
+- Build tag: `2026-08-29-e8673660ab`
 - Release tag commit: `9b6ccd6abbfcd6bb2dcad8946d445f670b0555ef`
 - Build recipe commit: `b4b1088c30e8821e012fd20052de4c2d3a8eaad4`
 - GitHub Actions run: `30091573485`
 - Toolchain repository: <https://github.com/shinchiro/mpv-winbuild-cmake>
 - Toolchain commit: `04283f7e911149809c46bc236a834cf7134ba133`
 - FFmpeg commit: `2f209337fc66b58bf0495265880bb37580c3f981`
-- Asset: `mpv-dev-lgpl-x86_64-20260724-git-0fb136f685.7z`
+- Asset: `mpv-dev-lgpl-x86_64-20260829-git-e8673660ab.7z`
+- Asset SHA-256:
+  `78260166265FBC09B3BEE75EE3464EB0F6BBAA8ECD172786E33C22BBF8A3CB47`
 - mpv commit: `0fb136f685c21ec10943f682bec1c90220d2d90f`
 - License: LGPL-2.1-or-later build
 - Local license: `third_party/libmpv/LICENSE.LGPL`
 - Upstream copyright and file exceptions: `third_party/libmpv/COPYRIGHT.mpv`
 - Bundled DLL SHA-256:
-  `2FDF6BF2AD4354F26A191C12EBA02492DC5A2F024AAC018494C85192DAE84E80`
+  `92CA673870C425E0A539B854231F75E71BF7FB6E72FE86A6CE315CDF57DC0F16`
+- Import library SHA-256:
+  `BEF1B89F534BC86B33135E1F04FA2D5064B9D48B5DE8BC9866665BBF43DEF793`
 
 The DLL is loaded dynamically and is replaceable. A compatible library can be
 selected with `RESUBWINNY_LIBMPV`; the application does not copy libmpv code
