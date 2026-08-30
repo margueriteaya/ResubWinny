@@ -109,6 +109,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config --global user.name "ResubWinny Build"
+          git config --global user.email "build@resubwinny.invalid"
           git config --global --add safe.directory "$GITHUB_WORKSPACE/build/libmpv/toolchain"
           git config --global --add safe.directory "$GITHUB_WORKSPACE/build/libmpv/recipe"
           sed -i "/ccache_conf.in/d" build/libmpv/toolchain/CMakeLists.txt
