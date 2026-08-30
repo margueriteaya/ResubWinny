@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
+  import { TriangleAlert, X } from "@lucide/svelte";
   import HomePage from "./features/home/HomePage.svelte";
   import { PreviewSession } from "./features/tasks/preview-session";
   import { SourceSession } from "./features/tasks/source-session";
@@ -100,11 +101,10 @@
     },
     failExport: (reason) => {
       isExporting = false;
-      previewIndexing = false;
+      exportPending = false;
       reportBackendFailure(reason);
     },
     beginIndex: () => {
-      isExporting = true;
       previewIndexing = true;
     },
     completeIndex: (path) => {
@@ -112,7 +112,7 @@
       appendNotice("notice.previewIndexStarted");
     },
     failIndex: (reason) => {
-      isExporting = false;
+      previewIndexing = false;
       reportBackendFailure(reason);
     },
   });
@@ -163,6 +163,7 @@
   });
   let isExporting = false;
   let previewIndexing = false;
+  let exportPending = false;
   let isPaused = false;
   let logs: string[] = [];
   let lastLoggedProgressBucket = -1;
@@ -502,7 +503,7 @@
       error = t("error.desktopExport");
       return;
     }
-    if (!inspection || isExporting) return;
+    if (!inspection || isExporting || exportPending) return;
     const activeInspection = inspection;
     error = "";
     if (!outputDirectory.trim()) {
@@ -520,6 +521,18 @@
       error = t("tracks.selectionRequired");
       return;
     }
+    if (previewIndexing) {
+      exportPending = true;
+      try {
+        await exportSession.cancel(() => backend.cancelExportAndWait());
+        previewIndexing = false;
+      } catch (reason) {
+        exportPending = false;
+        reportBackendFailure(reason);
+        return;
+      }
+    }
+    exportPending = false;
     await exportSession.runExport(
       (onCreated) => startTaskExport(
           activeInspection,
@@ -537,7 +550,7 @@
   }
 
   async function startPreviewIndex(expectedPath = inspection?.path ?? "") {
-    if (!desktopRuntime || !inspection || isExporting) return;
+    if (!desktopRuntime || !inspection || isExporting || exportPending || previewIndexing) return;
     if (!expectedPath || inspection.path !== expectedPath) return;
     const sourcePath = inspection.path;
     const selected = inspection.tracks.find((track) => selectedTracks.has(taskTrackKey(track)));
@@ -841,10 +854,7 @@
       return;
     }
 
-    if (!inspection) {
-      void chooseSource();
-      return;
-    }
+    if (!inspection) return;
     if (taskTab !== "preview") return;
     // A page change creates a fresh host.  Start only after it has been laid
     // out, and abandon the work if the user has navigated again meanwhile.
@@ -924,6 +934,14 @@
     <AppSidebar {page} collapsed={sidebarCollapsed} hasTask={Boolean(inspection)} taskName={inspection?.name ?? ""} busy={isInspecting || isExporting || batchRunning} onNavigate={selectView} />
   {/key}
 
+  {#if error}
+    <div class="global-error" role="alert">
+      <TriangleAlert class="global-error-icon" size={17} aria-hidden="true" />
+      <span>{error}</span>
+      <button type="button" aria-label={t("common.dismiss")} onclick={() => error = ""}><X size={16} /></button>
+    </div>
+  {/if}
+
   <section class="application">
     {#key $localeRevision}
     {#if page === "home"}
@@ -971,6 +989,7 @@
         {preservation}
         {error}
         {isExporting}
+        {exportPending}
         bind:outputDirectory
         canResume={canResumeCurrentJob}
         {resumeBusy}
@@ -1062,6 +1081,7 @@
 </main>
 
 <style>
+  .global-error{position:fixed;z-index:50;right:18px;bottom:42px;left:calc(var(--rw-sidebar-width, 220px) + 18px);display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:9px;min-height:42px;padding:8px 10px;border:1px solid color-mix(in srgb,#bb3d3d 65%,var(--rw-border));border-radius:8px;color:var(--rw-text);background:color-mix(in srgb,#bb3d3d 10%,var(--rw-surface-raised));box-shadow:0 8px 28px rgba(0,0,0,.2);backdrop-filter:blur(18px)}:global(.global-error-icon){color:#bb3d3d}.global-error span{font-size:12px;line-height:1.4}.global-error button{display:grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:50%;color:var(--rw-text-secondary);background:transparent}.global-error button:hover{background:color-mix(in srgb,var(--rw-text) 8%,transparent)}.sidebar-collapsed .global-error{left:76px}@media(max-width:700px){.global-error{right:10px;bottom:38px;left:10px}.sidebar-collapsed .global-error{left:10px}}
   .route-loading{display:grid;place-items:center;min-height:240px}.route-loading span{width:16px;height:16px;border:2px solid color-mix(in srgb,var(--rw-text) 16%,transparent);border-top-color:var(--rw-accent);border-radius:50%;animation:route-spin 700ms linear infinite}@keyframes route-spin{to{transform:rotate(1turn)}}
   @media(prefers-reduced-motion:reduce){.route-loading span{animation:none;border-top-color:inherit}}
 </style>

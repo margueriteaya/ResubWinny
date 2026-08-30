@@ -13,7 +13,7 @@
   export let preservation: ExportPreservation;
   export let error = "";
   export let isExporting = false;
-  export let previewIndexing = false;
+  export let exportPending = false;
   export let logs: string[] = [];
   export let onToggleFormat: (format: ExportFormat) => void = () => {};
   export let onTogglePreservation: (feature: Feature) => void = () => {};
@@ -78,7 +78,7 @@
   {#if inspection.container === "TLV"}<section class="constraint-card"><b>{t("limits.title")}</b><p>{t("limits.tlv")}</p></section>{/if}
   {#if error}<p class="error"><TriangleAlert size={16} />{error}</p>{/if}
   <div class="output-actions">
-    <button class="export-button" onclick={onStartExport} disabled={isExporting || !selectedFormats.size}><FileOutput size={17} />{previewIndexing ? t("task.indexingTimeline") : isExporting ? t("common.exporting") : t("common.startExport")}</button>
+    <button class="export-button" onclick={onStartExport} disabled={isExporting || exportPending || !selectedFormats.size}><FileOutput size={17} />{exportPending ? t("task.exportWaitingForPreview") : isExporting ? t("common.exporting") : t("common.startExport")}</button>
     {#if canResume}<button class="resume-button" onclick={onResume} disabled={resumeBusy || isExporting}><RotateCcw size={16} /> {resumeBusy ? t("task.resumingCheckpoint") : t("task.resumeCheckpoint")}</button>{/if}
   </div>
   <section class="log-card"><div><b>{t("common.liveLog")}</b><span>{t("workspace.logEntries").replace("{0}", String(logs.length))}</span></div><pre bind:this={logView}>{logs.join("\n") || t("workspace.logEmpty")}</pre></section>

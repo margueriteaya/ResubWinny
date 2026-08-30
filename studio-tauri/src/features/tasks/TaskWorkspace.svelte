@@ -38,6 +38,7 @@
   export let preservation: ExportPreservation;
   export let error = "";
   export let isExporting = false;
+  export let exportPending = false;
   export let subtitle: string = t("task.selectRecording");
   export let onChooseSource: () => void = () => {};
   export let onSelectTrack: (track: Track) => void = () => {};
@@ -152,7 +153,7 @@
       <div class="pane-separator source-separator" role="separator" aria-orientation="vertical" aria-label={t("workspace.resizeSource")} aria-valuemin="220" aria-valuemax="320" aria-valuenow={sourceWidth} tabindex="0" onpointerdown={(event) => resizePane("source", event)} onkeydown={(event) => resizeFromKeyboard("source", event)}></div>
     {/if}
     <TaskPreviewPanel
-      {taskTab} {currentJobId} {archivePath} {desktopRuntime} {captions} {diagnosticsCount} {bytesRead} {progress} {isExporting} {projectTimeMs} {durationMs} {playerRunning} {playerPaused} {previewAvailable} trackLabel={selectedTrackLabel} trackName={selectedTrackName} trackDetail={selectedTrackDetail}
+      {taskTab} {currentJobId} {archivePath} {desktopRuntime} {captions} {diagnosticsCount} {bytesRead} {progress} {isExporting} {previewIndexing} {projectTimeMs} {durationMs} {playerRunning} {playerPaused} {previewAvailable} {compactViewport} trackLabel={selectedTrackLabel} trackName={selectedTrackName} trackDetail={selectedTrackDetail}
       bind:nativePreview bind:playbackMapping {appliedPlaybackMapping} {playbackMappingBusy}
       onSelectTab={onSelectTab} onPlayerCommand={onPlayerCommand} onStartPreview={onStartPreview} onStopPreview={onStopPreview}
       onResizePreview={onResizePreview} {onSeekProject} {onSeekTarget} {onSetVolume} onSaveMapping={onSaveMapping}
@@ -164,7 +165,7 @@
     {/if}
     <div class="workspace-pane output-pane">
       <header class="pane-header"><b>{t("workspace.outputSettings")}</b><button class="pane-toggle liquid-control" onclick={toggleOutput} data-tooltip={outputIsCollapsed ? t("workspace.showOutput") : t("workspace.hideOutput")} aria-label={outputIsCollapsed ? t("workspace.showOutput") : t("workspace.hideOutput")}>{#if outputIsCollapsed}<PanelRightOpen size={16} />{:else}<PanelRightClose size={16} />{/if}</button></header>
-      {#if !outputIsCollapsed}<TaskOutputPanel {inspection} {formats} {selectedFormats} {preservation} {error} {isExporting} {previewIndexing} {logs} {canResume} {resumeBusy} {onToggleFormat} {onTogglePreservation} onStartExport={onStartExport} {onResume} bind:outputDirectory {onChooseOutputDirectory} />{/if}
+      {#if !outputIsCollapsed}<TaskOutputPanel {inspection} {formats} {selectedFormats} {preservation} {error} {isExporting} {exportPending} {logs} {canResume} {resumeBusy} {onToggleFormat} {onTogglePreservation} onStartExport={onStartExport} {onResume} bind:outputDirectory {onChooseOutputDirectory} />{/if}
     </div>
   </div>
 {:else}

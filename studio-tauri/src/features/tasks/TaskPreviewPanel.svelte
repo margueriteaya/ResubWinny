@@ -19,6 +19,8 @@
   export let bytesRead = 0;
   export let progress = 0;
   export let isExporting = false;
+  export let previewIndexing = false;
+  export let compactViewport = false;
   export let playerRunning = false;
   export let playerPaused = true;
   export let previewAvailable: boolean | null = null;
@@ -124,7 +126,7 @@
 
 <section class="preview-panel">
   <div class="tabs">
-    <MacSegmentedControl size="toolbar" iconOnly ariaLabel={t("app.navigation")} value={taskTab} options={taskTabOptions} onChange={(value) => onSelectTab(value as TaskTab)} />
+    <MacSegmentedControl size="toolbar" iconOnly={compactViewport} ariaLabel={t("app.navigation")} value={taskTab} options={taskTabOptions} onChange={(value) => onSelectTab(value as TaskTab)} />
   </div>
   {#if taskTab === "preview"}
     <div class="player-shell">
@@ -136,11 +138,11 @@
       </div>
     </div>
     <div class="preview-status"><span>{t("workspace.scanned").replace("{0}", (bytesRead / 1024 ** 3).toFixed(2))}</span><span>{progress.toFixed(1)}%</span></div>
-    <TaskTimeline {archivePath} {desktopRuntime} live={isExporting} editor {trackLabel} {trackName} {trackDetail} projectTimeMs={projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} playing={playerRunning && !playerPaused} expectedCount={captions} onSeek={onSeekProject} {onSeekTarget} onOpenMapping={openPlaybackMapping} {onError} />
+    <TaskTimeline {archivePath} {desktopRuntime} live={isExporting || previewIndexing} editor {trackLabel} {trackName} {trackDetail} projectTimeMs={projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} playing={playerRunning && !playerPaused} expectedCount={captions} onSeek={onSeekProject} {onSeekTarget} onOpenMapping={openPlaybackMapping} {onError} />
     <details class="playback-mapping" bind:this={playbackMappingDetails}><summary tabindex="-1">{t("preview.mappingTitle")}</summary><p>{t("preview.mappingDescription")}</p><label>{t("preview.mappingSegment")}<input bind:value={playbackMapping.segmentId} /></label><label>{t("preview.mappingMediaAnchor")}<input type="number" step="1" bind:value={playbackMapping.mediaAnchorMs} /></label><label>{t("preview.mappingProjectAnchor")}<input type="number" step="1" bind:value={playbackMapping.projectAnchorMs} /></label><label>{t("preview.mappingRateNumerator")}<input type="number" min="1" step="1" bind:value={playbackMapping.rateNumerator} /></label><label>{t("preview.mappingRateDenominator")}<input type="number" min="1" step="1" bind:value={playbackMapping.rateDenominator} /></label><button class="quiet-button" onclick={onSaveMapping} disabled={playbackMappingBusy}>{playbackMappingBusy ? t("preview.mappingApplying") : t("preview.mappingApply")}</button></details>
     {#if previewAvailable === false}<p class="preview-unavailable">{t("preview.runtimeUnavailable")}</p>{/if}
   {:else if taskTab === "events"}
-    <TaskTimeline {archivePath} {desktopRuntime} live={isExporting} {trackLabel} {trackName} {trackDetail} expectedCount={captions} projectTimeMs={projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} playing={playerRunning && !playerPaused} onSeek={onSeekProject} {onSeekTarget} {onError} />
+    <TaskTimeline {archivePath} {desktopRuntime} live={isExporting || previewIndexing} {trackLabel} {trackName} {trackDetail} expectedCount={captions} projectTimeMs={projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} playing={playerRunning && !playerPaused} onSeek={onSeekProject} {onSeekTarget} {onError} />
   {:else}<TaskDiagnostics jobId={currentJobId} {desktopRuntime} onCountChange={onDiagnosticsCount} {onError} />{/if}
 </section>
 
