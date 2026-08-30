@@ -158,29 +158,32 @@ with a coordinated frontend contract migration.
 - `CONTRIBUTING.md`, `SECURITY.md`, and the supported toolchain policy are now
   present. A Windows Alpha candidate workflow runs the full package gate and
   writes installer hashes without creating a public release.
-- Record the code-of-conduct decision and configure a protected signing
-  identity before public binary publication.
+- Record the code-of-conduct decision. A protected signing identity is required
+  for Signed Stable releases, but not for an explicitly disclosed Unsigned
+  Windows Alpha that satisfies the source, hash, provenance, and license gates.
 - Remove claims in architecture documents that no longer match the actual
   implementation and ensure all three language versions describe the same
   verified and experimental capability boundaries.
 
 ## Recommended order
 
-1. Keep architecture, backend contract, README, and locale capability wording
-   synchronized with the implemented lossy SRT/WebVTT and Windows-only native
-   preview boundary.
-2. Continue decomposing `App.svelte`, ASS construction, Ruby association, and
-   the multi-task table only when the extracted boundary owns state or behavior;
-   add focused tests around every moved boundary.
-3. Run packaged Windows end-to-end acceptance for source selection, native
+1. Produce an auditable Unsigned Windows Alpha pipeline that publishes the
+   exact tag and commit, complete artifact hashes, unsigned-build warning,
+   notices, and the bundled libmpv corresponding-source receipt.
+2. Run packaged Windows end-to-end acceptance for source selection, native
    preview, dynamic broadcast metadata, multi-task control, language packs,
    output planning, and artifact publication. Source selection, paused native
    video, dynamic metadata, 118-event indexing, and final-archive timeline
    recovery are verified with `bs4k_test_2.ts`; the remaining workflows still
    need packaged acceptance.
-4. Produce a fixed, complete corresponding-source package for the exact
+3. Maintain a private real-broadcast compatibility matrix and publish only its
+   results. Do not add synthetic broadcast generation to replace legally held
+   recordings, and keep TLV/MMTP explicitly experimental.
+4. Add focused tests for pure frontend behavior and generated Rust-to-TypeScript
+   DTO types without introducing a frontend test framework or RPC framework.
+5. Produce a fixed, complete corresponding-source package for the exact
    bundled LGPL libmpv build; the current development DLL blocks public binary
    distribution until this is done.
-5. Keep Cargo/npm dependency auditing active and convert the private Alpha
-   candidate workflow into a signed public-release workflow only after the
-   libmpv corresponding-source artifact and signing identity are available.
+6. Keep Cargo/npm dependency auditing active. Publish an unsigned Alpha only
+   after the libmpv corresponding-source gate passes; add signing as a separate
+   requirement when promoting a build to Signed Stable.
