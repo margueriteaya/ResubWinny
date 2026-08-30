@@ -35,6 +35,9 @@ try {
     }
 
     $version = (Get-Content -Raw studio-tauri/package.json | ConvertFrom-Json).version
+    if ($Tier -eq 'SignedStable') {
+        throw 'SignedStable manifests require Authenticode verification and are not supported by this unsigned-release tool.'
+    }
     $expectedTag = "v$version"
     if ($Tag -cne $expectedTag) {
         throw "Release tag differs from the package version: expected $expectedTag, found $Tag"
@@ -71,7 +74,8 @@ try {
         version = $version
         tag = $Tag
         commit = $commit
-        codeSigned = $Tier -eq 'SignedStable'
+        codeSigned = $false
+        unsignedWarningRequired = $Tier -eq 'UnsignedWindowsAlpha'
         generatedAtUtc = [DateTime]::UtcNow.ToString('o')
         artifacts = $artifacts
     }
