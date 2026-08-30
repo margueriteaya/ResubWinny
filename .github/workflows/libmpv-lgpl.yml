@@ -31,10 +31,10 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: |
-            build/libmpv/toolchain/build64
-            build/libmpv/toolchain/src_packages
-            build/libmpv/toolchain/clang_root
-            build/libmpv/toolchain/install_rustup
+            build/libmpv/cache/build64
+            build/libmpv/cache/src_packages
+            build/libmpv/cache/clang_root
+            build/libmpv/cache/install_rustup
           key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}
           restore-keys: |
             ${{ runner.os }}-libmpv-
@@ -67,6 +67,11 @@ jobs:
           git -C build/libmpv/toolchain checkout --detach "$TOOLCHAIN_COMMIT"
           git -C build/libmpv/toolchain config user.name "ResubWinny Build"
           git -C build/libmpv/toolchain config user.email "build@resubwinny.invalid"
+          for state in build64 src_packages clang_root install_rustup; do
+            if [ -e "build/libmpv/cache/$state" ]; then
+              mv "build/libmpv/cache/$state" "build/libmpv/toolchain/$state"
+            fi
+          done
 
       - name: Apply reviewed LGPL recipe
         shell: bash
