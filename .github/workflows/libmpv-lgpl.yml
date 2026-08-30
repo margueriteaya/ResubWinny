@@ -35,9 +35,10 @@ jobs:
             build/libmpv/cache/src_packages
             build/libmpv/cache/clang_root
             build/libmpv/cache/install_rustup
-          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}
+          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}-${{ github.run_id }}
           restore-keys: |
-            ${{ runner.os }}-libmpv-
+            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}-
+            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}
 
       - name: Install native Ubuntu build prerequisites
         shell: bash
@@ -72,6 +73,14 @@ jobs:
               mv "build/libmpv/cache/$state" "build/libmpv/toolchain/$state"
             fi
           done
+          if [ -d build/libmpv/toolchain/src_packages ]; then
+            find build/libmpv/toolchain/src_packages -type d -name .git -prune -print0 |
+              while IFS= read -r -d '' git_dir; do
+                repo="${git_dir%/.git}"
+                git -C "$repo" am --abort >/dev/null 2>&1 || true
+                git -C "$repo" reset --hard
+              done
+          fi
 
       - name: Apply reviewed LGPL recipe
         shell: bash
@@ -149,7 +158,7 @@ jobs:
             build/libmpv/toolchain/src_packages
             build/libmpv/toolchain/clang_root
             build/libmpv/toolchain/install_rustup
-          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}
+          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}-${{ github.run_id }}
 
       - name: Locate and extract binary artifact
         shell: bash
