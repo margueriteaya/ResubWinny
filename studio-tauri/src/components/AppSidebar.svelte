@@ -43,14 +43,14 @@
     transition: height var(--rw-motion-fluid) var(--rw-ease-fluid), padding var(--rw-motion-fluid) var(--rw-ease-fluid), opacity var(--rw-motion-responsive) var(--rw-ease-out), transform var(--rw-motion-fluid) var(--rw-ease-fluid), visibility 0s linear;
   }
   .sidebar-identity strong { display: block; font-size: 15px; line-height: 20px; font-weight: 650; white-space: nowrap; }
-  .sidebar-identity small { display: block; overflow: hidden; color: var(--rw-muted); font-size: 9px; line-height: 13px; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar-identity small { display: block; overflow: hidden; color: var(--rw-muted); font-size: 11px; line-height: 15px; text-overflow: ellipsis; white-space: nowrap; }
   .sidebar-section-label {
     height: 20px;
     margin: 10px 0 0;
     padding: 0 14px;
     overflow: hidden;
     color: var(--rw-text-secondary);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 20px;
     font-weight: 560;
     white-space: nowrap;
@@ -146,7 +146,7 @@
     border-radius: 9px;
     color: #fff;
     background: var(--rw-accent);
-    font-size: 9px;
+    font-size: 11px;
     line-height: 18px;
     font-style: normal;
     text-align: center;
@@ -172,8 +172,8 @@
   }
   .sidebar-current-task span,
   .sidebar-current-task b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sidebar-current-task span { color: var(--rw-muted); font-size: 9px; line-height: 13px; }
-  .sidebar-current-task b { margin-top: 3px; font-size: 11px; line-height: 14px; font-weight: 600; }
+  .sidebar-current-task span { color: var(--rw-muted); font-size: 11px; line-height: 15px; }
+  .sidebar-current-task b { margin-top: 3px; font-size: 12px; line-height: 16px; font-weight: 600; }
   .sidebar-current-task.busy span { color: var(--rw-warning); }
 
   .sidebar.collapsed .sidebar-identity,

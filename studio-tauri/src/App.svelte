@@ -965,6 +965,7 @@
         {desktopRuntime}
         {logs}
         {captions}
+        {warnings}
         {diagnosticsCount}
         {bytesRead}
         {progress}
