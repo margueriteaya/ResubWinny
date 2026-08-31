@@ -27,12 +27,6 @@ fn normalize(mut settings: AppSettings) -> AppSettings {
     ) {
         settings.default_format = "ASS".into();
     }
-    if !matches!(
-        settings.default_timeline.as_str(),
-        "Auto (Gap Merge + Overlap Resolve)" | "Strict original timestamps"
-    ) {
-        settings.default_timeline = "Auto (Gap Merge + Overlap Resolve)".into();
-    }
     if !matches!(settings.theme.as_str(), "system" | "light" | "dark") {
         settings.theme = "system".into();
     }
@@ -182,7 +176,6 @@ mod tests {
             ui_font: "cjk".into(),
             caption_font: "system".into(),
             default_format: "TTML".into(),
-            default_timeline: "Strict original timestamps".into(),
             locale: "ja".into(),
             theme: "dark".into(),
             workspace_layout: Default::default(),
@@ -190,7 +183,6 @@ mod tests {
         assert_eq!(settings.ui_font, "cjk");
         assert_eq!(settings.caption_font, "system");
         assert_eq!(settings.default_format, "TTML");
-        assert_eq!(settings.default_timeline, "Strict original timestamps");
         assert_eq!(settings.locale, "ja");
         assert_eq!(settings.theme, "dark");
     }
@@ -201,7 +193,6 @@ mod tests {
             ui_font: "not-a-font-profile".into(),
             caption_font: "untrusted-font".into(),
             default_format: "SRT".into(),
-            default_timeline: "make it up".into(),
             locale: "".into(),
             theme: "neon".into(),
             workspace_layout: crate::models::WorkspaceLayoutSettings {
@@ -214,10 +205,6 @@ mod tests {
         assert_eq!(settings.ui_font, "system");
         assert_eq!(settings.caption_font, "arib");
         assert_eq!(settings.default_format, "ASS");
-        assert_eq!(
-            settings.default_timeline,
-            "Auto (Gap Merge + Overlap Resolve)"
-        );
         assert_eq!(settings.locale, "system");
         assert_eq!(settings.theme, "system");
         assert_eq!(settings.workspace_layout.source_width, 220);

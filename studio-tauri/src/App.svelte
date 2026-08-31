@@ -184,7 +184,6 @@
     uiFont: "system",
     captionFont: "arib",
     defaultFormat: "ASS",
-    defaultTimeline: "Auto (Gap Merge + Overlap Resolve)",
     locale: "system",
     theme: "system",
     workspaceLayout: {

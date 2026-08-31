@@ -12,7 +12,7 @@
   export let onSettingsSaved: (settings: AppSettings) => void | Promise<void> = () => {}
   export let onSettingsPreview: (settings: AppSettings) => void | Promise<void> = () => {}
   export let onError: (reason: unknown) => void = () => {}
-  const defaults: AppSettings = { uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', defaultTimeline: 'Auto (Gap Merge + Overlap Resolve)', locale: 'system', theme: 'system', workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false } }
+  const defaults: AppSettings = { uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', locale: 'system', theme: 'system', workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false } }
   let preferences: AppSettings = { ...defaults }
   export let panel: Panel = 'general'
   let persistenceState: 'idle' | 'saving' | 'saved' | 'error' = 'idle'
