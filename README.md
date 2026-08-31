@@ -1,10 +1,11 @@
+[简体中文](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [English](README.en.md)
+
+> 简体中文版本是唯一权威来源。其他语言版本仅为同步译文。
+
 # ResubWinny
 
-⚠️本项目现在处于alpha前期，无法保证可用性，且可能存在破坏性变更！⚠️
-
-⚠️This project is currently in the early alpha stage; availability cannot be guaranteed, and there may be breaking changes! English documents is preparing!⚠️
-
-⚠️このプロジェクトは現在α版の初期段階にあり、安定した動作を保証できず、また破壊的な変更が行われる可能性があります。日本語の開発ドキュメントはまだまだ準備しています。⚠️
+> [!WARNING]
+> 本项目现在处于alpha前期，无法保证可用性，且可能存在破坏性变更！⚠
 
 ResubWinny 是一款在 Windows 上运行的面向泛日本内容视频档源文件的字幕抽取、检查、预览与转换工具，具有现代化的使用界面，也可使用命令行来进行操作。
 

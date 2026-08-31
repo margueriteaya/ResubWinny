@@ -1,143 +1,135 @@
-# macOS 27 Frontend Migration Matrix
+# macOS 27 前端迁移矩阵
 
-This document is the delivery contract for the ResubWinny frontend rewrite. It
-freezes the product surface while the visual implementation is migrated. A
-screen is complete only when its existing behavior, copy, states, accessibility,
-and performance gates all pass in the real Tauri application.
+[简体中文（唯一权威）](frontend-macos27-migration-matrix.md) | [English](frontend-macos27-migration-matrix.en.md) | [日本語](frontend-macos27-migration-matrix.ja.md) | [繁體中文（台灣）](frontend-macos27-migration-matrix.zh-TW.md)
 
-## Source Priority
+> 本简体中文文件是唯一具权威性的规范。英语、日语与繁体中文（台湾）版本仅为同步译文；任何歧义或冲突一律以本文件为准。
 
-1. Apple Human Interface Guidelines for behavior and material placement.
-2. The official Apple macOS 27 UI Kit for control measurements and states.
-3. The approved Figma frames, including `Task State / Timeline Indexing / 1280x820`.
-4. The existing application for features, copy, data, and information structure.
-5. External references for optical implementation research only.
+本文档是 ResubWinny 前端重写的交付契约。它在迁移视觉实现期间冻结产品界面。
+只有当一个屏幕的现有行为、文案、状态、无障碍功能与性能门槛全部在真实的 Tauri
+应用程序中通过时，该屏幕才算完成。
 
-No unapproved logo, brand color, content feature, or alternate information
-architecture is part of this migration.
+## 来源优先级
 
-## Platform Rules
+1. 行为与材质放置以 Apple Human Interface Guidelines 为准。
+2. 控件尺寸与状态以 Apple 官方 macOS 27 UI Kit 为准。
+3. 已批准的 Figma 画框，包括 `Task State / Timeline Indexing / 1280x820`。
+4. 功能、文案、数据与信息结构以现有应用程序为准。
+5. 外部参考仅用于视觉实现研究。
 
-- The titlebar has no title text. The titlebar and sidebar read as one material.
-- Window controls use `macos-traffic-lights` and retain their minimum layout area.
-- Production controls map to official UI Kit variants; no visual-only variants are
-  added without a matching product need.
-- UI text references installed SF Pro first and uses region-appropriate system
-  fallbacks. Fonts embedded in the Apple UI Kit are not redistributed.
-- Apple-restricted symbols are not redistributed in the Windows package. Windows
-  assets preserve the approved semantic, stroke, and optical-size mapping.
-- Liquid Glass is limited to navigation and control layers. Video, timelines,
-  tables, forms, logs, and other content surfaces remain solid.
-- The native mpv surface and its ancestors never receive `filter`,
-  `backdrop-filter`, `transform`, or WebView transparency.
-- Visual acceptance uses the packaged Tauri/WebView2 application, not a browser
-  development page.
+任何未经批准的徽标、品牌颜色、内容功能或替代信息架构均不属于本次迁移。
 
-## Application Shell
+## 平台规则
 
-| Surface | Existing behavior that must remain | Required states | Migration gate |
+- 标题栏不显示标题文本。标题栏与侧边栏在视觉上应呈现为同一种材质。
+- 窗口控件使用 `macos-traffic-lights`，并保留其最小布局区域。
+- 生产控件映射到官方 UI Kit 变体；没有相应产品需求时，不得添加仅供视觉使用的变体。
+- UI 文本优先引用已安装的 SF Pro，并使用适合区域的系统回退字体。不得再分发 Apple UI Kit 中嵌入的字体。
+- 不得在 Windows 包中再分发 Apple 限制使用的符号。Windows 资源须保留已批准的语义、描边与光学尺寸映射。
+- Liquid Glass 仅限用于导航层和控件层。视频、时间线、表格、表单、日志及其他内容表面保持实色。
+- 原生 mpv 表面及其祖先元素绝不得应用 `filter`、`backdrop-filter`、`transform` 或 WebView 透明度。
+- 视觉验收使用已打包的 Tauri/WebView2 应用程序，而非浏览器开发页面。
+
+## 应用程序外壳
+
+| 表面 | 必须保留的现有行为 | 必需状态 | 迁移门槛 |
 | --- | --- | --- | --- |
-| Window chrome | drag, eight resize directions, close, minimize, maximize/restore | normal, hover, active, narrow window | Traffic lights and toolbar controls remain centered and uncompressed |
-| Sidebar | Home, Tasks, Batch, DRCS, Settings, current task, busy state, task count | expanded, collapsed, responsive collapse, light, dark | No seam with titlebar; responsive state does not overwrite saved layout |
-| Navigation | lazy route loading and preview-safe route changes | idle, loading, selected, keyboard focus | Native preview is stopped or rebound according to the existing lifecycle |
-| Status | application and job progress information | idle, running, paused, error, complete | Copy and live-region behavior remain intact |
+| 窗口装饰 | 拖动、八个调整大小方向、关闭、最小化、最大化/还原 | 正常、悬停、活动、窄窗口 | 交通灯与工具栏控件保持居中且不被压缩 |
+| 侧边栏 | 首页、任务、批处理、DRCS、设置、当前任务、忙碌状态、任务数 | 展开、折叠、响应式折叠、浅色、深色 | 与标题栏之间无接缝；响应式状态不得覆盖已保存的布局 |
+| 导航 | 路由延迟加载及对预览安全的路由切换 | 空闲、加载中、已选择、键盘焦点 | 按照现有生命周期停止或重新绑定原生预览 |
+| 状态 | 应用程序与作业进度信息 | 空闲、运行中、已暂停、错误、完成 | 文案与实时区域行为保持完整 |
 
-## Home
+## 首页
 
-| Feature | Existing behavior that must remain | Required states |
+| 功能 | 必须保留的现有行为 | 必需状态 |
 | --- | --- | --- |
-| Open source | file picker and drag/drop entry | idle, drag over, inspecting, error |
-| Recent tasks | task name, route/container metadata, state, reopen action | empty, populated, long names, compact width |
-| Supported formats | current output formats and descriptions | complete locale copy, long labels |
-| Decoded caption types | current ARIB/TTML capability presentation | available and unavailable capability information |
+| 打开源文件 | 文件选择器与拖放入口 | 空闲、拖入悬停、检查中、错误 |
+| 最近任务 | 任务名称、路由/容器元数据、状态、重新打开操作 | 空、已有内容、长名称、紧凑宽度 |
+| 支持的格式 | 当前输出格式与说明 | 完整的本地化文案、长标签 |
+| 已解码字幕类型 | 当前 ARIB/TTML 能力呈现 | 可用与不可用的能力信息 |
 
-## Task Workspace
+## 任务工作区
 
-| Feature | Existing behavior that must remain | Required states |
+| 功能 | 必须保留的现有行为 | 必需状态 |
 | --- | --- | --- |
-| Source inspector | file/container/packet metadata, broadcast metadata, caption tracks, track selection | no task, inspecting, no tracks, selected, selection disabled |
-| Workspace layout | source width 220-320, output width 280-380, pointer and keyboard resizing, saved collapse state | desktop, compact overlay, source/output collapsed |
-| Preview tabs | Preview, Events, Diagnostics | selected, keyboard focus, counts, loading |
-| Native preview | start/stop, resize geometry, unavailable fallback, current subtitle overlay | stopped, starting, playing, paused, unavailable, error |
-| Playback | play/pause, seek, volume, current/duration time | indexing, ready, playing, paused, end of media |
-| Time mapping | existing mapping modes and save command | loading, selected, saving, error |
-| Timeline | paged event loading, current filter semantics, zoom, independent scrolling, draggable playhead, keyboard seek | empty, indexing, populated, filtered, loading more, live updates |
-| ARIB event visuals | Ruby, ARIB gaiji, DRCS, color, accessibility and other decoded traits | single trait, multiple traits, unknown text, long text |
-| Diagnostics | paged diagnostic records with stable keys | empty, loading, populated, exhausted, error |
-| Output formats | all current `ExportFormat` choices and format descriptions | unchecked, checked, disabled, lossy warning |
-| Preservation | position, color, ruby, DRCS, gaiji, accessibility and combined toggle semantics | checked, unchecked, disabled |
-| Output location | editable path and directory picker | empty, selected, invalid/error |
-| Export | start, progress, pause/resume/cancel where exposed by the controller, completion and failure | idle, indexing, exporting, paused, cancelled, complete, error |
-| Checkpoint | detect and resume persisted job checkpoint | unavailable, available, resuming, error |
-| Log | current live log entries and automatic scroll | empty, streaming, long lines |
+| 源检查器 | 文件/容器/数据包元数据、广播元数据、字幕轨道、轨道选择 | 无任务、检查中、无轨道、已选择、选择已禁用 |
+| 工作区布局 | 源区域宽度 220-320、输出区域宽度 280-380、指针与键盘调整大小、已保存的折叠状态 | 桌面、紧凑叠层、源/输出已折叠 |
+| 预览标签页 | 预览、事件、诊断 | 已选择、键盘焦点、计数、加载中 |
+| 原生预览 | 启动/停止、调整几何尺寸、不可用时的回退、当前字幕叠层 | 已停止、启动中、播放中、已暂停、不可用、错误 |
+| 播放 | 播放/暂停、跳转、音量、当前时间/总时长 | 索引中、就绪、播放中、已暂停、媒体结束 |
+| 时间映射 | 现有映射模式与保存命令 | 加载中、已选择、保存中、错误 |
+| 时间线 | 分页加载事件、当前筛选语义、缩放、独立滚动、可拖动播放头、键盘跳转 | 空、索引中、已有内容、已筛选、加载更多、实时更新 |
+| ARIB 事件视觉 | Ruby、ARIB gaiji、DRCS、颜色、无障碍及其他已解码特征 | 单一特征、多个特征、未知文本、长文本 |
+| 诊断 | 具有稳定键的分页诊断记录 | 空、加载中、已有内容、已穷尽、错误 |
+| 输出格式 | 当前所有 `ExportFormat` 选项与格式说明 | 未选中、已选中、已禁用、有损警告 |
+| 保留项 | 位置、颜色、ruby、DRCS、gaiji、无障碍及组合开关语义 | 已选中、未选中、已禁用 |
+| 输出位置 | 可编辑路径与目录选择器 | 空、已选择、无效/错误 |
+| 导出 | 启动、进度，以及控制器公开时的暂停/恢复/取消、完成与失败 | 空闲、索引中、导出中、已暂停、已取消、完成、错误 |
+| 检查点 | 检测并恢复已持久化的作业检查点 | 不可用、可用、恢复中、错误 |
+| 日志 | 当前实时日志条目与自动滚动 | 空、流式传入、长行 |
 
-## Batch
+## 批处理
 
-| Feature | Existing behavior that must remain | Required states |
+| 功能 | 必须保留的现有行为 | 必需状态 |
 | --- | --- | --- |
-| Queue input | add files and preserve file order | empty, populated, duplicate/error |
-| Queue management | selection, removal and per-item state | pending, running, complete, failed, cancelled |
-| Batch configuration | preset, output directory, formats and preservation options | default, edited, invalid |
-| Batch execution | start, aggregate progress, pause/resume/cancel where exposed | idle, running, paused, complete, partial failure |
+| 队列输入 | 添加文件并保持文件顺序 | 空、已有内容、重复/错误 |
+| 队列管理 | 选择、移除及逐项状态 | 待处理、运行中、完成、失败、已取消 |
+| 批处理配置 | 预设、输出目录、格式及保留选项 | 默认、已编辑、无效 |
+| 批处理执行 | 启动、汇总进度，以及公开时的暂停/恢复/取消 | 空闲、运行中、已暂停、完成、部分失败 |
 
 ## DRCS
 
-| Feature | Existing behavior that must remain | Required states |
+| 功能 | 必须保留的现有行为 | 必需状态 |
 | --- | --- | --- |
-| Dictionary tabs | automatic and user mappings | selected, keyboard focus |
-| Filtering | all, mapped and review states | empty, filtered, populated |
-| Mapping editor | character, image and font-glyph actions | unselected, selected, validation error, saved |
-| Dictionary persistence | load and update existing mappings | loading, saving, error, complete |
+| 字典标签页 | 自动映射与用户映射 | 已选择、键盘焦点 |
+| 筛选 | 全部、已映射及待复核状态 | 空、已筛选、已有内容 |
+| 映射编辑器 | 字符、图像及字体字形操作 | 未选择、已选择、验证错误、已保存 |
+| 字典持久化 | 加载并更新现有映射 | 加载中、保存中、错误、完成 |
 
-## Settings
+## 设置
 
-| Feature | Existing behavior that must remain | Required states |
+| 功能 | 必须保留的现有行为 | 必需状态 |
 | --- | --- | --- |
-| Appearance | installed language packs, open language directory, system/light/dark theme | loading packs, selected, missing pack, error |
-| Typography | interface fallback profile and caption font preview | system, CJK fallback, ARIB caption font |
-| Output defaults | default export format | default and edited |
-| Player | runtime availability, render API status and detail | ready, unavailable, partial capability |
-| Persistence | immediate preview, automatic persistence and category reset | saving, saved, reset, error, rapid consecutive edits |
-| About | product identity, running version, build provenance, distribution tier and signing declaration | development build, unsigned Alpha, missing optional provenance |
-| Licenses | project license, distribution notice, bundled component licenses and generated dependency inventory | loading, searchable list, selected document, unavailable resource, offline |
+| 外观 | 已安装语言包、打开语言目录、系统/浅色/深色主题 | 加载语言包、已选择、缺少语言包、错误 |
+| 排版 | 界面回退配置与字幕字体预览 | 系统、CJK 回退、ARIB 字幕字体 |
+| 输出默认值 | 默认导出格式 | 默认及已编辑 |
+| 播放器 | 运行时可用性、渲染 API 状态与详情 | 就绪、不可用、部分能力 |
+| 持久化 | 即时预览、自动持久化及类别重置 | 保存中、已保存、已重置、错误、快速连续编辑 |
+| 关于 | 产品标识、运行版本、构建来源、分发层级及签名声明 | 开发构建、未签名 Alpha、缺少可选来源信息 |
+| 许可证 | 项目许可证、分发通知、捆绑组件许可证及生成的依赖项清单 | 加载中、可搜索列表、已选文档、资源不可用、离线 |
 
-Settings category navigation is a navigation layer and may use Liquid Glass.
-Setting groups, previews, runtime details, About metadata, license search,
-license lists, notices, and full license text are content surfaces and remain
-opaque. A page must not add glass simply to make a card visually prominent.
-Interactive controls use the shared Liquid Glass control treatment; content
-containers use the existing solid surface and border tokens.
+设置类别导航属于导航层，可以使用 Liquid Glass。设置组、预览、运行时详情、
+“关于”元数据、许可证搜索、许可证列表、通知及完整许可证文本均为内容表面，须保持
+不透明。页面不得仅为使卡片在视觉上突出而添加玻璃效果。交互式控件使用共享的
+Liquid Glass 控件处理；内容容器使用现有的实色表面与边框令牌。
 
-## Shared Control Inventory
+## 共享控件清单
 
-| Production component | Official reference | Required behavior |
+| 生产组件 | 官方参考 | 必需行为 |
 | --- | --- | --- |
-| Toolbar icon button | Titlebars and Toolbars | 36x36 toolbar control, centered optical icon, tooltip, visible focus |
-| Button group | Titlebars and Toolbars | 28x28 units where the official toolbar variant is used |
-| Pop-up button and menu | Pop-up and Pull-down Buttons; Button and Menu | keyboard navigation, outside click, animated menu, no native Windows selector |
-| Segmented control | Segmented Controls; Toolbars | toolbar and regular variants, sliding selection, complete ARIA state |
-| Slider | Sliders; Toolbars | keyboard adjustment, pointer capture, glass thumb, numeric ARIA |
-| Switch | Toggles - Switches | checked, unchecked, disabled, focus, reduced motion |
-| Checkbox | Buttons/Toggles reference | sharp checkmark, mixed/checked/unchecked semantics |
-| Split pane | App workspace adaptation | separator role, ARIA values, pointer and arrow-key resize |
-| Tooltip/popover | Toolbars; Button and Menu | correct anchor, focus handling, escape/outside dismissal |
+| 工具栏图标按钮 | Titlebars and Toolbars | 36x36 工具栏控件、光学居中的图标、工具提示、可见焦点 |
+| 按钮组 | Titlebars and Toolbars | 使用官方工具栏变体时采用 28x28 单元 |
+| 弹出按钮与菜单 | Pop-up and Pull-down Buttons; Button and Menu | 键盘导航、点击外部、动画菜单、不得使用原生 Windows 选择器 |
+| 分段控件 | Segmented Controls; Toolbars | 工具栏与常规变体、滑动选择、完整 ARIA 状态 |
+| 滑块 | Sliders; Toolbars | 键盘调整、指针捕获、玻璃滑块、数值 ARIA |
+| 开关 | Toggles - Switches | 已选中、未选中、已禁用、焦点、减少动态效果 |
+| 复选框 | Buttons/Toggles reference | 清晰锐利的勾号、混合/已选中/未选中语义 |
+| 拆分窗格 | App workspace adaptation | 分隔符角色、ARIA 值、指针与方向键调整大小 |
+| 工具提示/弹出框 | Toolbars; Button and Menu | 正确锚点、焦点处理、Escape/点击外部关闭 |
 
-## Promotion Gates
+## 推进门槛
 
-Every vertical slice must pass all four gates before work expands:
+每个垂直切片都必须通过全部四项门槛，方可扩大工作范围：
 
-1. **Contract:** existing commands, copy, states, and four locales remain present.
-2. **Visual:** same-viewport comparison against the official Kit and approved Figma.
-3. **Interaction:** keyboard, pointer, focus, reduced motion, and compact layout pass.
-4. **Runtime:** real Tauri/WebView2 validation with no regression to native preview.
+1. **契约：** 保留现有命令、文案、状态与四种区域设置。
+2. **视觉：** 在相同视口下与官方 Kit 及已批准的 Figma 进行比较。
+3. **交互：** 键盘、指针、焦点、减少动态效果及紧凑布局全部通过。
+4. **运行时：** 在真实 Tauri/WebView2 中验证，原生预览不得发生回归。
 
-For Settings, About, and Licenses, visual review additionally verifies that
-glass appears only on category navigation, menus, and controls; readable content
-never receives `filter` or `backdrop-filter`; category labels remain visible at
-regular widths; and compact layouts do not turn the category list into a button
-wall. Forced-colors, static-glass, and reduced-motion fallbacks are release
-requirements, not optional polish.
+对于“设置”、“关于”与“许可证”，视觉评审还须验证：玻璃效果仅出现在类别导航、
+菜单与控件上；可读内容绝不应用 `filter` 或 `backdrop-filter`；在常规宽度下类别
+标签保持可见；紧凑布局不得将类别列表变成按钮墙。强制颜色、静态玻璃及减少动态
+效果回退是发布要求，而非可选润色。
 
-Final performance targets are panel and glass interaction p95 below 20 ms, no
-frontend long task above 50 ms during interaction, no idle animation frame loop,
-initial gzip JavaScript growth below 10 percent, and CSS gzip at or below 15 KB.
+最终性能目标为：面板与玻璃交互 p95 低于 20 ms；交互期间不得有超过 50 ms 的前端
+长任务；不得有空闲动画帧循环；初始 gzip JavaScript 增长低于 10%；CSS gzip 不超过
+15 KB。

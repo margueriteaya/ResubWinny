@@ -1,68 +1,59 @@
-# Private Windows Alpha acceptance
+[简体中文](windows-alpha-acceptance.md) · [繁體中文](windows-alpha-acceptance.zh-TW.md) · [日本語](windows-alpha-acceptance.ja.md) · [English](windows-alpha-acceptance.en.md)
 
-This matrix validates the packaged application against legally held Japanese
-broadcast recordings. Recordings, decoded captions, programme names, local
-paths, and screenshots remain private. A release may publish the result summary,
-fixture class, byte size, duration, hashes of generated release artifacts, and
-pass/fail counts only.
+> **规范性说明：** 简体中文版本是唯一权威来源。其他语言版本是同步译文；如措辞存在歧义或冲突，以简体中文版本为准。
 
-Public protocol fixtures do not replace this matrix, and no synthetic broadcast
-stream should be added merely to imitate a broadcaster-specific recording.
-Parser unit fixtures remain useful for bounded malformed-input regression.
+# Windows 私有 Alpha 版验收
 
-## Candidate identity
+此矩阵使用合法持有的日本广播录制文件验证已打包的应用程序。录制文件、解码后的字幕、节目名称、本地路径和屏幕截图均须保密。发布时只能公布结果摘要、测试样本类别、字节大小、时长、生成的发布产物哈希值以及通过/失败数量。
 
-Record these fields before testing. They must match `RELEASE-MANIFEST.json` and
-`SHA256SUMS.txt` from the candidate directory.
+公开的协议测试样本不能取代此矩阵，也不应仅为了仿制某家广播机构特有的录制文件而添加合成广播流。解析器单元测试样本仍适用于有界的畸形输入回归测试。
 
-| Field | Result |
+## 候选版本标识
+
+测试前记录以下字段。它们必须与候选版本目录中的 `RELEASE-MANIFEST.json` 和 `SHA256SUMS.txt` 一致。
+
+| 字段 | 结果 |
 | --- | --- |
-| Release tag / commit | Pending |
-| Installer name / SHA-256 | Pending |
-| `RELEASE-MANIFEST.json` SHA-256 | Pending |
-| libmpv `SOURCE-RECEIPT.json` SHA-256 | Pending |
-| Windows edition / build | Pending |
-| CPU / GPU / graphics driver | Pending |
-| Clean install or upgrade path | Pending |
+| 发布标签 / 提交 | 待定 |
+| 安装程序名称 / SHA-256 | 待定 |
+| `RELEASE-MANIFEST.json` SHA-256 | 待定 |
+| libmpv `SOURCE-RECEIPT.json` SHA-256 | 待定 |
+| Windows 版本 / 内部版本号 | 待定 |
+| CPU / GPU / 显卡驱动程序 | 待定 |
+| 全新安装或升级路径 | 待定 |
 
-Use an opaque local fixture ID such as `terrestrial-a` in notes. Do not record a
-programme title, broadcaster schedule, source filename, or filesystem path.
+在备注中使用 `terrestrial-a` 之类不透明的本地测试样本 ID。不得记录节目标题、广播机构节目表、源文件名或文件系统路径。
 
-## Compatibility matrix
+## 兼容性矩阵
 
-| Category | Required packaged workflow evidence | Pass criteria | Result |
+| 类别 | 所需的已打包工作流证据 | 通过标准 | 结果 |
 | --- | --- | --- | --- |
-| Terrestrial TS | Detect service and B24 track; preview; timeline; ASS and TTML export | Correct selected track, bounded memory, usable preview, non-empty validated exports | Pending |
-| BS TS | Detect service and caption track; preview; timeline; export | Same end-to-end result without fixed PID or filename assumptions | Pending |
-| Long programme (2–4 h) | Open, index, seek near start/middle/end, preview, export | No unbounded memory growth, stale timeline, seek lockup, or incomplete final artifact | Pending |
-| DRCS | Inspect report, map known glyph, leave unknown glyph unresolved, export | Mapping persists; fallback remains visible and diagnosable | Pending |
-| Multiple services/tracks | Switch the selected caption track and export each independently | Preview, event count, evidence, and export follow only the selected logical track | Pending |
-| Damaged/truncated recording | Inspect and convert a legally held corrupted or truncated capture | Bounded processing, explicit diagnostics, no fabricated service/track, recoverable outputs remain valid | Pending |
-| BS4K M2TS/private PES | Run only the already evidenced real-sample route | Result is reported narrowly as M2TS/private-PES TTML support | Pending |
-| TLV/MMTP | Run only when a lawful real sample exists | Result remains experimental and evidence-first; it cannot promote general BS4K/8K support | Not gated |
+| 地面波 TS | 检测服务和 B24 轨道；预览；时间线；导出 ASS 和 TTML | 所选轨道正确、内存有界、预览可用、经验证的导出文件非空 | 待定 |
+| BS TS | 检测服务和字幕轨道；预览；时间线；导出 | 在不假定固定 PID 或文件名的情况下获得相同的端到端结果 | 待定 |
+| 长节目（2–4 小时） | 打开、索引、跳转至接近开头/中间/结尾处、预览、导出 | 不出现无界内存增长、时间线陈旧、跳转锁死或最终产物不完整 | 待定 |
+| DRCS | 检查报告、映射已知字形、保留未知字形为未解析状态、导出 | 映射持久保存；回退状态保持可见且可诊断 | 待定 |
+| 多服务/轨道 | 切换所选字幕轨道并分别导出每条轨道 | 预览、事件数量、证据和导出仅跟随所选逻辑轨道 | 待定 |
+| 损坏/截断的录制文件 | 检查并转换合法持有的损坏或截断录制文件 | 处理有界、诊断明确、不虚构服务/轨道、可恢复的输出仍然有效 | 待定 |
+| BS4K M2TS/私有 PES | 仅运行已有真实样本证据支持的路径 | 结果严格表述为支持 M2TS/私有 PES TTML | 待定 |
+| TLV/MMTP | 仅在存在合法真实样本时运行 | 结果保持实验性且证据优先；不得据此宣称普遍支持 BS4K/8K | 不设门禁 |
 
-## End-to-end subtitle workflow
+## 端到端字幕工作流
 
-Run the installed application, not a development server or Cargo test harness:
+运行已安装的应用程序，而不是开发服务器或 Cargo 测试工具：
 
-1. Verify the installer hash against `SHA256SUMS.txt`, then install while
-   acknowledging the documented unknown-publisher warning.
-2. Open the recording and confirm detected container, service, programme
-   metadata evidence, and available caption tracks.
-3. Start native Preview; seek and pause/resume at multiple positions.
-4. Inspect timeline events, warnings, DRCS, and diagnostics.
-5. Select ASS and TTML, choose the intended preservation options, and export.
-6. Open the results in the normal downstream subtitle workflow and record any
-   text, timing, layout, Ruby, colour, DRCS, or usability defect.
-7. Uninstall the candidate and confirm that user-selected exports remain while
-   application files are removed.
+1. 对照 `SHA256SUMS.txt` 验证安装程序哈希值，然后在确认文档所述的未知发布者警告后安装。
+2. 打开录制文件，确认检测到的容器、服务、节目元数据证据和可用字幕轨道。
+3. 启动原生预览；在多个位置跳转以及暂停/继续。
+4. 检查时间线事件、警告、DRCS 和诊断信息。
+5. 选择 ASS 和 TTML，选择预期的保留选项，然后导出。
+6. 在常规下游字幕工作流中打开结果，并记录任何文本、时间、布局、注音、颜色、DRCS 或可用性缺陷。
+7. 卸载候选版本，确认应用程序文件已删除，而用户选择的导出文件仍然保留。
 
-Existing opt-in corpus and native-preview checks in `docs/corpus.md` remain
-supporting evidence. They do not replace the installed-application workflow.
+`docs/corpus.md` 中现有的选择加入式语料库检查和原生预览检查仍属于辅助证据，不能取代已安装应用程序的工作流。
 
-## Publishable result
+## 可公布的结果
 
-Release notes may publish a summary in this form:
+发行说明可以按以下格式公布摘要：
 
 ```text
 Candidate: <tag> @ <commit>
@@ -74,7 +65,4 @@ Known failures: <issue links or concise descriptions>
 No recording bytes, captions, programme metadata, or screenshots published.
 ```
 
-An Unsigned Windows Alpha may proceed only when every required row is passed or
-the release notes explicitly identify a skipped private-corpus gate as allowed
-by `release-checklist.md`. A failed required row is a release blocker, not a
-reason to weaken the matrix.
+只有在每个必需行均通过，或发行说明明确指出 `release-checklist.md` 允许跳过某个私有语料库门禁时，才可以继续发布未签名的 Windows Alpha 版。任何必需行失败都会阻止发布，不能以此为由削弱矩阵要求。
