@@ -76,10 +76,10 @@ jobs:
             build/libmpv/toolchain/src_packages
             build/libmpv/toolchain/clang_root
             build/libmpv/toolchain/install_rustup
-          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}-${{ github.run_id }}
+          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}-${{ github.run_id }}
           restore-keys: |
-            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}-
-            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}
+            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}-
+            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}
 
       - name: Sanitize restored source repositories
         shell: bash
@@ -102,7 +102,9 @@ jobs:
             git -C build/libmpv/toolchain am --3way "$GITHUB_WORKSPACE/$patch"
           done
           git -C build/libmpv/toolchain am --3way "$GITHUB_WORKSPACE/build/libmpv/recipe/compile-lgpl-libmpv.patch"
-          git -C build/libmpv/toolchain apply "$GITHUB_WORKSPACE/third_party/libmpv/patches/cppwinrt-winmd-path.patch"
+          for patch in "$GITHUB_WORKSPACE"/third_party/libmpv/patches/*.patch; do
+            git -C build/libmpv/toolchain apply "$patch"
+          done
 
       - name: Pin mpv and FFmpeg source commits
         shell: python
@@ -170,7 +172,7 @@ jobs:
             build/libmpv/toolchain/src_packages
             build/libmpv/toolchain/clang_root
             build/libmpv/toolchain/install_rustup
-          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/cppwinrt-winmd-path.patch') }}-${{ github.run_id }}
+          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}-${{ github.run_id }}
 
       - name: Locate and extract binary artifact
         shell: bash
