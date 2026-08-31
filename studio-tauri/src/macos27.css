@@ -296,10 +296,6 @@ main[data-page="tasks"] .workspace-header { display: none; }
 .export-button { margin-top: 8px !important; padding: 0 10px !important; font-size: 11px; }
 .log-card { margin-top: 10px !important; padding-top: 8px !important; }.log-card pre { height: 92px !important; margin-top: 6px !important; font-size: 9px !important; }
 
-.settings-shell { border-radius: 8px !important; }
-.settings-nav { border-radius: 8px !important; background: var(--rw-glass) !important; backdrop-filter: blur(18px) saturate(1.18); }
-.settings-nav button { border-radius: 6px !important; }
-.settings-nav button.selected { background: color-mix(in srgb, var(--rw-text) 10%, transparent) !important; box-shadow: inset 0 1px rgba(255,255,255,.4); }
 .track,.glyph-row,.queue-row,.quick-grid button,.format-list button,.recent-table td,.batch-format-option,.settings-nav button { transition: color var(--rw-motion-responsive) var(--rw-ease-out), background-color var(--rw-motion-responsive) var(--rw-ease-out), border-color var(--rw-motion-responsive) var(--rw-ease-out), box-shadow var(--rw-motion-responsive) var(--rw-ease-out), transform var(--rw-motion-press) var(--rw-ease-out); }
 .track:active,.glyph-row:active,.queue-row:active,.quick-grid button:active,.format-list button:active,.recent-file:active,.batch-format-option:active { transform:translateY(.5px); transition:transform var(--rw-motion-press) var(--rw-ease-out); }
 .task-progress b { transition: width var(--rw-motion-responsive) var(--rw-ease-out); }

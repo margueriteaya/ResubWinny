@@ -463,6 +463,8 @@
     "preview.volume": "Preview volume",
     "preview.runtimeUnavailable": "Native preview is unavailable on this runtime.",
     "settings.appearance": "Appearance",
+    "settings.general": "General",
+    "settings.playbackAndRuntime": "Playback & Runtime",
     "settings.appearanceDescription": "Choose the application language and colour mode. Additional JSON language files are read by the backend from the fixed language pack folder.",
     "settings.language": "Language",
     "settings.languageDescription": "Choose an installed interface language. Custom packs override matching built-in locale keys.",

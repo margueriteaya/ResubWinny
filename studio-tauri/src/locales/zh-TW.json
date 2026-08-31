@@ -463,6 +463,8 @@
     "preview.volume": "預覽音量",
     "preview.runtimeUnavailable": "此運行時無法使用原生預覽。",
     "settings.appearance": "外觀",
+    "settings.general": "一般",
+    "settings.playbackAndRuntime": "播放與執行環境",
     "settings.appearanceDescription": "選擇應用語言與介面主題。額外 JSON 語言檔案由後端從固定語言包資料夾讀取。",
     "settings.language": "語言",
     "settings.languageDescription": "選擇已安裝的界面語言。自定義語言包會覆蓋同 locale 的內置鍵。",

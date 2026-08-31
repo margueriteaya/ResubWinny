@@ -463,6 +463,8 @@
     "preview.volume": "プレビュー音量",
     "preview.runtimeUnavailable": "このランタイムではネイティブプレビューを利用できません。",
     "settings.appearance": "外観",
+    "settings.general": "一般",
+    "settings.playbackAndRuntime": "再生とランタイム",
     "settings.appearanceDescription": "画面表示の言語とテーマを選択します。追加の言語ファイルも利用できます。",
     "settings.language": "言語",
     "settings.languageDescription": "インストール済みの UI 言語を選択します。カスタムパックは同じ locale の built-in key を上書きします。",

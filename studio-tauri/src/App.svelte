@@ -194,7 +194,7 @@
       outputCollapsed: false,
     },
   };
-  let settingsPanel: "appearance" | "typography" | "output" | "player" = "typography";
+  let settingsPanel: "general" | "typography" | "output" | "playback" = "general";
   let outputDirectory = "";
   let taskTab: "preview" | "events" | "diagnostics" = "preview";
   let currentJobId = "";
