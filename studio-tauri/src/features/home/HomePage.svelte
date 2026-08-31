@@ -69,18 +69,18 @@
 </div>
 
 <style>
-  .workbench-home { width: min(820px, 100%); min-width: 0; margin: clamp(12px, 5vh, 58px) auto 0; color: var(--rw-text); }
-  .workbench-home-title { margin-bottom: 24px; text-align: center; }
+  .workbench-home { width: min(820px, 100%); min-width: 0; margin: clamp(8px, 4vh, 36px) auto 0; color: var(--rw-text); }
+  .workbench-home-title { margin-bottom: 20px; text-align: center; }
   .workbench-home-title h1 { margin: 0; font-size: 24px; line-height: 30px; font-weight: 720; letter-spacing: -.02em; }
   .workbench-home-title p { margin: 6px 0 0; color: var(--rw-text-secondary); font-size: 13px; line-height: 19px; }
-  .recording-dropzone { display: grid; place-items: center; min-height: clamp(250px, 36vh, 330px); padding: 30px; border: 1px dashed color-mix(in srgb, var(--rw-accent) 58%, var(--rw-border)); border-radius: 12px; color: var(--rw-text); background: var(--rw-surface-muted); text-align: center; }
+  .recording-dropzone { display: grid; place-items: center; width: 100%; min-height: clamp(230px, 31vh, 290px); padding: 30px; border: 1px dashed color-mix(in srgb, var(--rw-accent) 58%, var(--rw-border)); border-radius: 12px; color: var(--rw-text); background: var(--rw-surface-muted); text-align: center; }
   .recording-dropzone:hover:not(:disabled), .recording-dropzone:focus-visible { border-color: var(--rw-accent); background: color-mix(in srgb, var(--rw-accent) 5%, var(--rw-surface-muted)); }
   .recording-dropzone :global(> svg) { color: var(--rw-accent); }
   .dropzone-copy { display: grid; gap: 6px; margin-top: 14px; }
   .dropzone-copy strong { font-size: 17px; line-height: 22px; font-weight: 680; }
   .dropzone-copy small { color: var(--rw-text-secondary); font-size: 12px; line-height: 17px; }
   .home-primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; margin-top: 18px; padding: 0 16px; border: 1px solid color-mix(in srgb, var(--rw-accent) 80%, var(--rw-border)); border-radius: 7px; color: #fff; background: var(--rw-accent); font-size: 13px; font-weight: 680; }
-  .recent-workbench-section { margin-top: 30px; }
+  .recent-workbench-section { margin-top: 22px; }
   .recent-workbench-section > header { display: flex; align-items: center; min-height: 36px; border-bottom: 1px solid var(--rw-border); }
   .recent-workbench-section h2 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 680; }
   .recent-task-list { margin: 0; padding: 0; list-style: none; }
@@ -95,9 +95,9 @@
   .state-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rw-success); }
   .state-dot.warning { background: var(--rw-warning); }.state-dot.progress { background: var(--rw-accent); }
   .recent-status { color: var(--rw-text-secondary); font-size: 12px; line-height: 17px; white-space: nowrap; }
-  .empty-recent { display: grid; place-items: center; min-height: 124px; color: var(--rw-muted); text-align: center; }
+  .empty-recent { display: grid; place-items: center; min-height: 100px; color: var(--rw-muted); text-align: center; }
   .empty-recent p { margin: 8px 0 0; font-size: 13px; }
-  .home-secondary-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .home-secondary-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   .home-secondary-actions button { display: inline-flex; align-items: center; gap: 8px; min-width: 0; min-height: 42px; padding: 7px 10px; border: 1px solid var(--rw-border); border-radius: 7px; color: var(--rw-text); background: var(--rw-content); text-align: left; }
   .home-secondary-actions button:hover { border-color: color-mix(in srgb, var(--rw-accent) 55%, var(--rw-border)); background: color-mix(in srgb, var(--rw-accent) 5%, var(--rw-content)); }
   .home-secondary-actions button :global(svg) { flex: 0 0 auto; color: var(--rw-accent); }
