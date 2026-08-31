@@ -655,4 +655,7 @@
   .add,.secondary{background:transparent}
   .add{background:color-mix(in srgb,var(--rw-accent) 76%,var(--rw-glass-control))}
   @media(max-width:1180px){.batch-shell{height:auto}.batch-grid{overflow:visible}.preset-panel{overflow:visible;padding:12px 0 0;border-top:1px solid var(--rw-border-subtle);border-left:0;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}}
+
+  /* Keep dense queues readable at normal desktop viewing distance. */
+  .add,.secondary{font-size:12px}.queue-table{min-width:960px}.queue-heading{min-height:34px;font-size:11px}.queue-row{min-height:84px;contain-intrinsic-size:auto 84px}.file-kind{width:34px;height:42px;flex-basis:34px}.file-kind>small{font-size:11px;line-height:12px}.file strong{font-size:13px;line-height:17px}.queue-row b{font-size:12px;line-height:16px}.queue-row small{font-size:11px;line-height:15px}.job-status,.warnings,.destination{font-size:12px}.queue-footer{height:32px;font-size:11px}.batch-summary h2,.preset-panel h2{font-size:12px}.batch-summary span small,.metric small,.preset-panel>p,.batch-format-list small{font-size:11px}.batch-format-list b{font-size:12px}.batch-preserve-list :global(.mac-checkbox){font-size:12px}.preset-panel dt{font-size:11px}.preset-panel dd{font-size:12px}.quick-action{height:34px;font-size:12px}.quick-action :global(svg){width:16px;height:16px}
 </style>

@@ -216,4 +216,6 @@
   @media(prefers-reduced-motion:reduce){.settings-panel{animation:none}}
   @container content (max-width:820px){.settings-shell{grid-template-columns:1fr;gap:14px;margin-top:0}.settings-nav{position:static;display:flex;overflow-x:auto}.settings-nav button{flex:0 0 auto}.settings-nav-spacer{width:1px;height:26px;margin:5px 2px;border:0;border-left:1px solid var(--rw-border-subtle)}.settings-content{max-width:none}.settings-group{grid-template-columns:minmax(160px,.85fr) minmax(240px,1.15fr)}.runtime-status div{grid-template-columns:1fr}}
   @container content (max-width:560px){.settings-nav{display:none}.compact-category{display:block}.settings-shell{gap:12px}.settings-group{grid-template-columns:1fr;gap:12px;padding:15px}.caption-sample{align-items:flex-start;flex-direction:column}.theme-control :global(.mac-segmented){width:100%;min-width:0}}
+
+  .control-hint{font-size:12px;line-height:16px}.font-preview small,.caption-sample b,.runtime-status dt,.runtime-status dd,footer>span{font-size:11px;line-height:15px}.reset{font-size:12px}
 </style>
