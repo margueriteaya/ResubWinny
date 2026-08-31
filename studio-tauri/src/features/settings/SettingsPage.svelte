@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Check, FileText, FolderOpen, MonitorCog, Palette, RotateCcw, Save, Type } from '@lucide/svelte'
+  import { FileText, FolderOpen, MonitorCog, Palette, RotateCcw, Type } from '@lucide/svelte'
   import { backend, type AppSettings, type PreviewRuntime } from '../../backend'
   import { availableLocales, registerLanguagePacks, t } from '../../i18n'
   import { isDesktopRuntime } from '../../shell/desktop'
@@ -11,10 +11,14 @@
   export let saveCaptionFont: (font: string) => void = () => {}
   export let onSettingsSaved: (settings: AppSettings) => void | Promise<void> = () => {}
   export let onSettingsPreview: (settings: AppSettings) => void | Promise<void> = () => {}
+  export let onError: (reason: unknown) => void = () => {}
   const defaults: AppSettings = { uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', defaultTimeline: 'Auto (Gap Merge + Overlap Resolve)', locale: 'system', theme: 'system', workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false } }
   let preferences: AppSettings = { ...defaults }
   export let panel: Panel = 'general'
-  let saved = false
+  let persistenceState: 'idle' | 'saving' | 'saved' | 'error' = 'idle'
+  let pendingPreferences: AppSettings | null = null
+  let persistenceRunning = false
+  let savedTimer = 0
   let previewRuntime: PreviewRuntime | null = null
   let installedLocales = availableLocales()
   let languageRefreshBusy = false
@@ -39,23 +43,52 @@
     document.documentElement.style.setProperty('--resubwinny-ui-font', font)
   }
 
-  async function save() {
-    if (isDesktopRuntime()) preferences = await backend.updateSettings(preferences)
-    saveCaptionFont(preferences.captionFont)
-    await onSettingsSaved(preferences)
-    applyFont(); saved = true
-    window.setTimeout(() => saved = false, 2500)
+  function announceSaved() {
+    persistenceState = 'saved'
+    window.clearTimeout(savedTimer)
+    savedTimer = window.setTimeout(() => persistenceState = 'idle', 2500)
   }
 
-  async function reset() {
-    preferences = isDesktopRuntime() ? await backend.updateSettings({ ...defaults }) : { ...defaults, workspaceLayout: { ...defaults.workspaceLayout } }
-    saveCaptionFont('arib'); await onSettingsSaved(preferences); applyFont()
+  async function drainPersistence() {
+    if (persistenceRunning) return
+    persistenceRunning = true
+    while (pendingPreferences) {
+      const candidate = pendingPreferences
+      pendingPreferences = null
+      persistenceState = 'saving'
+      try {
+        const persisted = isDesktopRuntime() ? await backend.updateSettings(candidate) : candidate
+        if (!pendingPreferences) {
+          preferences = persisted
+          await onSettingsSaved({ ...persisted })
+          announceSaved()
+        }
+      } catch (reason) {
+        persistenceState = 'error'
+        onError(reason)
+      }
+    }
+    persistenceRunning = false
   }
 
-  async function previewAppearance() {
-    if (isDesktopRuntime()) preferences = await backend.updateSettings(preferences)
-    applyFont()
-    await onSettingsPreview({ ...preferences })
+  function updatePreferences(next: AppSettings, effect: 'appearance' | 'caption' | 'none' = 'none') {
+    preferences = next
+    if (effect === 'appearance') applyFont()
+    if (effect === 'caption') saveCaptionFont(next.captionFont)
+    void Promise.resolve(onSettingsPreview({ ...next })).catch(onError)
+    pendingPreferences = { ...next, workspaceLayout: { ...next.workspaceLayout } }
+    void drainPersistence()
+  }
+
+  function resetCategory() {
+    if (panel === 'general') {
+      updatePreferences({ ...preferences, locale: defaults.locale, theme: defaults.theme }, 'appearance')
+    } else if (panel === 'typography') {
+      updatePreferences({ ...preferences, uiFont: defaults.uiFont, captionFont: defaults.captionFont }, 'appearance')
+      saveCaptionFont(defaults.captionFont)
+    } else if (panel === 'output') {
+      updatePreferences({ ...preferences, defaultFormat: defaults.defaultFormat })
+    }
   }
 
   async function refreshLanguagePacks() {
@@ -67,7 +100,7 @@
       installedLocales = availableLocales()
       if (preferences.locale !== 'system' && !installedLocales.some((pack) => pack.locale === preferences.locale)) {
         preferences = { ...preferences, locale: 'system' }
-        await previewAppearance()
+        updatePreferences(preferences, 'appearance')
       }
     } catch (reason) {
       languageError = String(reason)
@@ -87,14 +120,7 @@
   }
 
   async function selectLanguage(next: string) {
-    preferences = { ...preferences, locale: next }
-    await previewAppearance()
-  }
-
-  async function previewCaptionFont() {
-    if (isDesktopRuntime()) preferences = await backend.updateSettings(preferences)
-    saveCaptionFont(preferences.captionFont)
-    await onSettingsPreview({ ...preferences })
+    updatePreferences({ ...preferences, locale: next }, 'appearance')
   }
 
   onMount(() => {
@@ -125,15 +151,15 @@
       </section>
       <section class="settings-group">
         <div class="setting-copy"><h3>{t('settings.theme')}</h3><p>{t('settings.themeDescription')}</p></div>
-        <div class="setting-control theme-control"><MacSegmentedControl ariaLabel={t('settings.theme')} value={preferences.theme} options={[{value:'system',label:t('settings.themeSystem')},{value:'light',label:t('settings.themeLight')},{value:'dark',label:t('settings.themeDark')}]} onChange={(value) => { preferences = {...preferences, theme: value as AppSettings['theme']}; void previewAppearance() }} /></div>
+        <div class="setting-control theme-control"><MacSegmentedControl ariaLabel={t('settings.theme')} value={preferences.theme} options={[{value:'system',label:t('settings.themeSystem')},{value:'light',label:t('settings.themeLight')},{value:'dark',label:t('settings.themeDark')}]} onChange={(value) => updatePreferences({...preferences, theme: value as AppSettings['theme']}, 'appearance')} /></div>
       </section>
     {:else if panel === 'typography'}
       <header><h2>{t('settings.typographyTitle')}</h2><p>{t('settings.typographyDescription')}</p></header>
-      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.uiFallback')}</h3><p>{t('settings.uiFallbackDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.interfaceProfile')} value={preferences.uiFont} options={[{value:'system',label:t('settings.systemFallback')},{value:'cjk',label:t('settings.cjkFallback')},{value:'arib',label:t('settings.aribFirst')}]} onChange={(value) => { preferences = {...preferences, uiFont: value as AppSettings['uiFont']}; void previewAppearance() }} /><div class="font-preview">日本語字幕 · 简体中文 · 繁體中文 · 한국어 · English<br /><small>{t('settings.fallbackPreview', 'Fallback preview — missing glyphs are never silently replaced by a generic icon.')}</small></div></div></section>
-      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.captionFont')}</h3><p>{t('settings.captionFontDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.captionFont')} value={preferences.captionFont} options={[{value:'arib',label:t('settings.aribBundled', 'Rounded M+ 1m for ARIB (bundled)')},{value:'system',label:t('settings.systemFallbackShort', 'System fallback')}]} onChange={(value) => { preferences = {...preferences, captionFont: value as AppSettings['captionFont']}; void previewCaptionFont() }} /><div class="caption-sample"><span>ニュースをお伝えします</span><b>{t('settings.aribPreview', 'ARIB / DRCS-aware preview')}</b></div></div></section>
+      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.uiFallback')}</h3><p>{t('settings.uiFallbackDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.interfaceProfile')} value={preferences.uiFont} options={[{value:'system',label:t('settings.systemFallback')},{value:'cjk',label:t('settings.cjkFallback')},{value:'arib',label:t('settings.aribFirst')}]} onChange={(value) => updatePreferences({...preferences, uiFont: value as AppSettings['uiFont']}, 'appearance')} /><div class="font-preview">日本語字幕 · 简体中文 · 繁體中文 · 한국어 · English<br /><small>{t('settings.fallbackPreview', 'Fallback preview — missing glyphs are never silently replaced by a generic icon.')}</small></div></div></section>
+      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.captionFont')}</h3><p>{t('settings.captionFontDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.captionFont')} value={preferences.captionFont} options={[{value:'arib',label:t('settings.aribBundled', 'Rounded M+ 1m for ARIB (bundled)')},{value:'system',label:t('settings.systemFallbackShort', 'System fallback')}]} onChange={(value) => updatePreferences({...preferences, captionFont: value as AppSettings['captionFont']}, 'caption')} /><div class="caption-sample"><span>ニュースをお伝えします</span><b>{t('settings.aribPreview', 'ARIB / DRCS-aware preview')}</b></div></div></section>
     {:else if panel === 'output'}
       <header><h2>{t('settings.output')}</h2><p>{t('settings.outputDescription')}</p></header>
-      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.defaultFormat')}</h3><p>{t('settings.faithfulDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.defaultFormat')} value={preferences.defaultFormat} options={['ASS','TTML','JSON','Raw Data'].map((value) => ({value,label:value}))} onChange={(value) => preferences = {...preferences, defaultFormat: value as AppSettings['defaultFormat']}} /></div></section>
+      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.defaultFormat')}</h3><p>{t('settings.faithfulDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.defaultFormat')} value={preferences.defaultFormat} options={['ASS','TTML','JSON','Raw Data'].map((value) => ({value,label:value}))} onChange={(value) => updatePreferences({...preferences, defaultFormat: value as AppSettings['defaultFormat']})} /></div></section>
     {:else}
       <header><h2>{t('settings.playbackAndRuntime')}</h2><p>{t('settings.playerDescription')}</p></header>
       <section class="settings-group runtime-group"><div class="setting-copy"><h3>{t('settings.runtimeStatus')}</h3><p>{t('settings.previewControlsDescription')}</p></div><div class="setting-control">
@@ -148,7 +174,10 @@
     {/if}
     </div>
     {/key}
-    <footer><button class="reset" onclick={reset}><RotateCcw size={17} /> {t('settings.reset')}</button><button class="save" onclick={save}>{#if saved}<Check size={17} /> {t('settings.saved')}{:else}<Save size={17} /> {t('settings.save')}{/if}</button></footer>
+    <footer>
+      <span class:error={persistenceState === 'error'} aria-live="polite">{persistenceState === 'saving' ? t('settings.saving') : persistenceState === 'saved' ? t('settings.saved') : persistenceState === 'error' ? t('settings.saveFailed') : ''}</span>
+      {#if panel !== 'playback'}<button class="reset liquid-control" onclick={resetCategory}><RotateCcw size={17} /> {t('settings.resetCategory')}</button>{/if}
+    </footer>
   </section>
 </section>
 
@@ -172,7 +201,7 @@
   .font-preview small{color:var(--rw-muted);font-size:10px}.caption-sample{display:flex;justify-content:space-between;align-items:center;gap:16px;color:#fff;background:#17191d}
   .caption-sample span{font-family:"Rounded M+ 1m for ARIB","Hiragino Sans","Yu Gothic UI",sans-serif;font-size:18px}.caption-sample b{color:#a9b2bd;font-size:10px;text-align:right}
   .runtime-status{display:grid;gap:7px;margin:0}.runtime-status div{display:grid;grid-template-columns:112px minmax(0,1fr);gap:10px}.runtime-status dt{color:var(--rw-muted);font-size:10px}.runtime-status dd{margin:0;color:var(--rw-warning);font-size:10px;line-height:14px;word-break:break-word}.runtime-status dd.available{color:var(--rw-success)}
-  footer{display:flex;justify-content:flex-end;gap:8px;padding:17px 0}.reset,.save{display:flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:7px;font-size:11px}.reset{color:var(--rw-text);border:.5px solid var(--rw-glass-border);background:transparent;box-shadow:var(--rw-control-shadow)}.save{color:#fff;background:var(--rw-accent)}
+  footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-height:49px;padding:9px 0}footer>span{margin-right:auto;color:var(--rw-muted);font-size:10px;line-height:14px}footer>span.error{color:#c24848}.reset{display:flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border:.5px solid var(--rw-glass-border);border-radius:8px;color:var(--rw-text);background:transparent;box-shadow:var(--rw-control-shadow);font-size:11px}
   .theme-control :global(.mac-segmented){width:100%}
   @keyframes settings-panel-reveal{from{opacity:0;transform:translate3d(0,5px,0)}to{opacity:1;transform:none}}
   @media(prefers-reduced-motion:reduce){.settings-panel{animation:none}}

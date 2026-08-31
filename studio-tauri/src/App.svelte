@@ -1070,6 +1070,7 @@
         {saveCaptionFont}
         onSettingsSaved={applyPreferences}
         onSettingsPreview={applyPreferences}
+        onError={reportBackendFailure}
       />
       {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
     {/if}
