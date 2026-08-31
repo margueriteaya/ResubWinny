@@ -1,21 +1,7 @@
 <script lang="ts">
-  import {
-    Captions,
-    ChevronRight,
-    FileOutput,
-    FileUp,
-    FileVideo2,
-    FolderOpen,
-    FolderPlus,
-    Layers3,
-    Lightbulb,
-    ScanText,
-    X,
-  } from "@lucide/svelte";
+  import { FileUp, FileVideo2, FolderPlus, Layers3, ScanText } from "@lucide/svelte";
   import { t } from "../../i18n";
-  import drcsIcon from "../../assets/arib/drcs.svg";
 
-  type Format = { name: string; description: string; color: string; icon: any };
   type HistoryItem = {
     name: string;
     path: string;
@@ -28,110 +14,94 @@
     jobId?: string;
   };
 
-  export let formats: Format[] = [];
   export let history: HistoryItem[] = [];
   export let isInspecting = false;
   export let onChooseSource: () => void = () => {};
-  export let onOpenTask: () => void = () => {};
   export let onOpenHistory: (item: HistoryItem) => void = () => {};
   export let onNavigate: (target: "batch" | "drcs") => void = () => {};
-  export let onChooseFormat: (name: string) => void = () => {};
 
-  let tipVisible = true;
-  const bytes = (value: number) => value
-    ? `${(value / 1024 ** 3).toFixed(value > 100 * 1024 ** 3 ? 1 : 2)} GB`
-    : "-";
-  const historyStatus = (status: HistoryItem["status"]) =>
-    status === "In Progress"
-      ? t("batch.status.running")
-      : status === "Warning"
-        ? t("batch.status.warning")
-        : t("batch.status.completed");
+  const historyStatus = (item: HistoryItem) => {
+    if (item.warnings) return `${item.warnings} ${t("home.warnings")}`;
+    if (item.status === "In Progress") return t("batch.status.running");
+    return t("batch.status.completed");
+  };
 </script>
 
-<div class="approved-home-page">
-  <header class="approved-page-title">
-    <div><h1>{t("home.title")}</h1><p>{t("home.subtitle")}</p></div>
-    <button class="approved-secondary" onclick={onOpenTask}><FolderOpen size={15} />{t("home.openTask")}</button>
+<div class="workbench-home">
+  <header class="workbench-home-title">
+    <h1>{t("home.title")}</h1>
+    <p>{t("home.subtitle")}</p>
   </header>
 
-  <div class="approved-home-grid">
-    <div class="approved-home-primary">
-      <button class="approved-dropzone" onclick={onChooseSource} disabled={isInspecting} aria-label={t("home.selectRecording")}>
-        <FileUp size={28} />
-        <h2>{isInspecting ? t("home.inspecting") : t("home.drop")}</h2>
-        <p>{t("home.supportedInputs")}</p>
-        <span class="approved-primary"><FolderPlus size={15} />{t("home.select")}</span>
-      </button>
+  <button class="recording-dropzone" onclick={onChooseSource} disabled={isInspecting} aria-label={t("home.selectRecording")}>
+    <FileUp size={32} />
+    <span class="dropzone-copy">
+      <strong>{isInspecting ? t("home.inspecting") : t("home.drop")}</strong>
+      <small>{t("home.supportedInputs")}</small>
+    </span>
+    <span class="home-primary-action"><FolderPlus size={16} />{t("home.select")}</span>
+  </button>
 
-      <section class="approved-section recent-section">
-        <header class="approved-section-head"><h2>{t("home.recent")}</h2></header>
-        {#if history.length}
-          <div class="recent-table-wrap">
-            <table class="recent-table">
-              <thead><tr><th>{t("batch.file")}</th><th>{t("batch.status")}</th><th>{t("home.captions")}</th><th>{t("home.warnings")}</th><th>{t("home.lastOpened")}</th></tr></thead>
-              <tbody>
-                {#each history.slice(0, 5) as item (item.path)}
-                  <tr role="button" tabindex={isInspecting ? -1 : 0} aria-disabled={isInspecting} onclick={() => { if (!isInspecting) onOpenHistory(item); }} onkeydown={(event) => { if (!isInspecting && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onOpenHistory(item); } }}>
-                    <td><div class="recent-file"><span class="recent-file-icon"><FileVideo2 size={16} /><small>{item.container}</small></span><span><b>{item.name}</b><small>{bytes(item.size)} · {item.container}</small></span></div></td>
-                    <td><span class:warning={item.status === "Warning"} class:progress={item.status === "In Progress"} class="state-dot"></span>{historyStatus(item.status)}</td>
-                    <td>{item.captions ?? 0}</td><td>{item.warnings}</td><td>{item.time}</td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
-        {:else}
-          <div class="empty-recent"><FileVideo2 size={25} /><p>{t("home.noCompleted")}</p><button onclick={onChooseSource}>{t("home.startNew")}</button></div>
-        {/if}
-      </section>
-    </div>
+  <section class="recent-workbench-section">
+    <header><h2>{t("home.recent")}</h2></header>
+    {#if history.length}
+      <ol class="recent-task-list">
+        {#each history.slice(0, 5) as item (item.path)}
+          <li>
+            <button disabled={isInspecting} onclick={() => onOpenHistory(item)}>
+              <span class="recent-recording-icon"><FileVideo2 size={18} /></span>
+              <span class="recent-recording-copy"><b>{item.name}</b><small>{item.time}</small></span>
+              <span class:warning={item.warnings > 0 || item.status === "Warning"} class:progress={item.status === "In Progress"} class="state-dot"></span>
+              <span class="recent-status">{historyStatus(item)}</span>
+            </button>
+          </li>
+        {/each}
+      </ol>
+    {:else}
+      <div class="empty-recent"><FileVideo2 size={25} /><p>{t("home.noCompleted")}</p></div>
+    {/if}
+  </section>
 
-    <aside class="approved-home-aside">
-      <section class="approved-section">
-        <header class="approved-section-head"><h2>{t("home.quickStart")}</h2></header>
-        <div class="quick-grid">
-          <button onclick={onChooseSource}><FileOutput size={17} /><b>{t("home.newExtraction")}</b><small>{t("home.extractionDescription")}</small></button>
-          <button onclick={() => onNavigate("batch")}><Layers3 size={17} /><b>{t("home.batch")}</b><small>{t("home.batchDescription")}</small></button>
-          <button onclick={() => onNavigate("drcs")}><ScanText size={17} /><b>DRCS</b><small>{t("home.drcsDescription")}</small></button>
-        </div>
-      </section>
-
-      <section class="approved-section format-section">
-        <header class="approved-section-head"><h2>{t("home.formats")}</h2></header>
-        <div class="format-list">
-          {#each formats as item}
-            <button onclick={() => onChooseFormat(item.name)} data-tooltip={item.description}><span class={`format-symbol ${item.color}`}><svelte:component this={item.icon} size={15} /></span><span><b>{item.name}</b><small>{item.description}</small></span><ChevronRight size={13} /></button>
-          {/each}
-        </div>
-      </section>
-
-      <section class="approved-section decoded-section">
-        <header class="approved-section-head"><h2>{t("home.decodedTypes")}</h2></header>
-        <div class="decoded-types"><span><ScanText size={15} />{t("home.decodedB24")}</span><span><Captions size={15} />{t("home.decodedTtml")}</span><span><img src={drcsIcon} alt="" />{t("home.decodedDrcs")}</span></div>
-      </section>
-
-      {#if tipVisible}
-        <section class="approved-tip"><Lightbulb size={17} /><p>{t("home.tipBody")}</p><button aria-label={t("home.closeTip")} onclick={() => tipVisible = false}><X size={14} /></button></section>
-      {/if}
-    </aside>
-  </div>
+  <nav class="home-secondary-actions" aria-label={t("home.quickStart")}>
+    <button onclick={() => onNavigate("batch")}><Layers3 size={17} /><span><b>{t("home.batch")}</b><small>{t("home.batchDescription")}</small></span></button>
+    <button onclick={() => onNavigate("drcs")}><ScanText size={17} /><span><b>DRCS</b><small>{t("home.drcsDescription")}</small></span></button>
+  </nav>
 </div>
 
 <style>
-  .approved-home-page{width:100%;min-width:0;min-height:100%;color:var(--rw-text)}
-  .approved-page-title{display:flex;align-items:center;margin-bottom:18px}.approved-page-title h1{margin:0;font-size:20px;line-height:25px;font-weight:680}.approved-page-title p{margin:3px 0 0;color:var(--rw-text-secondary);font-size:11px;line-height:15px}.approved-page-title>.approved-secondary{margin-left:auto}
-  .approved-secondary{display:flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 10px;border:.5px solid var(--rw-glass-border);border-radius:8px;color:var(--rw-text);background:transparent;box-shadow:var(--rw-control-shadow);backdrop-filter:blur(16px) saturate(1.18);-webkit-backdrop-filter:blur(16px) saturate(1.18);font-size:11px;font-weight:550}
-  .approved-home-grid{display:grid;width:100%;max-width:100%;grid-template-columns:minmax(0,1.25fr) minmax(330px,.75fr);gap:18px}.approved-home-primary,.approved-home-aside{min-width:0}
-  .approved-dropzone{display:grid;place-items:center;width:100%;min-height:220px;padding:22px;border:1px dashed color-mix(in srgb,var(--rw-accent) 48%,var(--rw-border));border-radius:8px;color:var(--rw-text);background:color-mix(in srgb,var(--rw-accent) 3%,var(--rw-surface-muted));text-align:center}.approved-dropzone :global(> svg){color:var(--rw-accent)}.approved-dropzone h2{margin:10px 0 3px;font-size:16px;line-height:20px}.approved-dropzone p{margin:0;color:var(--rw-text-secondary);font-size:11px}.approved-primary{display:flex;align-items:center;justify-content:center;gap:6px;height:32px;margin-top:10px;padding:0 14px;border:.5px solid color-mix(in srgb,var(--rw-accent) 76%,var(--rw-glass-border));border-radius:7px;color:#fff;background:color-mix(in srgb,var(--rw-accent) 76%,var(--rw-glass-control));font-size:11px;font-weight:650;box-shadow:0 .5px 1px rgba(0,0,0,.18),inset 0 .5px rgba(255,255,255,.2)}
-  .approved-section{margin-top:18px}.approved-section:first-child{margin-top:0}.approved-section-head{display:flex;align-items:center;height:34px;border-bottom:1px solid var(--rw-border)}.approved-section-head h2{margin:0;font-size:13px;line-height:17px;font-weight:650}
-  .recent-table-wrap{overflow:auto}.recent-table{width:100%;border-collapse:collapse;table-layout:fixed}.recent-table th{height:29px;padding:0 9px;color:var(--rw-muted);background:var(--rw-surface-muted);border-bottom:1px solid var(--rw-border);font-size:9px;font-weight:650;text-align:left}.recent-table th:first-child{width:44%}.recent-table th:nth-child(2){width:16%}.recent-table th:nth-child(3),.recent-table th:nth-child(4){width:10%}.recent-table th:last-child{width:20%}.recent-table td{height:56px;padding:0 9px;border-bottom:1px solid var(--rw-border);font-size:10px;white-space:nowrap}.recent-table tr[role="button"]{cursor:pointer}.recent-table tr[role="button"]:hover td,.recent-table tr[role="button"]:focus-visible td{background:color-mix(in srgb,var(--rw-accent) 7%,var(--rw-content))}.recent-table tr[aria-disabled="true"]{cursor:default;opacity:.65}.recent-file{display:flex;align-items:center;gap:8px;width:100%;padding:0;color:var(--rw-text);background:transparent;text-align:left}.recent-file>span:last-child{min-width:0}.recent-file b,.recent-file small{display:block;overflow:hidden;text-overflow:ellipsis}.recent-file b{font-size:10px}.recent-file small{margin-top:2px;color:var(--rw-muted);font-size:8px}.recent-file-icon{position:relative;display:grid;place-items:center;width:28px;height:32px;flex:0 0 28px;border:1px solid var(--rw-border);border-radius:6px;color:var(--rw-accent);background:var(--rw-content)}.recent-file-icon small{position:absolute;right:-4px;bottom:-3px;padding:1px 2px;border:1px solid var(--rw-content);border-radius:3px;background:var(--rw-surface-muted);font-size:6px;line-height:8px;font-weight:700}.state-dot{display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%;background:#30b85a}.state-dot.warning{background:#e59a19}.state-dot.progress{background:var(--rw-accent)}.empty-recent{display:grid;place-items:center;min-height:154px;color:var(--rw-muted);text-align:center}.empty-recent p{margin:8px 0 7px;font-size:12px}.empty-recent button{padding:4px 7px;color:var(--rw-accent);background:transparent;font-size:10px}
-  .quick-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;padding-top:8px}.quick-grid button{display:block;min-width:0;min-height:72px;padding:10px;border:1px solid var(--rw-border);border-radius:7px;color:var(--rw-text);background:var(--rw-surface-muted);text-align:left}.quick-grid button:hover{background:color-mix(in srgb,var(--rw-accent) 6%,var(--rw-surface-muted))}.quick-grid button :global(svg){color:var(--rw-accent)}.quick-grid b,.quick-grid small{display:block}.quick-grid b{margin-top:6px;font-size:11px;line-height:14px}.quick-grid small{margin-top:2px;overflow:hidden;color:var(--rw-text-secondary);font-size:9px;line-height:12px}
-  .format-list{display:grid;gap:1px;padding-top:4px}.format-list button{display:grid;grid-template-columns:26px minmax(0,1fr) 13px;align-items:center;gap:7px;width:100%;min-height:35px;padding:3px 5px;border-radius:6px;color:var(--rw-text);background:transparent;text-align:left}.format-list button:hover{background:color-mix(in srgb,var(--rw-accent) 7%,transparent)}.format-list button>span:nth-child(2){min-width:0}.format-list b,.format-list small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.format-list b{font-size:10px;line-height:13px}.format-list small{margin-top:1px;color:var(--rw-muted);font-size:8px;line-height:10px}.format-list button>:global(svg:last-child){color:var(--rw-muted)}.format-symbol{display:grid;place-items:center;width:26px;height:26px;border-radius:6px}.format-symbol.purple{color:#7b4db5;background:#7b4db512}.format-symbol.green{color:#168247;background:#16824712}.format-symbol.blue{color:#1766b3;background:#1766b312}.format-symbol.orange{color:#b86400;background:#b8640012}
-  .decoded-types{display:grid;gap:2px;padding-top:5px}.decoded-types>span{display:flex;align-items:center;gap:7px;min-width:0;height:27px;color:var(--rw-text-secondary);font-size:9px}.decoded-types :global(svg),.decoded-types img{width:15px;height:15px;flex:0 0 15px;color:var(--rw-accent)}
-  .approved-tip{display:flex;align-items:flex-start;gap:9px;margin-top:14px;padding:10px;border:1px solid var(--rw-border);border-radius:7px;background:var(--rw-surface-muted)}.approved-tip :global(> svg){flex:0 0 17px;color:var(--rw-text-secondary)}.approved-tip p{min-width:0;flex:1;margin:0;color:var(--rw-text-secondary);font-size:10px;line-height:14px}.approved-tip button{display:grid;place-items:center;width:24px;height:24px;flex:0 0 24px;margin:-5px -5px 0 0;padding:0;border-radius:50%;color:var(--rw-text-secondary);background:transparent}
-  @media(max-width:980px){.approved-home-grid{grid-template-columns:minmax(0,1fr)}.approved-home-aside{display:grid;grid-template-columns:1fr 1fr;gap:14px}.approved-home-aside>.approved-section{margin-top:0}.approved-tip{grid-column:1/-1;margin-top:0}}
-  @container content (max-width:900px){.approved-home-grid{grid-template-columns:minmax(0,1fr)}.approved-home-aside{display:grid;grid-template-columns:1fr 1fr;gap:14px}.approved-home-aside>.approved-section{margin-top:0}.approved-tip{grid-column:1/-1;margin-top:0}}
-  @media(max-width:640px){.approved-page-title{align-items:flex-start;gap:10px}.approved-page-title p{max-width:320px}.approved-secondary{width:32px;padding:0;justify-content:center;font-size:0}.approved-home-aside{grid-template-columns:1fr}.approved-tip{grid-column:auto}.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.recent-table th:nth-child(3),.recent-table th:nth-child(4),.recent-table td:nth-child(3),.recent-table td:nth-child(4){display:none}.recent-table th:first-child{width:58%}.recent-table th:nth-child(2){width:20%}.recent-table th:last-child{width:22%}}
-  @container content (max-width:640px){.approved-page-title{align-items:flex-start;gap:10px}.approved-page-title p{max-width:320px}.approved-secondary{width:32px;padding:0;justify-content:center;font-size:0}.approved-home-aside{grid-template-columns:1fr}.approved-tip{grid-column:auto}.quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.recent-table th:nth-child(3),.recent-table th:nth-child(4),.recent-table td:nth-child(3),.recent-table td:nth-child(4){display:none}.recent-table th:first-child{width:58%}.recent-table th:nth-child(2){width:20%}.recent-table th:last-child{width:22%}}
+  .workbench-home { width: min(820px, 100%); min-width: 0; margin: clamp(12px, 5vh, 58px) auto 0; color: var(--rw-text); }
+  .workbench-home-title { margin-bottom: 24px; text-align: center; }
+  .workbench-home-title h1 { margin: 0; font-size: 24px; line-height: 30px; font-weight: 720; letter-spacing: -.02em; }
+  .workbench-home-title p { margin: 6px 0 0; color: var(--rw-text-secondary); font-size: 13px; line-height: 19px; }
+  .recording-dropzone { display: grid; place-items: center; min-height: clamp(250px, 36vh, 330px); padding: 30px; border: 1px dashed color-mix(in srgb, var(--rw-accent) 58%, var(--rw-border)); border-radius: 12px; color: var(--rw-text); background: var(--rw-surface-muted); text-align: center; }
+  .recording-dropzone:hover:not(:disabled), .recording-dropzone:focus-visible { border-color: var(--rw-accent); background: color-mix(in srgb, var(--rw-accent) 5%, var(--rw-surface-muted)); }
+  .recording-dropzone :global(> svg) { color: var(--rw-accent); }
+  .dropzone-copy { display: grid; gap: 6px; margin-top: 14px; }
+  .dropzone-copy strong { font-size: 17px; line-height: 22px; font-weight: 680; }
+  .dropzone-copy small { color: var(--rw-text-secondary); font-size: 12px; line-height: 17px; }
+  .home-primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; margin-top: 18px; padding: 0 16px; border: 1px solid color-mix(in srgb, var(--rw-accent) 80%, var(--rw-border)); border-radius: 7px; color: #fff; background: var(--rw-accent); font-size: 13px; font-weight: 680; }
+  .recent-workbench-section { margin-top: 30px; }
+  .recent-workbench-section > header { display: flex; align-items: center; min-height: 36px; border-bottom: 1px solid var(--rw-border); }
+  .recent-workbench-section h2 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 680; }
+  .recent-task-list { margin: 0; padding: 0; list-style: none; }
+  .recent-task-list li { border-bottom: 1px solid var(--rw-border-subtle); }
+  .recent-task-list button { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; align-items: center; width: 100%; min-height: 58px; gap: 10px; padding: 8px 7px; color: var(--rw-text); background: transparent; text-align: left; }
+  .recent-task-list button:hover:not(:disabled), .recent-task-list button:focus-visible { background: color-mix(in srgb, var(--rw-accent) 6%, transparent); }
+  .recent-recording-icon { display: grid; place-items: center; width: 30px; height: 34px; border: 1px solid var(--rw-border); border-radius: 6px; color: var(--rw-accent); background: var(--rw-content); }
+  .recent-recording-copy { min-width: 0; }
+  .recent-recording-copy b, .recent-recording-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recent-recording-copy b { font-size: 13px; line-height: 18px; font-weight: 620; }
+  .recent-recording-copy small { margin-top: 2px; color: var(--rw-muted); font-size: 11px; line-height: 15px; }
+  .state-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rw-success); }
+  .state-dot.warning { background: var(--rw-warning); }.state-dot.progress { background: var(--rw-accent); }
+  .recent-status { color: var(--rw-text-secondary); font-size: 12px; line-height: 17px; white-space: nowrap; }
+  .empty-recent { display: grid; place-items: center; min-height: 124px; color: var(--rw-muted); text-align: center; }
+  .empty-recent p { margin: 8px 0 0; font-size: 13px; }
+  .home-secondary-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .home-secondary-actions button { display: inline-flex; align-items: center; gap: 8px; min-width: 0; min-height: 42px; padding: 7px 10px; border: 1px solid var(--rw-border); border-radius: 7px; color: var(--rw-text); background: var(--rw-content); text-align: left; }
+  .home-secondary-actions button:hover { border-color: color-mix(in srgb, var(--rw-accent) 55%, var(--rw-border)); background: color-mix(in srgb, var(--rw-accent) 5%, var(--rw-content)); }
+  .home-secondary-actions button :global(svg) { flex: 0 0 auto; color: var(--rw-accent); }
+  .home-secondary-actions span { min-width: 0; }.home-secondary-actions b, .home-secondary-actions small { display: block; }
+  .home-secondary-actions b { font-size: 12px; line-height: 16px; font-weight: 650; }.home-secondary-actions small { overflow: hidden; max-width: 190px; color: var(--rw-muted); font-size: 11px; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
+  @container content (max-width: 620px) { .workbench-home { margin-top: 10px; }.workbench-home-title { text-align: left; }.recent-task-list button { grid-template-columns: 34px minmax(0, 1fr) auto; }.recent-status { display: none; }.home-secondary-actions { justify-content: stretch; }.home-secondary-actions button { flex: 1; }.home-secondary-actions small { max-width: 120px; } }
 </style>

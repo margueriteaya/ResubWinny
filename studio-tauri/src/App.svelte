@@ -945,17 +945,11 @@
     {#key $localeRevision}
     {#if page === "home"}
       <HomePage
-        formats={supportedFormats}
         {history}
         {isInspecting}
         onChooseSource={chooseSource}
-        onOpenTask={() => selectView("tasks")}
         onOpenHistory={(item) => void openHistory(item)}
         onNavigate={(target) => selectView(target)}
-        onChooseFormat={(name) => {
-          selectedFormats = new Set([name as ExportFormat]);
-          selectView("tasks");
-        }}
       />
     {:else if page === "tasks"}
       {#if TaskWorkspaceComponent}
