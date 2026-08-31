@@ -8,6 +8,7 @@ mod drcs;
 mod export;
 mod inspection;
 mod jobs;
+mod legal;
 // Playback and caption composition stay behind the native backend API. The
 // WebView only forwards typed controls and displays bounded state.
 #[allow(dead_code)]
@@ -39,6 +40,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             about::get_about_info,
             about::open_project_link,
+            legal::list_legal_documents,
+            legal::get_legal_document,
             inspection::inspect_source,
             jobs::create_job,
             jobs::default_output_path,

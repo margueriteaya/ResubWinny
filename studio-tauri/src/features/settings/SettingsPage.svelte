@@ -1,14 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { FileText, FolderOpen, Info, MonitorCog, Palette, RotateCcw, Type } from '@lucide/svelte'
+  import { FileText, FolderOpen, Info, MonitorCog, Palette, RotateCcw, Scale, Type } from '@lucide/svelte'
   import { backend, type AppSettings, type PreviewRuntime } from '../../backend'
   import { availableLocales, registerLanguagePacks, t } from '../../i18n'
   import { isDesktopRuntime } from '../../shell/desktop'
   import PopupButton from '../../components/PopupButton.svelte'
   import MacSegmentedControl from '../../components/MacSegmentedControl.svelte'
   import AboutPanel from './AboutPanel.svelte'
+  import LicensesPanel from './LicensesPanel.svelte'
 
-  type Panel = 'general' | 'typography' | 'output' | 'playback' | 'about'
+  type Panel = 'general' | 'typography' | 'output' | 'playback' | 'about' | 'licenses'
   export let saveCaptionFont: (font: string) => void = () => {}
   export let onSettingsSaved: (settings: AppSettings) => void | Promise<void> = () => {}
   export let onSettingsPreview: (settings: AppSettings) => void | Promise<void> = () => {}
@@ -34,6 +35,7 @@
     { value: 'output', label: t('settings.output') },
     { value: 'playback', label: t('settings.playbackAndRuntime') },
     { value: 'about', label: t('settings.about') },
+    { value: 'licenses', label: t('settings.licenses') },
   ]
 
   function applyFont() {
@@ -143,6 +145,7 @@
     <button type="button" aria-current={panel === 'playback' ? 'page' : undefined} class:selected={panel === 'playback'} onclick={() => panel = 'playback'}><MonitorCog size={18} /> {t('settings.playbackAndRuntime')}</button>
     <span class="settings-nav-spacer" aria-hidden="true"></span>
     <button type="button" aria-current={panel === 'about' ? 'page' : undefined} class:selected={panel === 'about'} onclick={() => panel = 'about'}><Info size={18} /> {t('settings.about')}</button>
+    <button type="button" aria-current={panel === 'licenses' ? 'page' : undefined} class:selected={panel === 'licenses'} onclick={() => panel = 'licenses'}><Scale size={18} /> {t('settings.licenses')}</button>
   </nav>
   <section class="settings-content">
     {#key panel}
@@ -175,12 +178,13 @@
           </dl>
         {/if}
       </div></section>
-    {:else}<AboutPanel />{/if}
+    {:else if panel === 'about'}<AboutPanel />
+    {:else}<LicensesPanel />{/if}
     </div>
     {/key}
     <footer>
       <span class:error={persistenceState === 'error'} aria-live="polite">{persistenceState === 'saving' ? t('settings.saving') : persistenceState === 'saved' ? t('settings.saved') : persistenceState === 'error' ? t('settings.saveFailed') : ''}</span>
-      {#if panel !== 'playback' && panel !== 'about'}<button class="reset liquid-control" onclick={resetCategory}><RotateCcw size={17} /> {t('settings.resetCategory')}</button>{/if}
+      {#if panel !== 'playback' && panel !== 'about' && panel !== 'licenses'}<button class="reset liquid-control" onclick={resetCategory}><RotateCcw size={17} /> {t('settings.resetCategory')}</button>{/if}
     </footer>
   </section>
 </section>
