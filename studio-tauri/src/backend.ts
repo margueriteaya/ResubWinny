@@ -17,6 +17,7 @@ export type ExportPreservation = { position: boolean; color: boolean; ruby: bool
 export type WorkspaceLayoutSettings = { sourceWidth: number; outputWidth: number; sourceCollapsed: boolean; outputCollapsed: boolean }
 export type AppSettings = { uiFont: 'system' | 'cjk' | 'arib'; captionFont: 'arib' | 'system'; defaultFormat: 'ASS' | 'TTML' | 'JSON' | 'Raw Data'; locale: string; theme: 'system' | 'light' | 'dark'; workspaceLayout: WorkspaceLayoutSettings }
 export type LanguagePack = { locale: string; name: string; messages: Record<string, string> }
+export type AboutInfo = { productName: string; description: string; version: string; channel: string; platform: string; architecture: string; releaseTier: string; buildTag: string | null; buildCommit: string | null; signingDeclaration: 'development' | 'unsigned-alpha' | 'declared-signed' }
 export type TaskHistoryRecord = { name: string; path: string; size: number; container: string; status: string; time: string; warnings: number; captions: number; jobId?: string }
 export type PreviewCommand = 'toggle-pause' | 'seek-back' | 'seek-forward' | 'frame-back' | 'frame-forward'
 export type PreviewRect = { x: number; y: number; width: number; height: number }

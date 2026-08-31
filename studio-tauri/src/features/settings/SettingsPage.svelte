@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { FileText, FolderOpen, MonitorCog, Palette, RotateCcw, Type } from '@lucide/svelte'
+  import { FileText, FolderOpen, Info, MonitorCog, Palette, RotateCcw, Type } from '@lucide/svelte'
   import { backend, type AppSettings, type PreviewRuntime } from '../../backend'
   import { availableLocales, registerLanguagePacks, t } from '../../i18n'
   import { isDesktopRuntime } from '../../shell/desktop'
   import PopupButton from '../../components/PopupButton.svelte'
   import MacSegmentedControl from '../../components/MacSegmentedControl.svelte'
+  import AboutPanel from './AboutPanel.svelte'
 
-  type Panel = 'general' | 'typography' | 'output' | 'playback'
+  type Panel = 'general' | 'typography' | 'output' | 'playback' | 'about'
   export let saveCaptionFont: (font: string) => void = () => {}
   export let onSettingsSaved: (settings: AppSettings) => void | Promise<void> = () => {}
   export let onSettingsPreview: (settings: AppSettings) => void | Promise<void> = () => {}
@@ -32,6 +33,7 @@
     { value: 'typography', label: t('settings.typography') },
     { value: 'output', label: t('settings.output') },
     { value: 'playback', label: t('settings.playbackAndRuntime') },
+    { value: 'about', label: t('settings.about') },
   ]
 
   function applyFont() {
@@ -139,6 +141,8 @@
     <button type="button" aria-current={panel === 'typography' ? 'page' : undefined} class:selected={panel === 'typography'} onclick={() => panel = 'typography'}><Type size={18} /> {t('settings.typography')}</button>
     <button type="button" aria-current={panel === 'output' ? 'page' : undefined} class:selected={panel === 'output'} onclick={() => panel = 'output'}><FileText size={18} /> {t('settings.output')}</button>
     <button type="button" aria-current={panel === 'playback' ? 'page' : undefined} class:selected={panel === 'playback'} onclick={() => panel = 'playback'}><MonitorCog size={18} /> {t('settings.playbackAndRuntime')}</button>
+    <span class="settings-nav-spacer" aria-hidden="true"></span>
+    <button type="button" aria-current={panel === 'about' ? 'page' : undefined} class:selected={panel === 'about'} onclick={() => panel = 'about'}><Info size={18} /> {t('settings.about')}</button>
   </nav>
   <section class="settings-content">
     {#key panel}
@@ -160,7 +164,7 @@
     {:else if panel === 'output'}
       <header><h2>{t('settings.output')}</h2><p>{t('settings.outputDescription')}</p></header>
       <section class="settings-group"><div class="setting-copy"><h3>{t('settings.defaultFormat')}</h3><p>{t('settings.faithfulDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.defaultFormat')} value={preferences.defaultFormat} options={['ASS','TTML','JSON','Raw Data'].map((value) => ({value,label:value}))} onChange={(value) => updatePreferences({...preferences, defaultFormat: value as AppSettings['defaultFormat']})} /></div></section>
-    {:else}
+    {:else if panel === 'playback'}
       <header><h2>{t('settings.playbackAndRuntime')}</h2><p>{t('settings.playerDescription')}</p></header>
       <section class="settings-group runtime-group"><div class="setting-copy"><h3>{t('settings.runtimeStatus')}</h3><p>{t('settings.previewControlsDescription')}</p></div><div class="setting-control">
         {#if previewRuntime}
@@ -171,12 +175,12 @@
           </dl>
         {/if}
       </div></section>
-    {/if}
+    {:else}<AboutPanel />{/if}
     </div>
     {/key}
     <footer>
       <span class:error={persistenceState === 'error'} aria-live="polite">{persistenceState === 'saving' ? t('settings.saving') : persistenceState === 'saved' ? t('settings.saved') : persistenceState === 'error' ? t('settings.saveFailed') : ''}</span>
-      {#if panel !== 'playback'}<button class="reset liquid-control" onclick={resetCategory}><RotateCcw size={17} /> {t('settings.resetCategory')}</button>{/if}
+      {#if panel !== 'playback' && panel !== 'about'}<button class="reset liquid-control" onclick={resetCategory}><RotateCcw size={17} /> {t('settings.resetCategory')}</button>{/if}
     </footer>
   </section>
 </section>
@@ -187,6 +191,7 @@
   .settings-nav button{display:flex;align-items:center;gap:9px;min-height:36px;padding:0 10px;border:0;border-radius:7px;color:var(--rw-text-secondary);background:transparent;font-size:12px;text-align:left;transition:color var(--rw-motion-responsive) var(--rw-ease-out),background-color var(--rw-motion-responsive) var(--rw-ease-out),box-shadow var(--rw-motion-responsive) var(--rw-ease-out)}
   .settings-nav button.selected{color:var(--rw-text);background:color-mix(in srgb,var(--rw-text) 10%,transparent);box-shadow:inset 0 .5px rgba(255,255,255,.48)}
   .settings-nav button :global(svg){width:16px;height:16px;flex:0 0 16px;color:var(--rw-accent);stroke-width:1.8}.compact-category{display:none}
+  .settings-nav-spacer{height:8px;margin:2px 4px 0;border-top:1px solid var(--rw-border-subtle)}
   .settings-content{min-width:0;background:var(--rw-content)}
   .settings-panel{animation:settings-panel-reveal var(--rw-motion-fluid) var(--rw-ease-fluid) both}
   .settings-content header{padding:2px 2px 14px}
@@ -205,6 +210,6 @@
   .theme-control :global(.mac-segmented){width:100%}
   @keyframes settings-panel-reveal{from{opacity:0;transform:translate3d(0,5px,0)}to{opacity:1;transform:none}}
   @media(prefers-reduced-motion:reduce){.settings-panel{animation:none}}
-  @container content (max-width:820px){.settings-shell{grid-template-columns:1fr;gap:14px;margin-top:0}.settings-nav{position:static;display:flex;overflow-x:auto}.settings-nav button{flex:0 0 auto}.settings-content{max-width:none}.settings-group{grid-template-columns:minmax(160px,.85fr) minmax(240px,1.15fr)}.runtime-status div{grid-template-columns:1fr}}
+  @container content (max-width:820px){.settings-shell{grid-template-columns:1fr;gap:14px;margin-top:0}.settings-nav{position:static;display:flex;overflow-x:auto}.settings-nav button{flex:0 0 auto}.settings-nav-spacer{width:1px;height:26px;margin:5px 2px;border:0;border-left:1px solid var(--rw-border-subtle)}.settings-content{max-width:none}.settings-group{grid-template-columns:minmax(160px,.85fr) minmax(240px,1.15fr)}.runtime-status div{grid-template-columns:1fr}}
   @container content (max-width:560px){.settings-nav{display:none}.compact-category{display:block}.settings-shell{gap:12px}.settings-group{grid-template-columns:1fr;gap:12px;padding:15px}.caption-sample{align-items:flex-start;flex-direction:column}.theme-control :global(.mac-segmented){width:100%;min-width:0}}
 </style>

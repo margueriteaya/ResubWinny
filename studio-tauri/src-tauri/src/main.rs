@@ -1,3 +1,4 @@
+mod about;
 #[path = "../../../shared/arib_symbols.rs"]
 mod arib_symbols;
 #[path = "../../../shared/caption_features.rs"]
@@ -36,6 +37,8 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            about::get_about_info,
+            about::open_project_link,
             inspection::inspect_source,
             jobs::create_job,
             jobs::default_output_path,

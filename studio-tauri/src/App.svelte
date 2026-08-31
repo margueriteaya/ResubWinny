@@ -193,7 +193,7 @@
       outputCollapsed: false,
     },
   };
-  let settingsPanel: "general" | "typography" | "output" | "playback" = "general";
+  let settingsPanel: "general" | "typography" | "output" | "playback" | "about" = "general";
   let outputDirectory = "";
   let taskTab: "preview" | "events" | "diagnostics" = "preview";
   let currentJobId = "";

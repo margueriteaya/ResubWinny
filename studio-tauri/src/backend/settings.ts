@@ -1,7 +1,9 @@
-import type { AppSettings, LanguagePack, TaskHistoryRecord } from '../backend'
+import type { AboutInfo, AppSettings, LanguagePack, TaskHistoryRecord } from '../backend'
 import { call } from './client'
 
 export const settingsApi = {
+  getAboutInfo: () => call<AboutInfo>('get_about_info'),
+  openProjectLink: (target: 'source' | 'releases' | 'issues') => call<void>('open_project_link', { target }),
   getSettings: () => call<AppSettings>('get_settings'),
   updateSettings: (settings: AppSettings) => call<AppSettings>('update_settings', { settings }),
   listLanguagePacks: () => call<LanguagePack[]>('list_language_packs'),
