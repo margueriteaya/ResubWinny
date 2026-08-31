@@ -95,9 +95,18 @@ architecture is part of this migration.
 | --- | --- | --- |
 | Appearance | installed language packs, open language directory, system/light/dark theme | loading packs, selected, missing pack, error |
 | Typography | interface fallback profile and caption font preview | system, CJK fallback, ARIB caption font |
-| Output defaults | default format and timeline behavior | default and edited |
+| Output defaults | default export format | default and edited |
 | Player | runtime availability, render API status and detail | ready, unavailable, partial capability |
-| Persistence | preview changes, save and reset | dirty, saving, saved, reset, error |
+| Persistence | immediate preview, automatic persistence and category reset | saving, saved, reset, error, rapid consecutive edits |
+| About | product identity, running version, build provenance, distribution tier and signing declaration | development build, unsigned Alpha, missing optional provenance |
+| Licenses | project license, distribution notice, bundled component licenses and generated dependency inventory | loading, searchable list, selected document, unavailable resource, offline |
+
+Settings category navigation is a navigation layer and may use Liquid Glass.
+Setting groups, previews, runtime details, About metadata, license search,
+license lists, notices, and full license text are content surfaces and remain
+opaque. A page must not add glass simply to make a card visually prominent.
+Interactive controls use the shared Liquid Glass control treatment; content
+containers use the existing solid surface and border tokens.
 
 ## Shared Control Inventory
 
@@ -121,6 +130,13 @@ Every vertical slice must pass all four gates before work expands:
 2. **Visual:** same-viewport comparison against the official Kit and approved Figma.
 3. **Interaction:** keyboard, pointer, focus, reduced motion, and compact layout pass.
 4. **Runtime:** real Tauri/WebView2 validation with no regression to native preview.
+
+For Settings, About, and Licenses, visual review additionally verifies that
+glass appears only on category navigation, menus, and controls; readable content
+never receives `filter` or `backdrop-filter`; category labels remain visible at
+regular widths; and compact layouts do not turn the category list into a button
+wall. Forced-colors, static-glass, and reduced-motion fallbacks are release
+requirements, not optional polish.
 
 Final performance targets are panel and glass interaction p95 below 20 ms, no
 frontend long task above 50 ms during interaction, no idle animation frame loop,
