@@ -13,10 +13,10 @@ fuzzing = []
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 encoding_rs = "0.8"
-base64 = "0.22"
+base64 = "0.23"
 unicode-segmentation = "1.12"
 ttf-parser = "0.25"
-roxmltree = "0.20"
+roxmltree = "0.21"
 
 [build-dependencies]
 cmake = "0.1"
