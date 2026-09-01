@@ -12,7 +12,6 @@ use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    hash::{Hash, Hasher},
     io::{BufRead, BufReader, Seek, SeekFrom},
     path::Path,
     sync::{Arc, Mutex, OnceLock},
@@ -106,6 +105,7 @@ pub fn get_preview_runtime(app: AppHandle) -> PreviewRuntime {
 }
 
 #[tauri::command]
+#[cfg(windows)]
 pub fn get_preview_render_diagnostics(
     state: State<'_, Arc<AppState>>,
 ) -> Result<PreviewRenderDiagnostics, String> {
@@ -160,6 +160,27 @@ pub fn get_preview_render_diagnostics(
         last_error: stats.last_error,
     })
 }
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn get_preview_render_diagnostics(
+    _: State<'_, Arc<AppState>>,
+) -> Result<PreviewRenderDiagnostics, String> {
+    Ok(PreviewRenderDiagnostics {
+        route: "none".into(),
+        active: false,
+        frames_presented: 0,
+        presents_per_second: 0.0,
+        caption_texture_uploads: 0,
+        caption_texture_clears: 0,
+        video_aspect: None,
+        surface_width: None,
+        surface_height: None,
+        decoder_mode: None,
+        fallback_reason: Some("Native preview is only implemented on Windows.".into()),
+        last_error: None,
+    })
+}
 #[cfg(test)]
 fn parse_mpv_time_response(response: &str) -> Option<f64> {
     let value = serde_json::from_str::<serde_json::Value>(response).ok()?;
@@ -187,6 +208,7 @@ fn mpv_overlay_command(path: &Path, x: i32, y: i32, width: i32, height: i32) -> 
 }
 
 #[path = "preview/native.rs"]
+#[cfg(windows)]
 mod native;
 #[cfg(test)]
 #[path = "preview/tests.rs"]
@@ -255,7 +277,70 @@ pub fn stop_preview(state: State<'_, Arc<AppState>>) {
     platform_stop_preview(state.clone());
     reset_overlay_sync(state.inner());
 }
+
+fn invalidate_overlay_after_seek(state: State<'_, Arc<AppState>>) {
+    if let Ok(mut sync) = state.preview_overlay_sync.lock() {
+        let overlay_was_visible = sync.overlay_visible;
+        let revision = sync.revision.wrapping_add(1);
+        *sync = crate::state::PreviewOverlaySyncState {
+            revision,
+            ..Default::default()
+        };
+        if overlay_was_visible {
+            let _ = platform_clear_caption_overlay(state.clone());
+        }
+    } else {
+        let _ = platform_clear_caption_overlay(state);
+    }
+}
+
 #[tauri::command]
 pub fn preview_command(state: State<'_, Arc<AppState>>, command: String) -> Result<(), String> {
-    platform_preview_command(state, command)
+    let moves_timeline = matches!(
+        command.as_str(),
+        "seek-back" | "seek-forward" | "frame-back" | "frame-forward"
+    ) || command.starts_with("seek-absolute:");
+    platform_preview_command(state.clone(), command)?;
+    if moves_timeline {
+        invalidate_overlay_after_seek(state);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn seek_preview_project(
+    state: State<'_, Arc<AppState>>,
+    project_time_ms: i64,
+    exact: bool,
+) -> Result<i64, String> {
+    let media_time_ms = state
+        .playback_time_mapping
+        .lock()
+        .map_err(|_| "Playback time mapping is unavailable.")?
+        .media_time_ms(project_time_ms)?
+        .max(0);
+    platform_preview_command(
+        state.clone(),
+        format!(
+            "{}:{}",
+            if exact {
+                "seek-absolute"
+            } else {
+                "seek-preview"
+            },
+            media_time_ms as f64 / 1_000.0
+        ),
+    )?;
+    // Approximate seeks are emitted continuously while the user drags. Do
+    // not tear down the native caption plane for every intermediate target:
+    // that turns a scrub into a sequence of expensive clear/rebuild cycles
+    // and leaves the overlay visibly behind the pointer. An exact seek (the
+    // release/click path) invalidates the cached plane so the next sync can
+    // apply the frame at the authoritative player time.
+    if exact {
+        invalidate_overlay_after_seek(state);
+    } else if let Ok(mut sync) = state.preview_overlay_sync.lock() {
+        sync.revision = sync.revision.wrapping_add(1);
+    }
+    Ok(media_time_ms)
 }

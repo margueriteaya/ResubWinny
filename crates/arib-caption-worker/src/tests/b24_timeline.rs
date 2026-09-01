@@ -78,7 +78,7 @@ fn parses_b24_payload_and_pts() {
         0, 0, 1, 0xbd, 0, 0, 0x80, 0x80, 5, 0x21, 0, 5, 0xbf, 0x21, 0x80,
     ];
     let (payload, pts) = b24_payload_from_pes(&pes).expect("B24 PES");
-    assert_eq!(pts, Some(1000));
+    assert_eq!(pts.map(Pts90k::to_millis), Some(1000));
     assert_eq!(payload, [0x80]);
 }
 

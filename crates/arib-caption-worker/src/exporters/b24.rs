@@ -113,7 +113,7 @@ where
                     write_ttml_interval(ttml_writer, &interval, &options)?;
                 }
                 if let Some(archive_writer) = &mut archive_writer {
-                    write_archive_record(archive_writer, "region_interval", &interval)?;
+                    write_caption_archive_record(archive_writer, CaptionCueRef::B24(&interval))?;
                 }
             }
             if options.preserve_drcs && options.drcs_report {
@@ -166,7 +166,7 @@ where
             write_ttml_interval(ttml_writer, &interval, &options)?;
         }
         if let Some(archive_writer) = &mut archive_writer {
-            write_archive_record(archive_writer, "region_interval", &interval)?;
+            write_caption_archive_record(archive_writer, CaptionCueRef::B24(&interval))?;
         }
     }
     if !options.preserve_position {

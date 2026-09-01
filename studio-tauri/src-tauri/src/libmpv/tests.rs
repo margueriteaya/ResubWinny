@@ -93,14 +93,14 @@ fn render_worker_starts_and_stops_on_a_real_recording() {
             // vertically inverted native caption texture. Top is red; bottom
             // is blue.
             pixel.copy_from_slice(if row < 8 {
-                &[0, 0, 255, 255]
-            } else {
                 &[255, 0, 0, 255]
+            } else {
+                &[0, 0, 255, 255]
             });
         }
     }
     worker
-        .set_caption_overlay(overlay, 16, 16, 0, 0)
+        .set_caption_overlay(overlay.into(), 16, 16, 0, 0)
         .expect("upload native caption texture");
     unsafe {
         SetWindowPos(
@@ -248,7 +248,13 @@ fn render_worker_meets_the_long_4k_performance_gate() {
         if next_overlay < overlay_moments.len() && elapsed >= overlay_moments[next_overlay] {
             let overlay_started = Instant::now();
             worker
-                .set_caption_overlay(performance_overlay(next_overlay as u8), 1920, 1080, 0, 0)
+                .set_caption_overlay(
+                    performance_overlay(next_overlay as u8).into(),
+                    1920,
+                    1080,
+                    0,
+                    0,
+                )
                 .expect("update full native caption plane");
             maximum_observed_overlay_ms =
                 maximum_observed_overlay_ms.max(overlay_started.elapsed().as_secs_f64() * 1_000.0);

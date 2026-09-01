@@ -1,0 +1,27 @@
+From 5bdf2f86d33589ac89649209813e2f2104e5119f Mon Sep 17 00:00:00 2001
+From: shinchiro <shinchiro@users.noreply.github.com>
+Date: Wed, 5 Aug 2026 23:45:11 +0800
+Subject: [PATCH] cppwinrt: update winmd link
+
+Backport the upstream mpv-winbuild-cmake fix to the pinned toolchain commit.
+The old windows-rs path returns an error during cppwinrt installation.
+---
+ toolchain/cppwinrt.cmake | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/toolchain/cppwinrt.cmake b/toolchain/cppwinrt.cmake
+index ab33767..454ec73 100644
+--- a/toolchain/cppwinrt.cmake
++++ b/toolchain/cppwinrt.cmake
+@@ -10,7 +10,7 @@ ExternalProject_Add(cppwinrt
+         -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
+     BUILD_COMMAND ${EXEC} ninja -C <BINARY_DIR>
+     INSTALL_COMMAND ${EXEC} ninja -C <BINARY_DIR> install
+-            COMMAND ${EXEC} wget -O <BINARY_DIR>/Windows.winmd  https://github.com/microsoft/windows-rs/raw/master/crates/libs/bindgen/default/Windows.winmd
++            COMMAND ${EXEC} wget -O <BINARY_DIR>/Windows.winmd https://github.com/microsoft/windows-rs/raw/master/crates/libs/default/Windows.winmd
+             COMMAND ${EXEC} cppwinrt -input <BINARY_DIR>/Windows.winmd -output ${MINGW_INSTALL_PREFIX}/include/
+     LOG_DOWNLOAD 1 LOG_UPDATE 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1
+ )
+-- 
+2.51.0
+

@@ -22,6 +22,12 @@ function Invoke-Checked([string]$Label, [scriptblock]$Command) {
 
 Push-Location $root
 try {
+    if (-not $env:RESUBWINNY_RELEASE_TIER) {
+        $env:RESUBWINNY_RELEASE_TIER = 'Development'
+    }
+    if (-not $env:RESUBWINNY_BUILD_COMMIT) {
+        $env:RESUBWINNY_BUILD_COMMIT = (& git rev-parse --verify HEAD).Trim()
+    }
     if (-not $SkipNpmInstall) {
         Invoke-Checked 'Install pinned frontend dependencies' {
             npm ci --prefix studio-tauri

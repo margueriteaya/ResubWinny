@@ -1,6 +1,8 @@
 # Architecture Baseline (English Translation)
 
-> This is a translation of `architecture.zh-CN.md`. The Chinese document is normative whenever wording differs.
+[简体中文（唯一权威）](architecture.zh-CN.md) | [English](architecture.en.md) | [日本語](architecture.ja.md) | [繁體中文（台灣）](architecture.zh-TW.md)
+
+> This is a translation of `architecture.zh-CN.md`. The Simplified Chinese document is the sole authoritative architecture specification; the English, Japanese, and Traditional Chinese (Taiwan) versions are translations only. Any ambiguity or conflict is resolved exclusively by the Simplified Chinese document.
 
 > The third-stage core is implemented. Windows is the native-preview release
 > platform for the current Alpha. Native macOS/Linux preview backends are
@@ -9,6 +11,22 @@
 > behaviour, complete resource rendering, and independent 2K/8K, DPI, and
 > screenshot-difference gates. Zero-copy WGL/D3D interop is not a current
 > product claim.
+
+## Convergence boundary (2026-08-29)
+
+This phase freezes the frontend stack and Rust crate layout: Svelte, Tauri, and
+the existing `arib-caption-worker` remain in place. Frontend feature sessions
+are the preferred way to consolidate central state. The Worker remains
+responsible for input, probe/demux, decode, Caption IR, export, archive, and
+evidence; Tauri remains responsible for task history, queue, settings, window
+lifetime, and native preview. Splitting a `resubwinny-core` crate is deferred
+until the Caption IR, time model, or transport API is stable and has multiple
+consumers.
+
+The same convergence phase explicitly defers BD/DVD bitmap-subtitle OCR, a
+plugin system, AI translation, and native macOS/Linux preview. DRCS work is
+limited to the local hash-to-Unicode mapping path rather than a general OCR
+system.
 
 ## Scope
 
