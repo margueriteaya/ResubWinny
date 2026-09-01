@@ -10,14 +10,17 @@ provisioned nightly toolchain as well, because subrandr's rust-toolchain file
 otherwise selects a separate toolchain without the Windows gnullvm target.
 Keep its target directory local too, so a parent repository Cargo config cannot
 redirect the archive away from the path used by subrandr's installer.
+Do not emit linker-plugin LTO bitcode: the provisioned Rust nightly uses LLVM
+23 while the pinned MinGW Clang linker uses LLVM 22. A regular static archive
+keeps the two compiler versions interoperable.
 ---
- packages/subrandr.cmake | 7 +++++--
- 1 file changed, 5 insertions(+), 2 deletions(-)
+ packages/subrandr.cmake | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
 
 diff --git a/packages/subrandr.cmake b/packages/subrandr.cmake
 --- a/packages/subrandr.cmake
 +++ b/packages/subrandr.cmake
-@@ -12,10 +12,13 @@ ExternalProject_Add(subrandr
+@@ -12,10 +12,12 @@ ExternalProject_Add(subrandr
      PATCH_COMMAND ""
      CONFIGURE_COMMAND ""
 -    BUILD_COMMAND ${EXEC}
@@ -27,7 +30,7 @@ diff --git a/packages/subrandr.cmake b/packages/subrandr.cmake
 +        RUSTUP_TOOLCHAIN=nightly
 +        CARGO_TARGET_DIR=<SOURCE_DIR>/target
          CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
-         ${cargo_lto_rustflags}
+-        ${cargo_lto_rustflags}
 -        cargo -Z unstable-options -C <SOURCE_DIR> xtask install
 +        cargo xtask install
          --prefix ${MINGW_INSTALL_PREFIX}
