@@ -8,6 +8,7 @@ build = "build.rs"
 
 [features]
 fuzzing = []
+libaribtlv = []
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

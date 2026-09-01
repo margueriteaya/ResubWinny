@@ -228,7 +228,7 @@ fn render_at_has_a_stable_native_ttml_ruby_visual_golden() {
         "ttml-horizontal-ruby-basic-native"
     );
     assert_eq!(snapshot.rendered_ruby_count, 1);
-    assert_eq!(png_fingerprint(&png), 0x05F2_F28D_D0F0_0E5F);
+    assert_eq!(png_fingerprint(&png), 0x25B1_5CE8_08DB_AF4F);
     std::fs::remove_file(path).expect("remove fixture");
 }
 
@@ -249,7 +249,7 @@ fn render_at_has_a_stable_arib_receiver_baseline_stroke_golden() {
         .expect("ARIB receiver baseline snapshot");
     let png = snapshot.composed_png_base64.expect("native PNG");
     assert_eq!(snapshot.caption_plane_mode, "ttml-horizontal-native");
-    assert_eq!(png_fingerprint(&png), 0xA79A_D2FF_A80D_23B6);
+    assert_eq!(png_fingerprint(&png), 0x57A4_3C37_BBB3_6040);
     std::fs::remove_file(path).expect("remove fixture");
 }
 
@@ -274,7 +274,7 @@ fn render_at_has_a_stable_native_vertical_ruby_visual_golden() {
         "ttml-vertical-ruby-basic-native"
     );
     assert_eq!(snapshot.rendered_ruby_count, 1);
-    assert_eq!(png_fingerprint(&png), 0x73DF_C0AC_44B8_CA44);
+    assert_eq!(png_fingerprint(&png), 0x4C48_B78F_5D57_3626);
     std::fs::remove_file(path).expect("remove fixture");
 }
 
@@ -299,7 +299,7 @@ fn render_at_has_a_stable_wrapped_vertical_ruby_visual_golden() {
         "ttml-vertical-ruby-basic-native"
     );
     assert_eq!(snapshot.rendered_ruby_count, 1);
-    assert_eq!(png_fingerprint(&png), 0x91C0_DFBD_6755_0E63);
+    assert_eq!(png_fingerprint(&png), 0xEFCF_409A_9E61_3AA7);
     std::fs::remove_file(path).expect("remove fixture");
 }
 
@@ -321,7 +321,7 @@ fn render_at_has_a_stable_vertical_text_combine_visual_golden() {
     let png = snapshot.composed_png_base64.expect("native PNG");
     assert_eq!(snapshot.caption_plane_mode, "ttml-vertical-basic-native");
     assert_eq!(snapshot.missing_glyph_count, 0);
-    assert_eq!(png_fingerprint(&png), 0xDBDB_3620_9690_B754);
+    assert_eq!(png_fingerprint(&png), 0x552C_864E_D8F9_8943);
     std::fs::remove_file(path).expect("remove fixture");
 }
 
@@ -343,7 +343,7 @@ fn render_at_has_a_stable_vertical_punctuation_visual_golden() {
     let png = snapshot.composed_png_base64.expect("native PNG");
     assert_eq!(snapshot.caption_plane_mode, "ttml-vertical-basic-native");
     assert_eq!(snapshot.missing_glyph_count, 0);
-    assert_eq!(png_fingerprint(&png), 0x6733_4C7F_EE93_DE85);
+    assert_eq!(png_fingerprint(&png), 0x5399_899F_880B_2454);
     std::fs::remove_file(path).expect("remove fixture");
 }
 
@@ -364,7 +364,7 @@ fn render_at_has_a_stable_multiline_alignment_visual_golden() {
         render_at(path.to_string_lossy().into_owned(), 1_200).expect("native multiline snapshot");
     let png = snapshot.composed_png_base64.expect("native PNG");
     assert_eq!(snapshot.caption_plane_mode, "ttml-horizontal-native");
-    assert_eq!(png_fingerprint(&png), 0x6758_E8F6_9420_6649);
+    assert_eq!(png_fingerprint(&png), 0xAFCF_A4D5_24CC_7CD6);
     std::fs::remove_file(path).expect("remove fixture");
 }
 

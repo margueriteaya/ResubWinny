@@ -40,6 +40,8 @@ jobs:
           cargo fmt --manifest-path studio-tauri/src-tauri/Cargo.toml --check
       - name: Lint Worker
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Lint native TLV Worker backend
+        run: cargo clippy --workspace --all-targets --features libaribtlv -- -D warnings
       - name: Lint desktop service
         run: cargo clippy --manifest-path studio-tauri/src-tauri/Cargo.toml --all-targets --target x86_64-pc-windows-msvc -- -D warnings
       - name: Build and check desktop frontend
@@ -73,6 +75,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - name: Test Worker
         run: cargo test --workspace
+      - name: Test native TLV Worker backend
+        run: cargo test --workspace --features libaribtlv
       - name: Test desktop service
         run: cargo test --manifest-path studio-tauri/src-tauri/Cargo.toml
 

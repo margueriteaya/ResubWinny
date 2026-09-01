@@ -376,13 +376,12 @@ where
         |summary| progress(summary),
         cancelled,
         |packet_offset, payload| {
-            if let Some(archive_writer) = &mut *archive_writer.borrow_mut() {
+            if let Some(archive_writer) = &mut *archive_writer.borrow_mut()
+                && let Some(mpu_sequence_number) = payload.mpu_sequence_number
+            {
                 for resource in &payload.resources {
-                    let evidence = ttml_resource_evidence(
-                        payload.packet_id,
-                        payload.mpu_sequence_number,
-                        resource,
-                    );
+                    let evidence =
+                        ttml_resource_evidence(payload.packet_id, mpu_sequence_number, resource);
                     if archived_resource_evidence.insert(evidence.record_key.clone()) {
                         write_archive_record(archive_writer, "resource_evidence", &evidence)?;
                     }

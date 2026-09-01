@@ -32,6 +32,9 @@ pub(crate) fn write_tlv_raw_payload(
     source_offset: u64,
     payload: &TlvCaptionPayload,
 ) -> io::Result<()> {
+    let scope_key = payload
+        .mpu_sequence_number
+        .map(|sequence| format!("packet:{}:mpu:{sequence}", payload.packet_id));
     serde_json::to_writer(
         &mut *writer,
         &serde_json::json!({
@@ -39,7 +42,7 @@ pub(crate) fn write_tlv_raw_payload(
             "tlv_packet_offset": source_offset,
             "mmpt_packet_id": payload.packet_id,
             "mpu_sequence_number": payload.mpu_sequence_number,
-            "scope_key": format!("packet:{}:mpu:{}", payload.packet_id, payload.mpu_sequence_number),
+            "scope_key": scope_key,
             "mmtp_sequence_number": payload.mmtp_sequence_number,
             "presentation_ntp": payload.presentation_ntp,
             "timed_mfu": payload.timed,
@@ -54,10 +57,10 @@ pub(crate) fn write_tlv_raw_payload(
                     "width": format.width,
                     "height": format.height,
                     "preview_data_uri": bounded_png_preview_data_uri(&resource.bytes),
-                    "record_key": format!(
-                        "stpp-resource:packet:{}:mpu:{}:subsample:{}",
-                        payload.packet_id, payload.mpu_sequence_number, resource.index
-                    ),
+                    "record_key": payload.mpu_sequence_number.map(|sequence| format!(
+                        "stpp-resource:packet:{}:mpu:{sequence}:subsample:{}",
+                        payload.packet_id, resource.index
+                    )),
                     "payload_hex": hex_encode(&resource.bytes),
                 })
             }).collect::<Vec<_>>(),

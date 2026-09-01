@@ -224,7 +224,7 @@ from the filename extension.
 
 The desktop implementation is Tauri 2 + Svelte 5. The worker is split by responsibility (`cli.rs`, `inspection.rs`, `jobs.rs`, `preview.rs`, `archive.rs`, `protocol.rs`, `resource.rs`, `transport/`, `caption/`, `timeline.rs`, `drcs.rs`, and `exporters/`); `main.rs` is only the process entry point and tests. The `render-at` CLI command returns a bounded archive snapshot at a requested time. Historical Slint references do not describe the current architecture. Initial cargo-fuzz targets now cover content probing, strict TTML envelopes, and MMTP envelopes, and the CI matrix builds core/desktop on Windows, macOS, and Linux. Complete resource-to-preview composition, general TLV/MMT caption conversion, deeper PSI/PES/B24/signalling/MPU fuzz coverage, and macOS/Linux preview backends remain unfinished.
 
-Display-plane correction (2026-07-25): B62/ARIB-TTML viewer geometry is normalised onto the native renderer's logical 1920×1080 plane when the root `<tt>` declares a valid pixel display extent. When it does not, logical 2K remains the default; only complete pixel `origin`/`extent` geometry that exceeds logical 2K on at least one axis and fits a canonical 3840×2160 or 7680×4320 plane may establish that source plane. Region geometry is scaled per axis while pixel font size, line height, letter spacing, and direct outline width use a bounded uniform scale. Equivalent 2K, 4K, and 8K source layouts therefore retain the same screen-relative caption size; ambiguous or invalid data never silently becomes 4K. Raw PES/MMTP evidence remains unmodified.
+Display-plane correction (2026-07-25, revised 2026-09-02): a valid pixel display extent on the root `<tt>` defines the B62/ARIB-TTML source coordinate space. When it is absent, logical 2K remains the default; complete pixel `origin`/`extent` geometry must exceed logical 2K on at least one axis before the smallest canonical 3840×2160 or 7680×4320 plane that contains each coordinate/size component is selected. Region extent is layout capacity that may be clipped at the display edge, so `origin + extent` must not promote a 4K document to 8K; gross geometry beyond the largest canonical plane still rejects inference. Region geometry is scaled per axis while pixel font size, line height, letter spacing, and direct outline width use a bounded uniform scale. The native backend's current `1920×1080` plane is an intermediate logical texture, not the target resolution used to define correctness. Correctness means that source layout ratios map to the actual video-content viewport, excluding letterbox or pillarbox bars, and remain stable across window size, DPI, and fullscreen changes. Ambiguous or invalid data never silently becomes 4K. Raw PES/MMTP evidence remains unmodified.
 
 Vertical punctuation increment (2026-07-25): the native B62 preview maps only Unicode-defined vertical presentation punctuation and uses it only when the bundled ARIB font supplies that glyph. It otherwise preserves the source character. A deterministic archive-to-`render_at` PNG golden covers this path. This does not claim Latin rotation, tate-chu-yoko, complete orientation/punctuation rules, or standard B62 stroke behaviour.
 
@@ -354,3 +354,27 @@ encoding validation. Default preview/export selects declared caption tracks,
 while superimpose remains an independent explicitly selectable track.
 Unclassified streams remain candidates and are never inferred from a PID,
 filename, or programme name.
+
+ARIB-TTML background and outline correction (2026-09-02): the caption model
+preserves whether the effective `backgroundColor` came from a region, block,
+or inline element. Native preview fills only region-scoped colours across the
+region; block/inline colours follow the measured text line or glyph cell, and
+identical concurrent region backgrounds are composited once. Legacy archives
+without this scope use a compact text background instead of treating region
+layout capacity as a caption box. An explicit `textOutline` width of `0px`
+means no outline and is never promoted to a 1 px minimum; inherited inline
+colours receive parent opacity exactly once.
+
+## Vendored libaribtlv TLV backend (2026-09-02)
+
+The `libaribtlv` feature builds pinned libaribtlv 0.6.1 and its private Zlib
+1.3.2 statically behind a project-owned narrow C ABI. It takes over the
+experimental TLV-to-B62-TTML scan while retaining 1 MiB bounded streaming and
+an evidence-first contract: callback data is copied across the ABI; audio,
+video, and ARIB-HTML5 application resources are not collected; and only
+self-contained compression-type-0 TTML reaches strict XML parsing. EXI,
+unknown formats, non-self-contained, and malformed payloads are archived and
+reported only. Native normalised PTS, actual MPT presentation NTP, MPU/MMTP
+sequence numbers, and discontinuities are separate optional evidence; absent
+values are never fabricated. This does not integrate `tlvdemux` player/MSE code
+or promote TLV/MMTP to validated general BS4K/8K support.

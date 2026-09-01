@@ -118,6 +118,8 @@ Worker 使用固定大小的串流緩衝區和 64 位元檔案位移。檔案體
 | 相依套件 | 用途 | 整合方式 | 授權條款/狀態 |
 | --- | --- | --- | --- |
 | [xqq/libaribcaption](https://github.com/xqq/libaribcaption) `v1.1.2` | ARIB STD-B24 解碼與原生算繪 | 固定 commit 的 vendored 原始碼 | MIT |
+| [makeding/libaribtlv](https://github.com/makeding/libaribtlv) `0.6.1` | 可選的實驗性 TLV/MMTP → B62 TTML 解複用 | `libaribtlv` feature 啟用時以固定 commit 的 vendored 原始碼靜態連結；專案自有窄 C ABI | MIT |
+| [Zlib](https://github.com/madler/zlib) `1.3.2` | libaribtlv 的私有壓縮相依性 | 以固定 commit 的 vendored 原始碼靜態連結；不偵測系統 Zlib | Zlib License |
 | [mpv](https://mpv.io/) / libmpv | Windows 原生影片預覽 | 動態連結、可替換 DLL；建置時依雜湊下載 | LGPL-2.1-or-later |
 | Rounded M+ 1m for ARIB `1.3` | ARIB 字元 fallback、字幕預覽與 ASS 字型度量 | 隨專案散佈字型 | M+ FONT LICENSE 與 WadaLab 授權 |
 | Tauri 2 | 桌面視窗、原生 API 與封裝 | Cargo 相依套件 | 請參閱相依套件授權條款清單 |

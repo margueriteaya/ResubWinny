@@ -114,6 +114,8 @@ pub(crate) struct TtmlCaption {
 pub(crate) struct TtmlCaptionStyle {
     pub(crate) color: Option<String>,
     pub(crate) background_color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) background_scope: Option<TtmlBackgroundScope>,
     pub(crate) font_size: Option<String>,
     pub(crate) font_family: Option<String>,
     pub(crate) font_style: Option<String>,
@@ -130,14 +132,63 @@ pub(crate) struct TtmlCaptionStyle {
     pub(crate) font_resource: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum TtmlBackgroundScope {
+    Region,
+    Block,
+    Inline,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+pub(crate) struct RationalTimestamp {
+    pub(crate) value: i64,
+    pub(crate) timescale: u32,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[allow(dead_code)] // Exactly one route is compiled into a worker backend.
+pub(crate) enum TlvTimelineBasis {
+    MptPresentationNtp,
+    LibaribTlvNormalizedPts,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct TtmlCaptionSource {
     pub(crate) route: &'static str,
     pub(crate) source_offset: u64,
     pub(crate) mmpt_packet_id: u16,
-    pub(crate) mpu_sequence_number: u32,
-    pub(crate) mmtp_sequence_number: u32,
-    pub(crate) presentation_ntp: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) mpu_sequence_number: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) mmtp_sequence_number: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) presentation_ntp: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) normalized_pts: Option<RationalTimestamp>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) reference_start_pts: Option<RationalTimestamp>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) reference_start_ntp: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) reference_start_time_leap_indicator: Option<u8>,
+    pub(crate) timeline_basis: TlvTimelineBasis,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) track_id: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) component_tag: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) timing_mode: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) operation_mode: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) display_mode: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) compression_type: Option<u8>,
+    pub(crate) random_access: bool,
+    pub(crate) discontinuity: bool,
+    pub(crate) discontinuity_reasons: u32,
     pub(crate) xml_encoding: String,
     pub(crate) resources: Vec<TtmlResourceMetadata>,
     pub(crate) resources_complete: bool,
@@ -189,9 +240,13 @@ pub(crate) fn subt_resource_index(value: &str) -> Option<u32> {
 }
 
 pub(crate) fn ttml_resource_references(caption: &TtmlCaption) -> Vec<TtmlResourceReference> {
-    let scope = caption.source.as_ref().map(|source| TtmlResourceScope {
-        packet_id: source.mmpt_packet_id,
-        mpu_sequence_number: source.mpu_sequence_number,
+    let scope = caption.source.as_ref().and_then(|source| {
+        source
+            .mpu_sequence_number
+            .map(|mpu_sequence_number| TtmlResourceScope {
+                packet_id: source.mmpt_packet_id,
+                mpu_sequence_number,
+            })
     });
     let scope_key = scope.as_ref().map(TtmlResourceScope::key);
     [

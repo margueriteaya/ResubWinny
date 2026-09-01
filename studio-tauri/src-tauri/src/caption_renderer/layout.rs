@@ -124,6 +124,22 @@ pub(super) fn draw_horizontal_text(
                 .saturating_add(line.ruby_height.ceil() as i32)
                 .saturating_add(line.glyph_height.ceil() as i32);
             let run_start = cursor_x;
+            let segment_width = measure_text(font, segment, run.font_size, run.letter_spacing);
+            if !segment.is_empty() && run.background[3] > 0 {
+                let run_end = if right_to_left {
+                    run_start - segment_width
+                } else {
+                    run_start + segment_width
+                };
+                fill_rect(
+                    canvas,
+                    run_start.min(run_end).floor() as i32,
+                    line_y.saturating_add(line.ruby_height.ceil() as i32),
+                    segment_width.ceil() as i32,
+                    line_height.max(line.glyph_height).ceil() as i32,
+                    run.background,
+                );
+            }
             if run.ruby_base && ruby_base_start.is_none() {
                 ruby_base_start = Some(run_start);
             }
@@ -283,6 +299,16 @@ pub(super) fn draw_vertical_text(
                     character_index += 1;
                     continue;
                 }
+            }
+            if run.background[3] > 0 {
+                fill_rect(
+                    canvas,
+                    cursor_x,
+                    cursor_y,
+                    run.font_size.ceil() as i32,
+                    cell.ceil() as i32,
+                    run.background,
+                );
             }
             base_cells.push((cursor_x, cursor_y));
             let combined_digit_count = run

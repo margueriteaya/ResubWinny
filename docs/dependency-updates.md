@@ -10,7 +10,7 @@ ResubWinny 使用固定且可审查的依赖更新。应用程序运行时绝不
 
 | 类别 | 示例 | 固定与更新规则 |
 | --- | --- | --- |
-| 随附源代码 | libaribcaption | 在 `third_party/versions.json` 中固定上游标签、完整提交和确定性的源代码快照哈希；审查源代码差异及许可证，随后用 `scripts/prepare-vendored-source.ps1` 移除嵌套的 Git 元数据。 |
+| 随附源代码 | libaribcaption、libaribtlv、Zlib | 在 `third_party/versions.json` 中固定上游标签、完整提交和确定性的源代码快照哈希；审查源代码差异及许可证，随后用 `scripts/prepare-vendored-source.ps1` 移除嵌套的 Git 元数据。 |
 | 下载的二进制运行时 | Windows libmpv | 固定发布标签提交、工作流配方提交/运行、工具链提交、上游 mpv 提交、资源名称、归档哈希及提取后哈希。`scripts/setup-libmpv.ps1` 为开发和打包显式安装它；应用程序绝不下载它。绝不可仅替换 DLL，而不同时提供其头文件、声明和对应源代码计划。 |
 | 仅供参考的源代码 | aribb62.js | 固定已审查的提交。上游变更是研究输入，不是可执行依赖，也不会被自动移植。 |
 | 包管理的源代码 | Cargo 和 npm 包 | 锁定文件是权威来源。Dependabot 可以提出更新；维护者负责审查和测试。 |
@@ -34,6 +34,7 @@ ResubWinny 使用固定且可审查的依赖更新。应用程序运行时绝不
 
 ```text
 cargo test -p arib-caption-worker
+cargo test -p arib-caption-worker --features libaribtlv
 cargo check --manifest-path studio-tauri/src-tauri/Cargo.toml
 npm run build --prefix studio-tauri
 cargo check --manifest-path fuzz/Cargo.toml
@@ -43,6 +44,7 @@ cargo fmt --check
 附加门槛取决于组件：
 
 - **libaribcaption：** 桥接 ABI 编译、B24 解码语料、DRCS 映射、RegionInterval 时间以及 B24 视觉 golden 对比。即使 C ABI 未变，更改字符映射、控制代码、默认选项或渲染器也属于语义变更。
+- **libaribtlv 与 Zlib：** 构建 vendored 静态桥接，不得回退到系统 Zlib；运行 native TLV feature 的协议回归和严格 TTML/EXI 原始证据测试。审查上游 C ABI、回调所有权、资源与时间语义；缺失的 MPU/MMTP/NTP 信息必须保持缺失，不能用零值或猜测补齐。
 - **libmpv：** 导出符号检查、可替换性检查、原生预览冒烟测试、seek/pause/resume、叠加层时钟同步、调整大小/DPI，以及 2K/4K/8K 性能样本。验证制品仍是 LGPL 构建，并用 `scripts/package-libmpv-source.ps1` 打包其精确源代码缓存。
 - **aribb62.js：** 手动检查上游变更。只移植由 ARIB 文档或语料证据支持、且已被独立理解的行为。在其可再分发许可证明确前，绝不复制新增代码。
 - **字体：** 字形覆盖、缺字诊断、横排/竖排 ruby、标点方向、描边/背景，以及逻辑 2K/4K/8K 视觉等价性。

@@ -12,7 +12,7 @@ Update automation may open a proposal, but must not merge or publish it.
 
 | Class | Examples | Pinning and update rule |
 | --- | --- | --- |
-| Vendored source | libaribcaption | Pin an upstream tag, full commit, and deterministic source-snapshot hash in `third_party/versions.json`; review the source diff and license, then remove nested Git metadata with `scripts/prepare-vendored-source.ps1`. |
+| Vendored source | libaribcaption, libaribtlv, Zlib | Pin an upstream tag, full commit, and deterministic source-snapshot hash in `third_party/versions.json`; review the source diff and license, then remove nested Git metadata with `scripts/prepare-vendored-source.ps1`. |
 | Downloaded binary runtime | Windows libmpv | Pin the release tag commit, workflow recipe commit/run, toolchain commit, upstream mpv commit, asset name, archive hash, and extracted hashes. `scripts/setup-libmpv.ps1` installs it explicitly for development and packaging; the application never downloads it. Never replace only the DLL without its headers, notices, and corresponding-source plan. |
 | Reference-only source | aribb62.js | Pin the reviewed commit. Upstream changes are research input, not executable dependencies and not automatically ported. |
 | Package-managed source | Cargo and npm packages | Lockfiles are authoritative. Dependabot may propose updates; maintainers review and test them. |
@@ -36,6 +36,7 @@ All updates run the normal project gate:
 
 ```text
 cargo test -p arib-caption-worker
+cargo test -p arib-caption-worker --features libaribtlv
 cargo check --manifest-path studio-tauri/src-tauri/Cargo.toml
 npm run build --prefix studio-tauri
 cargo check --manifest-path fuzz/Cargo.toml
@@ -48,6 +49,11 @@ Additional gates depend on the component:
   RegionInterval timing, and B24 visual golden comparisons. Character mapping,
   control-code, default option, or renderer changes are semantic changes even
   when the C ABI is unchanged.
+- **libaribtlv and Zlib:** build the vendored static bridge without falling back
+  to a system Zlib; run native-TLV feature protocol regressions and strict
+  TTML/EXI raw-evidence tests. Review upstream C ABI, callback ownership,
+  resource, and time semantics; absent MPU/MMTP/NTP information must stay
+  absent rather than being substituted with zeroes or guesses.
 - **libmpv:** exported-symbol check, replaceability check, native preview smoke,
   seek/pause/resume, overlay clock synchronisation, resize/DPI, and 2K/4K/8K
   performance samples. Verify that the artifact is still an LGPL build and

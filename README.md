@@ -118,6 +118,8 @@ Worker 使用固定大小的流式缓冲和 64 位文件偏移。文件体积增
 | 依赖 | 用途 | 集成方式 | 许可证/状态 |
 | --- | --- | --- | --- |
 | [xqq/libaribcaption](https://github.com/xqq/libaribcaption) `v1.1.2` | ARIB STD-B24 解码与原生渲染 | 固定 commit 的 vendored 源码 | MIT |
+| [makeding/libaribtlv](https://github.com/makeding/libaribtlv) `0.6.1` | 可选的实验性 TLV/MMTP → B62 TTML 解复用 | `libaribtlv` feature 启用时以固定 commit 的 vendored 源码静态链接；项目自有窄 C ABI | MIT |
+| [Zlib](https://github.com/madler/zlib) `1.3.2` | libaribtlv 的私有压缩依赖 | 以固定 commit 的 vendored 源码静态链接；不发现系统 Zlib | Zlib License |
 | [mpv](https://mpv.io/) / libmpv | Windows 原生视频预览 | 动态链接、可替换 DLL；构建时按哈希下载 | LGPL-2.1-or-later |
 | Rounded M+ 1m for ARIB `1.3` | ARIB 字符 fallback、字幕预览与 ASS 字体度量 | 随项目分发字体 | M+ FONT LICENSE 与 WadaLab 授权 |
 | Tauri 2 | 桌面窗口、原生 API 与打包 | Cargo 依赖 | 见依赖许可证清单 |

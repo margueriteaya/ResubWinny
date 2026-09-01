@@ -1,7 +1,7 @@
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use fontdue::{Font, FontSettings};
 use serde_json::Value;
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 const MAX_LAYERS: usize = 128;
 const MAX_PIXELS: u64 = 33_177_600;
@@ -32,6 +32,7 @@ struct StyledRun {
     id: Option<String>,
     ruby_target_id: Option<String>,
     color: [u8; 4],
+    background: [u8; 4],
     font_size: f32,
     letter_spacing: f32,
     outline: Option<TextOutline>,
@@ -172,6 +173,7 @@ fn compose_ttml_horizontal(intervals: &[Value]) -> Option<CaptionPlaneFrame> {
     let mut missing_glyph_count = 0;
     let mut has_vertical = false;
     let mut rendered_ruby_count = 0;
+    let mut rendered_region_backgrounds = BTreeSet::new();
     for interval in intervals.iter().take(MAX_LAYERS) {
         let Some(text) = caption_text(interval) else {
             continue;
@@ -191,6 +193,8 @@ fn compose_ttml_horizontal(intervals: &[Value]) -> Option<CaptionPlaneFrame> {
             ),
             opacity,
         );
+        let background_scope = style_value(style, "background_scope")
+            .or_else(|| style_value(style, "backgroundScope"));
         // TTML's two-axis fontSize is horizontal then vertical. The native
         // rasterizer is height-based, so `36px 72px` must remain 72px tall
         // instead of becoming a visibly undersized 36px glyph.
@@ -235,44 +239,18 @@ fn compose_ttml_horizontal(intervals: &[Value]) -> Option<CaptionPlaneFrame> {
             outline,
             opacity,
         );
-        if width > 0 && height > 0 {
-            let (background_x, background_y, background_width, background_height) = if vertical {
-                (x, y, width, height)
-            } else {
-                // Some broadcast TTML regions declare an extent narrower than
-                // the final glyph run when receiver fonts, letter spacing and
-                // a stroke are applied. Do not allow the backing box to end
-                // before the visible subtitle does.
-                let lines = horizontal_lines(&font, &runs);
-                let text_width = lines
-                    .iter()
-                    .map(|line| line.width.ceil() as i32)
-                    .max()
-                    .unwrap_or(0);
-                let text_height = lines
-                    .iter()
-                    .map(|line| line_height.max(line.glyph_height + line.ruby_height).ceil() as i32)
-                    .sum::<i32>();
-                let padding = outline
-                    .map(|stroke| stroke.radius.saturating_add(2))
-                    .unwrap_or(0);
-                (
-                    x.saturating_sub(padding),
-                    y.saturating_sub(padding),
-                    width
-                        .max(text_width)
-                        .saturating_add(padding.saturating_mul(2)),
-                    height
-                        .max(text_height)
-                        .saturating_add(padding.saturating_mul(2)),
-                )
-            };
+        if width > 0
+            && height > 0
+            && background[3] > 0
+            && background_scope == Some("region")
+            && rendered_region_backgrounds.insert((x, y, width, height, background))
+        {
             fill_rect(
                 &mut canvas,
-                background_x,
-                background_y,
-                background_width,
-                background_height,
+                x,
+                y,
+                width,
+                height,
                 background,
             );
         }
@@ -392,10 +370,10 @@ fn decode_rendered_image(image: &Value) -> Option<(Vec<u8>, u32, u32)> {
 mod layout;
 #[cfg(test)]
 use layout::{
-    VerticalGlyphOrientation, rotate_bitmap_clockwise, text_combine_digit_count,
+    VerticalGlyphOrientation, horizontal_lines, rotate_bitmap_clockwise, text_combine_digit_count,
     vertical_glyph_orientation, vertical_presentation_form,
 };
-use layout::{draw_horizontal_text, draw_vertical_text, horizontal_lines};
+use layout::{draw_horizontal_text, draw_vertical_text};
 mod rich_text;
 use rich_text::styled_runs;
 mod glyph;

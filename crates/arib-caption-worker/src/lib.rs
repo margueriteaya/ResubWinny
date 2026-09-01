@@ -23,6 +23,9 @@ mod inspection;
 mod jobs;
 mod models;
 mod native_b24;
+#[cfg(feature = "libaribtlv")]
+#[allow(dead_code)] // PoC boundary; production TLV routing remains evidence-first.
+mod native_tlv;
 mod preview;
 mod protocol;
 mod resource;

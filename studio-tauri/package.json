@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run verify:contract && svelte-check --tsconfig ./tsconfig.json && vite build",
-    "build:worker": "cargo build --manifest-path ../Cargo.toml -p arib-caption-worker --release",
+    "build:worker": "cargo build --manifest-path ../Cargo.toml -p arib-caption-worker --release --features libaribtlv",
     "build:bundle": "npm run build:worker && npm run build",
     "verify:contract": "node ../scripts/verify-frontend-contract.mjs",
     "tauri": "tauri"

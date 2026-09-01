@@ -41,25 +41,48 @@ function Get-SourceSnapshotHash([string]$Directory) {
         throw "Could not locate the repository containing $Directory."
     }
     $relativeRoot = [IO.Path]::GetRelativePath($repository, $root).Replace('\', '/')
-    & git -C $repository diff --quiet HEAD -- $relativeRoot
-    if ($LASTEXITCODE -ne 0) {
-        throw "Source snapshot contains uncommitted changes: $relativeRoot"
-    }
-    $entries = @(& git -C $repository ls-tree -r HEAD -- $relativeRoot)
-    if ($LASTEXITCODE -ne 0 -or $entries.Count -eq 0) {
-        throw "Source snapshot has no tracked files: $relativeRoot"
+    [string[]]$entries = @(Get-ChildItem -LiteralPath $root -Recurse -File |
+        ForEach-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') })
+    [Array]::Sort($entries, [StringComparer]::Ordinal)
+    if ($entries.Count -eq 0) {
+        throw "Source snapshot has no files: $root"
     }
     $hash = [Security.Cryptography.IncrementalHash]::CreateHash(
         [Security.Cryptography.HashAlgorithmName]::SHA256
     )
     try {
         $entries | ForEach-Object {
-                $metadata, $path = $_ -split "`t", 2
-                $object = ($metadata -split '\s+')[2]
-                $relative = $path.Substring($relativeRoot.Length).TrimStart('/')
+                $relative = $_
+                $repositoryRelative = "$relativeRoot/$relative"
+                $fullPath = Join-Path $root $relative
+                $object = (& git -C $repository hash-object --filters "--path=$repositoryRelative" -- $fullPath).Trim()
+                if ($LASTEXITCODE -ne 0 -or -not $object) {
+                    throw "Could not hash vendored source file: $fullPath"
+                }
                 $hash.AppendData([Text.Encoding]::UTF8.GetBytes($relative))
                 $hash.AppendData([byte[]]@(0))
                 $hash.AppendData([Text.Encoding]::ASCII.GetBytes($object))
+            }
+        return [Convert]::ToHexString($hash.GetHashAndReset())
+    } finally {
+        $hash.Dispose()
+    }
+}
+
+function Get-SourceContentHash([string]$Directory) {
+    $root = (Resolve-Path -LiteralPath $Directory).Path
+    $hash = [Security.Cryptography.IncrementalHash]::CreateHash(
+        [Security.Cryptography.HashAlgorithmName]::SHA256
+    )
+    try {
+        Get-ChildItem -LiteralPath $root -Recurse -File |
+            Sort-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') } |
+            ForEach-Object {
+                $relative = [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/')
+                $hash.AppendData([Text.Encoding]::UTF8.GetBytes($relative))
+                $hash.AppendData([byte[]]@(0))
+                $hash.AppendData([BitConverter]::GetBytes([Int64]$_.Length))
+                $hash.AppendData([IO.File]::ReadAllBytes($_.FullName))
             }
         return [Convert]::ToHexString($hash.GetHashAndReset())
     } finally {
@@ -82,6 +105,17 @@ $libaribcaptionSnapshotHash = Get-SourceSnapshotHash $libaribcaptionPath
 Assert-Equal 'libaribcaption source snapshot SHA-256' `
     $libaribcaptionSnapshotHash `
     $dependencies.libaribcaption.sourceSnapshotSha256
+
+foreach ($name in @('libaribcaption', 'libaribtlv', 'zlib')) {
+    $path = Join-Path $repositoryRoot "third_party\$name"
+    $metadata = $dependencies.$name
+    Assert-Equal "$name source snapshot SHA-256" `
+        (Get-SourceSnapshotHash $path) `
+        $metadata.sourceSnapshotSha256
+    Assert-Equal "$name source content SHA-256" `
+        (Get-SourceContentHash $path) `
+        $metadata.sourceContentSha256
+}
 
 $libmpvPath = Join-Path $repositoryRoot 'third_party\libmpv\windows-x86_64\libmpv-2.dll'
 if (-not (Test-Path -LiteralPath $libmpvPath -PathType Leaf)) {
@@ -129,6 +163,17 @@ if ($Online) {
     } else {
         Write-Host "[review] aribb62.js reference changed: $($dependencies.aribb62Js.reviewedCommit) -> $aribb62Head"
         $updatesAvailable = $true
+    }
+
+    foreach ($name in @('libaribtlv', 'zlib')) {
+        $metadata = $dependencies.$name
+        $head = Get-RemoteHead $metadata.upstream
+        if ($head -eq $metadata.commit) {
+            Write-Host "[current] ${name}: $head"
+        } else {
+            Write-Host "[update] ${name}: $($metadata.commit) -> $head"
+            $updatesAvailable = $true
+        }
     }
 
     $tagRef = "refs/tags/$($dependencies.libmpvWindowsX86_64.buildTag)"

@@ -187,7 +187,7 @@ TS 188/192/204 包頭和 PAT/PMT 宜手寫小型受限解析；TLV/MMTP 可選 w
 
 當前模型交付：每個 B24 場景都會拆分為 `RegionInterval`。有界活動區域表只在該區域自身發生變化或消失時關閉它，因此說話人標籤與正文可以擁有獨立、重疊的生命週期。已經關閉的同一區域會被同時寫入保真 ASS、可選 TTML 與 JSONL 存檔記錄。TTML 保留區域時間、位置、範圍、字號、顏色以及帶名稱空間的未解析 DRCS 引用；ASS 繼續以向量 DRCS 字形承擔視覺兜底。Tauri 的完成任務時間軸和診斷視窗直接流式掃描 JSONL，只保留請求頁；直播事件列表只保留後端最近視窗，編輯時間軸使用有界預取區間和追加位元組遊標，不再反覆讀取完整 archive，也不把完整事件歷史送進 WebView。單任務 Worker 可在流式解析邊界協作式暫停、繼續或取消。中斷後 `checkpoint.json` 會記錄檔案大小、mtime、首尾 64 KiB 指紋、軌道和進度上限；恢復會拒絕被替換或截斷的輸入。由於 native B24 與部分 artifact 狀態尚不能序列化，下次啟動仍從錄製檔案的可信起點完整重放，而不會虛假宣稱按位元組續跑。
 
-顯示平面校正（2026-07-25）：根 `<tt>` 宣告有效畫素顯示範圍時，B62/ARIB-TTML 會歸一化到原生渲染器的邏輯 `1920×1080` 平面。缺失該範圍時仍預設邏輯 2K；只有完整的畫素 `origin`/`extent` 幾何至少在一個軸越過 2K 範圍、且可落入標準 3840×2160 或 7680×4320 平面，才會推斷源平面。區域幾何按橫縱軸分別縮放，畫素字號、行距、字距和直接描邊寬度採用有界的統一縮放。因此等價的 2K、4K、8K 源佈局會保持相同的觀眾相對字幕面積；模糊或無效資料絕不會被偷偷當作 4K。原始 PES/MMTP 證據保持不變。
+顯示平面校正（2026-07-25，2026-09-02 修訂）：根 `<tt>` 宣告有效畫素顯示範圍時，以它作為 B62/ARIB-TTML 的來源座標空間。缺失該範圍時仍預設邏輯 2K；只有完整的畫素 `origin`/`extent` 幾何至少在一個軸越過 2K 範圍，才會在標準 3840×2160 或 7680×4320 平面中選擇可容納各座標/尺寸分量的最小來源平面。region extent 是可被顯示邊緣裁切的版面容量，不能用 `origin + extent` 把 4K 文件升級成 8K；但總邊界超過最大標準平面的異常幾何仍會被拒絕推斷。區域幾何按橫縱軸分別縮放，畫素字號、行距、字距和直接描邊寬度採用有界的統一縮放。目前原生後端的 `1920×1080` 平面只是中間邏輯紋理，不是定義正確性的目標解析度；正確性以來源佈局相對於實際視訊內容 viewport（排除 letterbox/pillarbox）的比例在視窗縮放、DPI 與全螢幕變化時保持不變來衡量。模糊或無效資料絕不會被偷偷當作 4K。原始 PES/MMTP 證據保持不變。
 
 豎排標點增量（2026-07-25）：原生 B62 預覽只對映 Unicode 明確定義的豎排標點形式，並且僅當捆綁 ARIB 字型含有該字形時使用；否則保留源字元。archive 到 `render_at` 的確定性 PNG 金樣覆蓋該路徑。這不表示已實現拉丁字元旋轉、縱中橫、完整朝向/標點規則或標準 B62 描邊。
 
@@ -268,3 +268,9 @@ Ruby 對應關係現已成為字幕模型階段的產物，而不是 ASS exporte
 符合 namespace 規範的 TTML 現在透過只讀 XML 樹的 local-name 與祖先關係解析，不再要求標籤必須寫成字面 `<p>`。部分 192-byte 錄製檔案的 ARIB-TTML 檔案不含 `begin`、`end` 或 `dur`；同一 PID 的下一份完整檔案會關閉上一份檔案，空 `<tt>` 表示清屏。若 private PES 雖設定 PTS 標誌卻未滿足 MPEG marker/prefix 規則，零填充值會被拒絕，192-byte 路線改用處理 30-bit 迴繞的 M2TS arrival timestamp。各 PID 的檔案狀態完全隔離。
 
 PMT 的 `component_tag 0x30..0x37` 與 `0x38..0x3f` 分別分類 caption 和 superimpose，但該標籤本身不證明 B24 或 TTML。B24 仍須具有 `data_component_id 0x0008`，TTML 仍須透過完整 XML 與嚴格編碼驗證。預設預覽和匯出只選擇宣告的 caption 軌，superimpose 作為獨立可選軌保留；描述符無法分類時保持 candidate，不以 PID、檔名或節目名稱猜測。
+
+ARIB-TTML 背景與描邊語意修正（2026-09-02）：字幕模型保留最終 `backgroundColor` 來自 region、block 或 inline 的作用域。原生預覽只把 region 背景鋪滿 region；block/inline 顏色依實際文字行或字元 cell 繪製，多個同時作用且幾何與顏色相同的 region 背景只合成一次。舊 archive 未記錄作用域時採用緊湊文字背景，避免把 region 版面容量誤畫成字幕底框。明確的 `textOutline` 寬度為 `0px` 表示無描邊，不得提升為最小 1 px；父層 opacity 對繼承的行內顏色只套用一次。
+
+## Vendored libaribtlv TLV 後端（2026-09-02）
+
+`libaribtlv` feature 將固定版本的 libaribtlv 0.6.1 與其私有 Zlib 1.3.2 靜態建置在專案自有窄 C ABI 後。它接管實驗性 TLV→B62 TTML 掃描，但仍以 1 MiB 有界串流輸入和 evidence-first 為約束：callback 資料在越過 ABI 前複製，audio/video 與 ARIB-HTML5 application resource 不收集，只有 compression type 0 的 self-contained TTML 可進入 strict XML 解析；EXI、unknown format、non-self-contained 或 malformed payload 僅 archive/report。native normalized PTS、actual MPT presentation NTP、MPU/MMTP sequence 與 discontinuity 都是獨立的 optional evidence，缺少時不偽造。該實作不整合 `tlvdemux` player/MSE code，也不將 TLV/MMTP 提升為已驗證的通用 BS4K/8K support。

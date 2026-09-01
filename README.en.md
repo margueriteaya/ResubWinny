@@ -118,6 +118,8 @@ The Worker uses fixed-size streaming buffers and 64-bit file offsets. Under norm
 | Dependency | Purpose | Integration | License/status |
 | --- | --- | --- | --- |
 | [xqq/libaribcaption](https://github.com/xqq/libaribcaption) `v1.1.2` | ARIB STD-B24 decoding and native rendering | Vendored source at a pinned commit | MIT |
+| [makeding/libaribtlv](https://github.com/makeding/libaribtlv) `0.6.1` | Optional experimental TLV/MMTP → B62 TTML demux | Statically linked from vendored pinned source when the `libaribtlv` feature is enabled; project-owned narrow C ABI | MIT |
+| [Zlib](https://github.com/madler/zlib) `1.3.2` | Private compression dependency of libaribtlv | Statically linked from vendored pinned source; no system Zlib discovery | Zlib License |
 | [mpv](https://mpv.io/) / libmpv | Native video preview on Windows | Dynamically linked, replaceable DLL; downloaded by hash at build time | LGPL-2.1-or-later |
 | Rounded M+ 1m for ARIB `1.3` | ARIB character fallback, subtitle preview, and ASS font metrics | Font distributed with the project | M+ FONT LICENSE and WadaLab authorization |
 | Tauri 2 | Desktop windows, native APIs, and packaging | Cargo dependency | See dependency license inventory |

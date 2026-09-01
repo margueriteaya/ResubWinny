@@ -695,6 +695,19 @@ fn infers_a_canonical_plane_when_one_extentless_geometry_axis_exceeds_logical_2k
 }
 
 #[test]
+fn b62_region_capacity_does_not_promote_a_4k_document_to_an_8k_plane() {
+    let xml = r##"<tt><head><styling><style xml:id="caption" tts:fontSize="144px 144px" tts:lineHeight="240px" arib-tt:letter-spacing="16px"/></styling><layout><region xml:id="display1" tts:extent="2480px 1920px" tts:origin="680px 1080px"/><region xml:id="display2" tts:extent="2480px 1920px" tts:origin="680px 1320px"/></layout></head><body><div><p begin="0s" end="1s" region="display1"><span style="caption">字幕</span></p></div></body></tt>"##;
+    let caption = parse_ttml_captions(xml, 0).pop().expect("caption");
+    assert_eq!(
+        (caption.x, caption.y, caption.width, caption.height),
+        (340, 540, Some(1240), Some(960))
+    );
+    assert_eq!(caption.style.font_size.as_deref(), Some("72px 72px"));
+    assert_eq!(caption.style.line_height.as_deref(), Some("120px"));
+    assert_eq!(caption.style.letter_spacing.as_deref(), Some("8px"));
+}
+
+#[test]
 fn leaves_2k_or_out_of_canonical_extentless_ttml_geometry_unmodified() {
     for (origin, extent) in [
         ("1800px 810px", "100px 180px"),

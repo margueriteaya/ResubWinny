@@ -1,0 +1,70 @@
+# 変更履歴
+
+## [0.6.1] - 2026-08-28
+
+Commit range: `7662d16..6ecf9e3`
+
+- 選択された映像 asset layer の presentation range の和集合から、録画の duration を
+  算出するようにしました。
+- 正確な presentation start、presentation end、終端映像 packet id を C/C++ の
+  duration probe API から公開しました。
+- 後続の並べ替え済み sample により小さい timestamp があっても、最初の
+  presentation timestamp を開始境界として保持するようにしました。
+
+## [0.6.0] - 2026-08-26
+
+Commit range: `c9d9004..afda8b8`
+
+- 映像の transfer-characteristic metadata と HLG/PQ presentation hint を追加しました。
+- TLV transport の解析と再同期、および IP flow、NTP、TLV-NIT、AMT、raw signalling
+  table、unknown descriptor を通知する C API callback を追加しました。
+- 不正・切り詰め・再配置された入力でも、MMTP timestamp、fragmentation、
+  restart-offset、damage evidence を保持するようにしました。
+- demuxer の test support を責務ごとの module に分割し、transport、timestamp、colour、
+  package、C API のテストを拡充しました。
+
+## [0.5.0] - 2026-08-16
+
+Commit range: `d72b3d4..4b3853a`
+
+- MH-EIT の構造化 HDR 番組アイコンと positive-only の映像 presentation hint を
+  公開し、アイコンがない場合を SDR として扱わないようにしました。
+- header-only の HLG-to-SDR 色変換と packed 3D LUT 生成を追加し、調整済みの
+  BT.2446 prototype と数値回帰テストを含めました。
+- FFmpeg から直接連携できるよう、安定 C API から LUT を公開しました。
+
+## [0.4.0] - 2026-08-15
+
+Commit range: `b807bd0..d72b3d4`
+
+- 再利用可能な asset-layer helper と、再生復旧利用者向けの
+  discontinuity/damage span を追加しました。
+
+## [0.3.0]（正式リリース前）- 2026-08-14
+
+Commit range: `c712b1c..59204a3`
+
+- 映像・アセットグループのメタデータ、録画スキャナー、拡張 C API、RAP 前の
+  シーク処理、負の PTS によるオーバーフロー防止、選択映像 packet/track 制御を追加しました。
+- 詳細な字幕トラック構造を追加し、拡張した字幕メタデータを文書化しました。
+
+## [0.2.0] - 2026-08-11
+
+Commit range: `91bafe3`
+
+- duration probe とそのテストを追加しました。
+
+## [0.1.1] - 2026-08-11
+
+Commit range: `a8bbb0d..1ebeccb`
+
+- ARIB MMT/TLV コアを `libaribtlv` として抽出し、インストール済み C++ API の検証、
+  C API、文書、テスト、再配置可能な pkg-config metadata を追加しました。
+
+## コア抽出前の開発 - 2026-07-19 から 2026-08-04
+
+Commit range: `050f800..3c6d800`
+
+- 後に抽出されたコアにあたる歴史的な `tlvdemux` 開発です。MMT/TLV、compressed-IP、
+  MMTP 解析、シグナリング、サービス選択、時刻、音声 descriptor、B62 字幕、
+  アプリケーション/データアセット、録画、duration analysis を含みます。

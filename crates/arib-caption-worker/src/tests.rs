@@ -110,6 +110,27 @@ fn preserves_b62_horizontal_legacy_direction() {
 }
 
 #[test]
+fn preserves_the_element_scope_of_b62_background_colours() {
+    let region = parse_ttml_captions(
+        r#"<tt xmlns:tts='urn:ebu:tt:style'><head><layout><region xml:id='r1' tts:origin='170px 270px' tts:extent='620px 480px' tts:backgroundColor='#00000080'/></layout></head><body><div><p region='r1' begin='0s' end='1s'>地域</p></div></body></tt>"#,
+        0,
+    );
+    assert_eq!(
+        region[0].style.background_scope,
+        Some(TtmlBackgroundScope::Region)
+    );
+
+    let inline = parse_ttml_captions(
+        r#"<tt xmlns:tts='urn:ebu:tt:style'><body><div><p begin='0s' end='1s'><span tts:backgroundColor='#00000080'>行内</span></p></div></body></tt>"#,
+        0,
+    );
+    assert_eq!(
+        inline[0].style.background_scope,
+        Some(TtmlBackgroundScope::Inline)
+    );
+}
+
+#[test]
 fn b62_layout_golden_fixture_keeps_timing_regions_and_ruby_evidence() {
     let captions = parse_ttml_captions(include_str!("../testdata/golden/b62-layout.xml"), 0);
     let actual = captions
@@ -174,15 +195,29 @@ fn scopes_subt_references_to_the_caption_mpu() {
         route: "isdb_s3_tlv_mmtp_stpp",
         source_offset: 10,
         mmpt_packet_id: 0x0459,
-        mpu_sequence_number: 7,
-        mmtp_sequence_number: 11,
-        presentation_ntp: 12,
+        mpu_sequence_number: Some(7),
+        mmtp_sequence_number: Some(11),
+        presentation_ntp: Some(12),
+        normalized_pts: None,
+        reference_start_pts: None,
+        reference_start_ntp: None,
+        reference_start_time_leap_indicator: None,
+        timeline_basis: TlvTimelineBasis::MptPresentationNtp,
+        track_id: None,
+        component_tag: None,
+        timing_mode: None,
+        operation_mode: None,
+        display_mode: None,
+        compression_type: None,
+        random_access: false,
+        discontinuity: false,
+        discontinuity_reasons: 0,
         xml_encoding: "UTF-8".into(),
         resources: Vec::new(),
         resources_complete: false,
     });
     let mut second = first.clone();
-    second.source.as_mut().unwrap().mpu_sequence_number = 8;
+    second.source.as_mut().unwrap().mpu_sequence_number = Some(8);
 
     let first_reference = &ttml_resource_references(&first)[0];
     let second_reference = &ttml_resource_references(&second)[0];
@@ -213,9 +248,23 @@ fn matches_subt_reference_to_same_mpu_resource_evidence() {
         route: "isdb_s3_tlv_mmtp_stpp",
         source_offset: 10,
         mmpt_packet_id: 0x0459,
-        mpu_sequence_number: 7,
-        mmtp_sequence_number: 11,
-        presentation_ntp: 12,
+        mpu_sequence_number: Some(7),
+        mmtp_sequence_number: Some(11),
+        presentation_ntp: Some(12),
+        normalized_pts: None,
+        reference_start_pts: None,
+        reference_start_ntp: None,
+        reference_start_time_leap_indicator: None,
+        timeline_basis: TlvTimelineBasis::MptPresentationNtp,
+        track_id: None,
+        component_tag: None,
+        timing_mode: None,
+        operation_mode: None,
+        display_mode: None,
+        compression_type: None,
+        random_access: false,
+        discontinuity: false,
+        discontinuity_reasons: 0,
         xml_encoding: "UTF-8".into(),
         resources: vec![TtmlResourceMetadata {
             index: 4,

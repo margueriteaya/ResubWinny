@@ -28,8 +28,9 @@ preview compositor; neither the Svelte UI nor a browser text engine redraws
 it.
 
 The B62/ARIB-TTML native renderer must target the same viewer-facing
-relationships, not a different visual language. Its 2K/4K/8K coordinates are
-normalised to the same 1920×1080 logical plane. It has visual goldens for
+relationships, not a different visual language. Its 2K/4K/8K source coordinates
+must map proportionally from their display plane into the actual video-content
+viewport; the current 1920×1080 logical plane is only an intermediate texture. It has visual goldens for
 horizontal ruby, vertical ruby, vertical punctuation, and the Rounded M+
 receiver-baseline black stroke used when a broadcast omits a repeated direct
 outline declaration. An explicit `tts:textOutline="none"` remains authoritative.

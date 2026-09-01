@@ -18,6 +18,7 @@ ResubWinny 有三个公开发布层级。通过某一层级并不意味着下一
 - [ ] `scripts/verify-repository.ps1` 报告不存在已生成、已下载、私有语料库、嵌套仓库或超大且受跟踪的文件。
 - [ ] 所有软件包版本和 UI 版本标签描述同一版本。
 - [ ] `THIRD_PARTY_NOTICES.md`、`third_party/versions.json` 和 `docs/dependency-licenses.md` 均为最新。
+- [ ] 如构建启用 `libaribtlv` feature，随附 libaribtlv 0.6.1 与 Zlib 1.3.2 的固定提交、快照哈希和许可证，并通过 `cargo test -p arib-caption-worker --features libaribtlv`；构建不得依赖系统 Zlib 或开发者外部 checkout。
 - [ ] 架构和后端契约声明明确区分已验证路径与实验性 TLV/MMTP 行为。
 - [ ] `scripts/package-source.ps1` 从干净的标签生成源代码归档和校验和。
 - [ ] 发布说明指明已知限制及任何已跳过的语料库门禁。
@@ -29,7 +30,7 @@ ResubWinny 有三个公开发布层级。通过某一层级并不意味着下一
 - [ ] Worker、前端和桌面端二进制文件均由固定版本的工作流构建。
 - [ ] 完全一致的捆绑 libmpv 二进制文件及完整对应源代码归档由同一经过审查的工作流生成并一同发布。
 - [ ] `SOURCE-RECEIPT.json`、DLL 哈希值、安装程序哈希值和声明相互一致。
-- [ ] 安装程序包含 MPL-2.0、libaribcaption、libmpv 和 Rounded M+ 声明，并允许替换 libmpv。
+- [ ] 安装程序包含 MPL-2.0、libaribcaption、libaribtlv、Zlib、libmpv 和 Rounded M+ 声明，并允许替换 libmpv。
 - [ ] 发布标题和说明注明 **未签名 Windows Alpha 版**，解释 Windows 可能显示未知发布者警告，且不得暗示已通过代码签名证明真实性。
 - [ ] 该版本为每个可下载归档、可执行文件和安装程序提供 SHA-256 校验和，并提供用于构建它们的确切 Git 标签和提交。
 - [ ] 原生预览冒烟测试、跳转/暂停/继续、叠加层定时、缩放/DPI 和长时间 4K 性能门禁均在已打包的可执行文件上通过。

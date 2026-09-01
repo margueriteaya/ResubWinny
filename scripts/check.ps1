@@ -17,8 +17,14 @@ try {
     cargo test --workspace
     if ($LASTEXITCODE -ne 0) { throw 'Worker tests failed.' }
 
+    cargo test --workspace --features libaribtlv
+    if ($LASTEXITCODE -ne 0) { throw 'Native TLV Worker tests failed.' }
+
     cargo clippy --workspace --all-targets -- -D warnings
     if ($LASTEXITCODE -ne 0) { throw 'Worker lint failed.' }
+
+    cargo clippy --workspace --all-targets --features libaribtlv -- -D warnings
+    if ($LASTEXITCODE -ne 0) { throw 'Native TLV Worker lint failed.' }
 
     cargo test --manifest-path studio-tauri/src-tauri/Cargo.toml
     if ($LASTEXITCODE -ne 0) { throw 'Desktop tests failed.' }

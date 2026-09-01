@@ -1,5 +1,10 @@
+#[cfg(not(feature = "libaribtlv"))]
 use super::*;
 
+#[cfg(feature = "libaribtlv")]
+pub(crate) use crate::native_tlv::scan_tlv_ttml_native as scan_tlv_ttml;
+
+#[cfg(any(not(feature = "libaribtlv"), test))]
 pub(crate) fn ntp_delta_ms(value: u64, origin: u64) -> i64 {
     let delta = i128::from(value) - i128::from(origin);
     let milliseconds = (delta * 1_000) >> 32;
@@ -11,6 +16,7 @@ pub(crate) fn ntp_delta_ms(value: u64, origin: u64) -> i64 {
 /// contain a self-contained XML TTML document. XML is decoded only with its
 /// BOM or declared character encoding; other `stpp` payloads are retained by
 /// `dump-tlv`, but never guessed into captions here.
+#[cfg(not(feature = "libaribtlv"))]
 pub(crate) fn scan_tlv_ttml<F, P, C, R, A>(
     path: &Path,
     mut on_caption: F,
@@ -98,7 +104,21 @@ where
                         mmpt_packet_id: payload.packet_id,
                         mpu_sequence_number: payload.mpu_sequence_number,
                         mmtp_sequence_number: payload.mmtp_sequence_number,
-                        presentation_ntp,
+                        presentation_ntp: Some(presentation_ntp),
+                        normalized_pts: None,
+                        reference_start_pts: None,
+                        reference_start_ntp: None,
+                        reference_start_time_leap_indicator: None,
+                        timeline_basis: TlvTimelineBasis::MptPresentationNtp,
+                        track_id: None,
+                        component_tag: None,
+                        timing_mode: None,
+                        operation_mode: None,
+                        display_mode: None,
+                        compression_type: None,
+                        random_access: false,
+                        discontinuity: false,
+                        discontinuity_reasons: 0,
                         xml_encoding: document.encoding.label().to_owned(),
                         resources: payload
                             .resources

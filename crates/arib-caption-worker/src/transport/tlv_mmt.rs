@@ -169,10 +169,10 @@ pub(crate) struct MpuMfu<'a> {
 #[derive(Debug, Clone)]
 pub(crate) struct TlvCaptionPayload {
     pub(crate) packet_id: u16,
-    pub(crate) mpu_sequence_number: u32,
-    pub(crate) mmtp_sequence_number: u32,
+    pub(crate) mpu_sequence_number: Option<u32>,
+    pub(crate) mmtp_sequence_number: Option<u32>,
     pub(crate) presentation_ntp: Option<u64>,
-    pub(crate) timed: bool,
+    pub(crate) timed: Option<bool>,
     pub(crate) bytes: Vec<u8>,
     pub(crate) resources: Vec<TlvSubtitleResource>,
     pub(crate) resources_complete: bool,
@@ -199,6 +199,7 @@ pub(crate) struct TlvAssetEvidence {
     pub(crate) payload_route: &'static str,
 }
 
+#[cfg_attr(feature = "libaribtlv", allow(dead_code))]
 pub(crate) fn tlv_asset_evidence(diagnostics: &TlvDiagnostics) -> Vec<TlvAssetEvidence> {
     diagnostics
         .mpt_assets
@@ -457,13 +458,13 @@ pub(crate) fn inspect_stpp_mpu(
             diagnostics.stpp_payload_bytes += parsed.payload.len() as u64;
             payloads.push(TlvCaptionPayload {
                 packet_id: packet.packet_id,
-                mpu_sequence_number: mfu.mpu_sequence_number,
-                mmtp_sequence_number: packet.sequence_number,
+                mpu_sequence_number: Some(mfu.mpu_sequence_number),
+                mmtp_sequence_number: Some(packet.sequence_number),
                 presentation_ntp: diagnostics
                     .mpt_presentation_ntp
                     .get(&(packet.packet_id, mfu.mpu_sequence_number))
                     .copied(),
-                timed: mfu.timed,
+                timed: Some(mfu.timed),
                 bytes: parsed.payload.to_vec(),
                 resources,
                 resources_complete,

@@ -18,6 +18,7 @@ ResubWinny には 3 つの公開リリース階層があります。ある階層
 - [ ] `scripts/verify-repository.ps1` が、生成済み、ダウンロード済み、非公開コーパス、ネストしたリポジトリ、または追跡対象としては大きすぎるファイルを報告しない。
 - [ ] すべてのパッケージバージョンと UI のバージョンラベルが同じリリースを表している。
 - [ ] `THIRD_PARTY_NOTICES.md`、`third_party/versions.json`、`docs/dependency-licenses.md` が最新である。
+- [ ] ビルドで `libaribtlv` feature を有効にする場合、同梱する libaribtlv 0.6.1 と Zlib 1.3.2 の固定コミット、snapshot hash、license を記録し、`cargo test -p arib-caption-worker --features libaribtlv` に通過する。system Zlib または開発者の外部 checkout に依存してはならない。
 - [ ] アーキテクチャおよびバックエンド契約に関する記述で、検証済みルートと実験的な TLV/MMTP の挙動を区別している。
 - [ ] `scripts/package-source.ps1` が、クリーンなタグからソースアーカイブとチェックサムを生成する。
 - [ ] リリースノートに、既知の制限事項とスキップしたコーパスゲートを明記している。
@@ -29,7 +30,7 @@ ResubWinny には 3 つの公開リリース階層があります。ある階層
 - [ ] Worker、フロントエンド、デスクトップの各バイナリが、固定されたワークフローでビルドされている。
 - [ ] バンドルされるものと完全に同一の libmpv バイナリと、対応するソースの完全なアーカイブが、同じレビュー済みワークフローで生成され、一緒に公開されている。
 - [ ] `SOURCE-RECEIPT.json`、DLL のハッシュ、インストーラーのハッシュ、通知が一致している。
-- [ ] インストーラーに MPL-2.0、libaribcaption、libmpv、Rounded M+ の通知が含まれ、libmpv を交換可能な状態にしている。
+- [ ] インストーラーに MPL-2.0、libaribcaption、libaribtlv、Zlib、libmpv、Rounded M+ の通知が含まれ、libmpv を交換可能な状態にしている。
 - [ ] リリースタイトルとノートに **未署名 Windows Alpha** と記載し、Windows が発行元不明の警告を表示する可能性を説明し、コード署名によって真正性が保証されているかのように示唆していない。
 - [ ] ダウンロード可能なすべてのアーカイブ、実行ファイル、インストーラーの SHA-256 チェックサムと、それらのビルドに使用した正確な Git タグおよびコミットがリリースに含まれている。
 - [ ] パッケージ済み実行ファイルで、ネイティブプレビューのスモークテスト、シーク／一時停止／再開、オーバーレイのタイミング、サイズ変更／DPI、長時間 4K パフォーマンスの各ゲートに合格している。

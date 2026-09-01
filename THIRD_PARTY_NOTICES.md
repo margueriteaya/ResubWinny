@@ -21,6 +21,33 @@ linked statically through
 ResubWinny's separately maintained narrow C ABI bridge. ResubWinny carries no
 patches inside the vendored tree at this revision.
 
+## libaribtlv
+
+- Upstream: <https://github.com/makeding/libaribtlv>
+- Version: `0.6.1`
+- Commit: `a84e5b62bf9230d3fcea21c66e62f7cc5d50a3c2`
+- License: MIT
+- Copyright: Copyright (c) 2026 huggy
+- Local license: `third_party/libaribtlv/LICENSE`
+
+The complete source snapshot is linked statically only when the optional
+`libaribtlv` Worker feature is enabled. ResubWinny exposes its B62 subtitle
+events through a separately maintained narrow C ABI; callback-lifetime data is
+copied before returning to the library. Player, MSE and `tlvdemux` code is not
+included.
+
+## Zlib
+
+- Upstream: <https://github.com/madler/zlib>
+- Version: `1.3.2`
+- Commit: `da607da739fa6047df13e66a2af6b8bec7c2a498`
+- License: Zlib License
+- Copyright: Copyright (c) 1995-2026 Jean-loup Gailly and Mark Adler
+- Local license: `third_party/zlib/LICENSE`
+
+Zlib is built from the pinned source snapshot as a private static dependency
+of libaribtlv. Shared/system Zlib discovery is not used by that build route.
+
 ## libmpv for Windows x86_64
 
 - Build upstream: <https://github.com/zhongfly/mpv-winbuild>

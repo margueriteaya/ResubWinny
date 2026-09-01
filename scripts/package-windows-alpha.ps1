@@ -164,6 +164,8 @@ try {
         'THIRD_PARTY_NOTICES.md' = 'THIRD_PARTY_NOTICES.md'
         'docs/dependency-licenses.md' = 'dependency-licenses.md'
         'third_party/libaribcaption/LICENSE' = 'libaribcaption-MIT.txt'
+        'third_party/libaribtlv/LICENSE' = 'libaribtlv-MIT.txt'
+        'third_party/zlib/LICENSE' = 'zlib-License.txt'
         'third_party/libmpv/LICENSE.LGPL' = 'libmpv-LGPL-2.1.txt'
         'third_party/libmpv/COPYRIGHT.mpv' = 'libmpv-COPYRIGHT.txt'
         'third_party/rounded-mplus-1m-arib/LICENSE.txt' = 'rounded-mplus-1m-arib-LICENSE.txt'

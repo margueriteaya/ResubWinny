@@ -30,6 +30,10 @@ pass.
 - [ ] All package versions and the UI version label describe the same release.
 - [ ] `THIRD_PARTY_NOTICES.md`, `third_party/versions.json`, and
   `docs/dependency-licenses.md` are current.
+- [ ] When the build enables the `libaribtlv` feature, its pinned libaribtlv
+  0.6.1 and Zlib 1.3.2 commits, snapshot hashes, and licenses are included,
+  and `cargo test -p arib-caption-worker --features libaribtlv` passes; the
+  build must not depend on a system Zlib or a developer checkout.
 - [ ] Architecture and backend-contract claims distinguish verified routes
   from experimental TLV/MMTP behaviour.
 - [ ] `scripts/package-source.ps1` produces the source archive and checksum
@@ -44,7 +48,7 @@ Complete every Source Release item, then also require:
 - [ ] The exact bundled libmpv binary and complete corresponding-source
   archive are produced by the same reviewed workflow and published together.
 - [ ] `SOURCE-RECEIPT.json`, DLL hashes, installer hashes, and notices match.
-- [ ] The installer includes MPL-2.0, libaribcaption, libmpv, and Rounded M+
+- [ ] The installer includes MPL-2.0, libaribcaption, libaribtlv, Zlib, libmpv, and Rounded M+
   notices and leaves libmpv replaceable.
 - [ ] The release title and notes say **Unsigned Windows Alpha**, explain that
   Windows may show an unknown-publisher warning, and do not imply authenticity

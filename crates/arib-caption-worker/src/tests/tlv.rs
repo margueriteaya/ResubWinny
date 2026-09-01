@@ -433,6 +433,7 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
     let stem = format!("arib-caption-tlv-dump-{}", std::process::id());
     let input_path = std::env::temp_dir().join(format!("{stem}.tlv"));
     let output_path = std::env::temp_dir().join(format!("{stem}.jsonl"));
+    #[cfg(not(feature = "libaribtlv"))]
     let converted_path = std::env::temp_dir().join(format!("{stem}.ass"));
     fs::write(&input_path, input).expect("fixture");
     let summary = dump_tlv_stpp_raw(&input_path, &output_path, false).expect("raw dump");
@@ -443,65 +444,76 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
     assert!(raw.contains(&hex_encode(ttml)));
     assert!(raw.contains(&presentation_ntp.to_string()));
     assert!(raw.contains("\"pts_ms\":null"));
-    let options = ConversionOptions {
-        ttml: true,
-        archive: true,
-        raw: true,
-        ..ConversionOptions::default()
-    };
-    let report =
-        convert_with_options_and_cancel(&input_path, &converted_path, options, |_| {}, || false)
-            .expect("clocked TTML conversion");
-    assert_eq!(report.summary.captions, 1);
-    assert_eq!(report.summary.decoder_errors, 0);
-    let ass = fs::read_to_string(&converted_path).expect("ASS output");
-    assert!(ass.contains("}raw "));
-    assert!(ass.contains("}evidence"));
-    assert!(ass.contains("Dialogue: 1,"));
-    let ruby_lines = ass
-        .lines()
-        .filter(|line| line.starts_with("Dialogue: 1,"))
-        .collect::<Vec<_>>();
-    assert_eq!(ruby_lines.len(), 5);
-    for character in "proof".chars() {
-        assert!(ruby_lines.iter().any(|line| line.ends_with(character)));
+    // The compact protocol fixture above intentionally targets the project's
+    // bounded Rust envelope parser. It is not a full libaribtlv-compliant MMT
+    // stream; the native backend has its own bridge and callback fixtures.
+    #[cfg(not(feature = "libaribtlv"))]
+    {
+        let options = ConversionOptions {
+            ttml: true,
+            archive: true,
+            raw: true,
+            ..ConversionOptions::default()
+        };
+        let report = convert_with_options_and_cancel(
+            &input_path,
+            &converted_path,
+            options,
+            |_| {},
+            || false,
+        )
+        .expect("clocked TTML conversion");
+        assert_eq!(report.summary.captions, 1);
+        assert_eq!(report.summary.decoder_errors, 0);
+        let ass = fs::read_to_string(&converted_path).expect("ASS output");
+        assert!(ass.contains("}raw "));
+        assert!(ass.contains("}evidence"));
+        assert!(ass.contains("Dialogue: 1,"));
+        let ruby_lines = ass
+            .lines()
+            .filter(|line| line.starts_with("Dialogue: 1,"))
+            .collect::<Vec<_>>();
+        assert_eq!(ruby_lines.len(), 5);
+        for character in "proof".chars() {
+            assert!(ruby_lines.iter().any(|line| line.ends_with(character)));
+        }
+        assert!(!ass.contains("raw evidenceproof"));
+        assert!(ass.contains("\\c&H0034AB12&\\fs42"));
+        assert!(
+            fs::read_to_string(report.raw.as_ref().expect("raw output"))
+                .expect("raw conversion output")
+                .contains(&presentation_ntp.to_string())
+        );
+        let archive = fs::read_to_string(report.archive.as_ref().expect("archive output"))
+            .expect("archive conversion output");
+        assert!(archive.contains("isdb_s3_tlv_mmtp_stpp"));
+        assert!(archive.contains("\"ruby_bindings\""));
+        assert!(archive.contains("\"base_text\":\"evidence\""));
+        assert!(
+            fs::read_to_string(report.ttml.as_ref().expect("TTML output"))
+                .expect("TTML conversion output")
+                .contains("tts:writingMode=\"vertical-rl\"")
+        );
+        assert!(
+            fs::read_to_string(report.ttml.as_ref().expect("TTML output"))
+                .expect("TTML conversion output")
+                .contains("tts:ruby=\"text\"")
+        );
+        let preview = preview_caption(&input_path)
+            .expect("TLV preview")
+            .expect("caption preview");
+        assert_eq!(preview.text, "raw evidenceproof");
+        assert!((0.0..=1.0).contains(&preview.x));
+        assert!((0.0..=1.0).contains(&preview.y));
+        assert_eq!(preview.text_color, 0xff12_ab34);
+        assert_eq!(preview.background_color, 0xb000_0000);
+        fs::remove_file(input_path).expect("cleanup input");
+        fs::remove_file(output_path).expect("cleanup output");
+        fs::remove_file(converted_path).expect("cleanup ASS");
+        fs::remove_file(report.ttml.expect("TTML output")).expect("cleanup TTML");
+        fs::remove_file(report.archive.expect("archive output")).expect("cleanup archive");
+        fs::remove_file(report.raw.expect("raw output")).expect("cleanup conversion raw");
     }
-    assert!(!ass.contains("raw evidenceproof"));
-    assert!(ass.contains("\\c&H0034AB12&\\fs42"));
-    assert!(
-        fs::read_to_string(report.raw.as_ref().expect("raw output"))
-            .expect("raw conversion output")
-            .contains(&presentation_ntp.to_string())
-    );
-    let archive = fs::read_to_string(report.archive.as_ref().expect("archive output"))
-        .expect("archive conversion output");
-    assert!(archive.contains("isdb_s3_tlv_mmtp_stpp"));
-    assert!(archive.contains("\"ruby_bindings\""));
-    assert!(archive.contains("\"base_text\":\"evidence\""));
-    assert!(
-        fs::read_to_string(report.ttml.as_ref().expect("TTML output"))
-            .expect("TTML conversion output")
-            .contains("tts:writingMode=\"vertical-rl\"")
-    );
-    assert!(
-        fs::read_to_string(report.ttml.as_ref().expect("TTML output"))
-            .expect("TTML conversion output")
-            .contains("tts:ruby=\"text\"")
-    );
-    let preview = preview_caption(&input_path)
-        .expect("TLV preview")
-        .expect("caption preview");
-    assert_eq!(preview.text, "raw evidenceproof");
-    assert!((0.0..=1.0).contains(&preview.x));
-    assert!((0.0..=1.0).contains(&preview.y));
-    assert_eq!(preview.text_color, 0xff12_ab34);
-    assert_eq!(preview.background_color, 0xb000_0000);
-    fs::remove_file(input_path).expect("cleanup input");
-    fs::remove_file(output_path).expect("cleanup output");
-    fs::remove_file(converted_path).expect("cleanup ASS");
-    fs::remove_file(report.ttml.expect("TTML output")).expect("cleanup TTML");
-    fs::remove_file(report.archive.expect("archive output")).expect("cleanup archive");
-    fs::remove_file(report.raw.expect("raw output")).expect("cleanup conversion raw");
 }
 
 #[test]

@@ -10,7 +10,7 @@ ResubWinny は、固定されレビュー可能な依存関係更新を使用し
 
 | 分類 | 例 | 固定と更新の規則 |
 | --- | --- | --- |
-| 同梱ソース | libaribcaption | `third_party/versions.json` に上流タグ、完全なコミット、決定的なソーススナップショットハッシュを固定します。ソース差分とライセンスをレビューしてから、`scripts/prepare-vendored-source.ps1` でネストした Git メタデータを削除します。 |
+| 同梱ソース | libaribcaption、libaribtlv、Zlib | `third_party/versions.json` に上流タグ、完全なコミット、決定的なソーススナップショットハッシュを固定します。ソース差分とライセンスをレビューしてから、`scripts/prepare-vendored-source.ps1` でネストした Git メタデータを削除します。 |
 | ダウンロード済みバイナリーランタイム | Windows libmpv | リリースタグのコミット、ワークフローレシピのコミット/実行、ツールチェーンのコミット、上流 mpv のコミット、アセット名、アーカイブハッシュ、展開後ハッシュを固定します。`scripts/setup-libmpv.ps1` が開発とパッケージング用に明示的にインストールし、アプリケーションがダウンロードすることはありません。ヘッダー、通知、対応ソース計画なしに DLL だけを置換してはなりません。 |
 | 参照専用ソース | aribb62.js | レビュー済みのコミットを固定します。上流変更は調査入力であり、実行可能な依存関係ではなく、自動的に移植されません。 |
 | パッケージ管理ソース | Cargo および npm パッケージ | ロックファイルが権威あるものです。Dependabot は更新を提案できますが、メンテナーがレビューとテストを行います。 |
@@ -34,6 +34,7 @@ ResubWinny は、固定されレビュー可能な依存関係更新を使用し
 
 ```text
 cargo test -p arib-caption-worker
+cargo test -p arib-caption-worker --features libaribtlv
 cargo check --manifest-path studio-tauri/src-tauri/Cargo.toml
 npm run build --prefix studio-tauri
 cargo check --manifest-path fuzz/Cargo.toml
@@ -43,6 +44,7 @@ cargo fmt --check
 追加ゲートはコンポーネントによって異なります。
 
 - **libaribcaption:** ブリッジ ABI コンパイル、B24 復号コーパス、DRCS マッピング、RegionInterval タイミング、B24 視覚 golden 比較。C ABI が変わらなくても、文字マッピング、制御コード、既定オプション、レンダラーの変更は意味論的変更です。
+- **libaribtlv と Zlib:** system Zlib へフォールバックせず vendored の静的ブリッジをビルドし、native TLV feature のプロトコル回帰と厳格な TTML/EXI raw-evidence テストを実行します。上流 C ABI、callback の所有権、resource と時間の意味論をレビューします。存在しない MPU/MMTP/NTP 情報は zero や推測で補わず、存在しないままにします。
 - **libmpv:** エクスポートシンボル検査、置換可能性検査、ネイティブプレビューのスモーク、seek/pause/resume、オーバーレイクロック同期、リサイズ/DPI、2K/4K/8K 性能サンプル。成果物が LGPL ビルドであることを確認し、`scripts/package-libmpv-source.ps1` で正確なソースキャッシュをパッケージ化します。
 - **aribb62.js:** 上流の変更を手動で調査します。ARIB 文書またはコーパス証拠で裏付けられ、独自に理解した動作だけを移植します。再配布可能なライセンスが明確になるまで、新しいコードをコピーしてはなりません。
 - **フォント:** グリフ網羅性、欠落グリフ診断、横書き/縦書き ruby、句読点方向、アウトライン/背景、論理的な 2K/4K/8K 視覚等価性。

@@ -250,10 +250,12 @@ fn ttml_display_plane_with_root(xml: &str, root: Option<&str>) -> TtmlDisplayPla
 }
 
 /// Some recorded ARIB-TTML documents omit the root display extent while still
-/// using a canonical 4K/8K pixel coordinate space. Infer only when complete
-/// pixel geometry proves at least one axis exceeds the logical plane and remains within
-/// a known broadcast plane; all ambiguous documents retain 1920x1080.
+/// using a canonical 4K/8K pixel coordinate space. Region extent is layout
+/// capacity and may be clipped beyond the display edge, so `origin + extent`
+/// is only a gross sanity bound; it must not promote a 4K document to 8K.
 fn inferred_ttml_display_plane(xml: &str) -> Option<TtmlDisplayPlane> {
+    let mut max_horizontal_component = 0_i32;
+    let mut max_vertical_component = 0_i32;
     let mut max_right = 0_i32;
     let mut max_bottom = 0_i32;
     let mut remaining = xml;
@@ -272,26 +274,46 @@ fn inferred_ttml_display_plane(xml: &str) -> Option<TtmlDisplayPlane> {
         let mut origin_values = origin.split_whitespace();
         let mut extent_values = extent.split_whitespace();
         let (Some(x), Some(y), Some(width), Some(height)) = (
-            origin_values.next().and_then(ttml_pixel_length),
-            origin_values.next().and_then(ttml_pixel_length),
+            origin_values.next().and_then(ttml_nonnegative_pixel_length),
+            origin_values.next().and_then(ttml_nonnegative_pixel_length),
             extent_values.next().and_then(ttml_pixel_length),
             extent_values.next().and_then(ttml_pixel_length),
         ) else {
             continue;
         };
+        max_horizontal_component = max_horizontal_component.max(x).max(width);
+        max_vertical_component = max_vertical_component.max(y).max(height);
         max_right = max_right.max(x.saturating_add(width));
         max_bottom = max_bottom.max(y.saturating_add(height));
     }
-    if max_right <= LOGICAL_DISPLAY_WIDTH && max_bottom <= LOGICAL_DISPLAY_HEIGHT {
+    if max_horizontal_component <= LOGICAL_DISPLAY_WIDTH
+        && max_vertical_component <= LOGICAL_DISPLAY_HEIGHT
+    {
+        return None;
+    }
+    if max_right > 7680 || max_bottom > 4320 {
         return None;
     }
     [(3840, 2160), (7680, 4320)]
         .into_iter()
-        .find(|(width, height)| max_right <= *width && max_bottom <= *height)
+        .find(|(width, height)| {
+            max_horizontal_component <= *width && max_vertical_component <= *height
+        })
         .map(|(source_width, source_height)| TtmlDisplayPlane {
             source_width,
             source_height,
         })
+}
+
+fn ttml_nonnegative_pixel_length(value: &str) -> Option<i32> {
+    let pixels = value
+        .trim()
+        .strip_suffix("px")?
+        .trim()
+        .parse::<f64>()
+        .ok()?;
+    (pixels.is_finite() && pixels >= 0.0 && pixels <= f64::from(i32::MAX))
+        .then_some(pixels.round() as i32)
 }
 
 fn ttml_pixel_length(value: &str) -> Option<i32> {
@@ -433,6 +455,7 @@ pub(crate) fn ttml_inline_style(tag: &str) -> TtmlCaptionStyle {
     TtmlCaptionStyle {
         color: attribute(tag, "tts:color"),
         background_color: attribute(tag, "tts:backgroundColor"),
+        background_scope: None,
         font_size: attribute(tag, "tts:fontSize"),
         font_family: attribute(tag, "tts:fontFamily"),
         font_style: attribute(tag, "tts:fontStyle"),
@@ -469,6 +492,9 @@ pub(crate) fn merge_ttml_style(into: &mut TtmlCaptionStyle, next: &TtmlCaptionSt
     }
     if next.background_color.is_some() {
         into.background_color.clone_from(&next.background_color);
+    }
+    if next.background_scope.is_some() {
+        into.background_scope = next.background_scope;
     }
     if next.font_size.is_some() {
         into.font_size.clone_from(&next.font_size);
@@ -546,6 +572,20 @@ pub(crate) fn ttml_apply_style(
     merge_ttml_style(resolved, &ttml_inline_style(source));
 }
 
+fn ttml_apply_scoped_style(
+    resolved: &mut TtmlCaptionStyle,
+    source: &str,
+    definitions: &BTreeMap<String, TtmlCaptionStyle>,
+    background_scope: TtmlBackgroundScope,
+) {
+    let mut element = TtmlCaptionStyle::default();
+    ttml_apply_style(&mut element, source, definitions);
+    if element.background_color.is_some() {
+        element.background_scope = Some(background_scope);
+    }
+    merge_ttml_style(resolved, &element);
+}
+
 pub(crate) fn ttml_resolved_style(
     tag: &str,
     parents: &[&str],
@@ -554,12 +594,22 @@ pub(crate) fn ttml_resolved_style(
 ) -> TtmlCaptionStyle {
     let mut resolved = TtmlCaptionStyle::default();
     for parent in parents {
-        ttml_apply_style(&mut resolved, parent, definitions);
+        ttml_apply_scoped_style(
+            &mut resolved,
+            parent,
+            definitions,
+            TtmlBackgroundScope::Block,
+        );
     }
     if let Some(region) = region {
-        ttml_apply_style(&mut resolved, region, definitions);
+        ttml_apply_scoped_style(
+            &mut resolved,
+            region,
+            definitions,
+            TtmlBackgroundScope::Region,
+        );
     }
-    ttml_apply_style(&mut resolved, tag, definitions);
+    ttml_apply_scoped_style(&mut resolved, tag, definitions, TtmlBackgroundScope::Block);
     resolved
 }
 
@@ -760,7 +810,12 @@ pub(crate) fn parse_ttml_captions_until(
             if body.matches("<span").count() == 1
                 && let Some(span_tag) = ttml_first_span_tag(body)
             {
-                ttml_apply_style(&mut style, span_tag, &style_definitions);
+                ttml_apply_scoped_style(
+                    &mut style,
+                    span_tag,
+                    &style_definitions,
+                    TtmlBackgroundScope::Inline,
+                );
             }
             normalise_ttml_style_lengths(&mut style, display_plane);
             let rich_body = safe_ttml_inline_body(body).map(|safe| {
@@ -849,7 +904,12 @@ fn parse_ttml_captions_legacy(
             if body.matches("<span").count() == 1
                 && let Some(span_tag) = ttml_first_span_tag(body)
             {
-                ttml_apply_style(&mut style, span_tag, &style_definitions);
+                ttml_apply_scoped_style(
+                    &mut style,
+                    span_tag,
+                    &style_definitions,
+                    TtmlBackgroundScope::Inline,
+                );
             }
             normalise_ttml_style_lengths(&mut style, display_plane);
             let rich_body = safe_ttml_inline_body(body).map(|safe| {
@@ -945,7 +1005,7 @@ pub struct ConversionReport {
 }
 
 #[derive(Debug, Clone)]
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg_attr(any(not(test), feature = "libaribtlv"), allow(dead_code))]
 pub(crate) struct CaptionPreview {
     pub text: String,
     pub x: f32,

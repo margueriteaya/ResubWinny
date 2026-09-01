@@ -1,0 +1,67 @@
+# 更新日志
+
+## [0.6.1] - 2026-08-28
+
+Commit range: `7662d16..6ecf9e3`
+
+- 根据所选视频 asset layer 呈现范围的并集计算录制时长。
+- 通过 C/C++ duration probe API 暴露准确的呈现开始时间、呈现结束时间和末端视频
+  packet id。
+- 即使后续重排 sample 的 timestamp 更小，也保留第一个呈现 timestamp 作为开始边界。
+
+## [0.6.0] - 2026-08-26
+
+Commit range: `c9d9004..afda8b8`
+
+- 增加视频 transfer-characteristic 元数据和 HLG/PQ 呈现提示。
+- 增加 TLV transport 解析与重新同步，并通过 C API callback 暴露 IP flow、NTP、
+  TLV-NIT、AMT、raw signalling table 和 unknown descriptor。
+- 在输入损坏、截断或重新定位时，保留 MMTP timestamp、fragmentation、restart-offset
+  和 damage evidence。
+- 将 demuxer 测试支持拆分为职责明确的模块，并扩充 transport、timestamp、色彩、
+  package 和 C API 测试。
+
+## [0.5.0] - 2026-08-16
+
+Commit range: `d72b3d4..4b3853a`
+
+- 暴露结构化 MH-EIT HDR 节目标记和仅作肯定判断的视频呈现提示，不将缺少标记解释为
+  SDR。
+- 增加 header-only HLG-to-SDR 色彩转换和 packed 3D LUT 生成，包括完成标定的
+  BT.2446 原型及数值回归测试。
+- 通过稳定 C API 暴露 LUT，供 FFmpeg 直接接入。
+
+## [0.4.0] - 2026-08-15
+
+Commit range: `b807bd0..d72b3d4`
+
+- 增加可复用 asset-layer helper，以及供播放恢复使用方消费的 discontinuity/damage span。
+
+## [0.3.0]（未正式发布）- 2026-08-14
+
+Commit range: `c712b1c..59204a3`
+
+- 增加视频和资产组元数据、录制扫描器、扩展 C API、RAP 前 seek 处理、负 PTS 溢出保护，
+  以及选定视频 packet/track 控制。
+- 增加详细的字幕轨结构，并记录扩展的字幕元数据。
+
+## [0.2.0] - 2026-08-11
+
+Commit range: `91bafe3`
+
+- 增加时长探测及其测试。
+
+## [0.1.1] - 2026-08-11
+
+Commit range: `a8bbb0d..1ebeccb`
+
+- 将 ARIB MMT/TLV 核心抽取为 `libaribtlv`，验证已安装的 C++ API，并增加 C API、
+  文档、测试和可重定位的 pkg-config 元数据。
+
+## 核心抽取前的开发 - 2026-07-19 至 2026-08-04
+
+Commit range: `050f800..3c6d800`
+
+- 这是后来被抽取为核心的历史 `tlvdemux` 开发：包括 MMT/TLV、compressed-IP、MMTP
+  解析、信令、服务选择、时序、音频 descriptor、B62 字幕、应用/数据资产、录制和
+  时长分析。

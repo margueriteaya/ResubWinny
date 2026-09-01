@@ -546,6 +546,69 @@ fn renders_horizontal_ttml_text_with_the_bundled_arib_font() {
     assert_eq!(frame.layer_count, 1);
 }
 
+fn frame_pixel(frame: &super::CaptionPlaneFrame, x: usize, y: usize) -> [u8; 4] {
+    let index = (y * frame.width as usize + x) * 4;
+    frame.pixels[index..index + 4]
+        .try_into()
+        .expect("RGBA pixel")
+}
+
+#[test]
+fn keeps_legacy_b62_line_backgrounds_tight_to_the_rendered_text() {
+    let style = json!({
+        "font_size": "36px 36px",
+        "line_height": "60px",
+        "color": "#FFFFFFFF",
+        "background_color": "#00000080",
+        "text_outline": "#000000ff 0px 0px",
+        "writing_mode": "horizontal-tb"
+    });
+    let frame = compose(&[
+        json!({"text":"閉会式", "x":170, "y":270, "width":620, "height":480, "style":style}),
+        json!({"text":"感動", "x":170, "y":330, "width":620, "height":480, "style":style}),
+    ])
+    .expect("two-line B62 frame");
+
+    assert_eq!(frame_pixel(&frame, 170, 270), [0, 0, 0, 128]);
+    assert_eq!(frame_pixel(&frame, 500, 300)[3], 0);
+    assert_eq!(frame_pixel(&frame, 180, 700)[3], 0);
+}
+
+#[test]
+fn paints_the_same_region_background_only_once_for_concurrent_intervals() {
+    let style = json!({
+        "font_size": "36px",
+        "background_color": "#00000080",
+        "background_scope": "region",
+        "writing_mode": "horizontal-tb"
+    });
+    let frame = compose(&[
+        json!({"text":"一", "x":170, "y":270, "width":620, "height":480, "style":style}),
+        json!({"text":"二", "x":170, "y":270, "width":620, "height":480, "style":style}),
+    ])
+    .expect("deduplicated region frame");
+
+    assert_eq!(frame_pixel(&frame, 180, 700), [0, 0, 0, 128]);
+}
+
+#[test]
+fn inherited_inline_background_does_not_apply_parent_opacity_twice() {
+    let interval = json!({
+        "rich_body": "<span>字幕</span>",
+        "style": {"background_color":"#00000080", "opacity":"50%"}
+    });
+    let runs = styled_runs(
+        &interval,
+        "字幕",
+        [255, 255, 255, 128],
+        36.0,
+        0.0,
+        None,
+        0.5,
+    );
+    assert_eq!(runs[0].background, [0, 0, 0, 64]);
+}
+
 #[test]
 fn applies_horizontal_text_and_display_alignment_in_native_layout() {
     let start = compose(&[json!({
@@ -875,6 +938,7 @@ fn horizontal_ruby_reserves_a_separate_band_above_its_base_line() {
         id: None,
         ruby_target_id: None,
         color: [255, 255, 255, 255],
+        background: [0, 0, 0, 0],
         font_size: 80.0,
         letter_spacing: 0.0,
         outline: None,
@@ -1010,6 +1074,7 @@ fn parses_direct_ttml_opacity_and_outline_conservatively() {
     assert_eq!(named_outline.radius, 3);
     assert_eq!(named_outline.color, [255, 255, 0, 255]);
     assert!(parse_text_outline(Some("none"), 1.0).is_none());
+    assert!(parse_text_outline(Some("#000000ff 0px 0px"), 1.0).is_none());
     assert!(parse_text_outline(Some("thin black"), 1.0).is_none());
     assert!(parse_text_outline(Some("2px #nothex"), 1.0).is_none());
 }

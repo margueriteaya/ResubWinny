@@ -9,11 +9,51 @@ pub(super) fn styled_runs(
     outline: Option<TextOutline>,
     opacity: f32,
 ) -> Vec<StyledRun> {
+    let style = interval.get("style").unwrap_or(interval);
+    let region_background = style_value(style, "background_scope")
+        .or_else(|| style_value(style, "backgroundScope"))
+        == Some("region");
+    let background = if region_background {
+        [0, 0, 0, 0]
+    } else {
+        apply_opacity(
+            parse_rgba(
+                style_value(style, "background_color")
+                    .or_else(|| style_value(style, "backgroundColor"))
+                    .unwrap_or("#00000000"),
+            ),
+            opacity,
+        )
+    };
+    styled_runs_with_background(
+        interval,
+        fallback_text,
+        color,
+        background,
+        font_size,
+        letter_spacing,
+        outline,
+        opacity,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn styled_runs_with_background(
+    interval: &Value,
+    fallback_text: &str,
+    color: [u8; 4],
+    background: [u8; 4],
+    font_size: f32,
+    letter_spacing: f32,
+    outline: Option<TextOutline>,
+    opacity: f32,
+) -> Vec<StyledRun> {
     let base = StyledRun {
         text: String::new(),
         id: None,
         ruby_target_id: None,
         color,
+        background,
         font_size,
         letter_spacing,
         outline,
@@ -65,7 +105,8 @@ pub(super) fn styled_runs(
         if role.is_some_and(|value| value == "text") {
             attach_ruby_to_trailing_bases(&mut runs, text, tag, opacity);
         } else if !text.is_empty() {
-            let span_opacity = opacity * parse_opacity(xml_attribute(tag, "tts:opacity"));
+            let local_opacity = parse_opacity(xml_attribute(tag, "tts:opacity"));
+            let span_opacity = opacity * local_opacity;
             let ruby_target_id = xml_attribute(tag, "arib-tt:ruby").map(str::to_owned);
             let annotation_has_explicit_style = [
                 "tts:color",
@@ -82,11 +123,13 @@ pub(super) fn styled_runs(
                     .or_else(|| xml_attribute(tag, "id"))
                     .map(str::to_owned),
                 ruby_target_id: ruby_target_id.clone(),
-                color: apply_opacity(
-                    xml_attribute(tag, "tts:color")
-                        .map(parse_rgba)
-                        .unwrap_or(base.color),
-                    span_opacity,
+                color: xml_attribute(tag, "tts:color").map_or_else(
+                    || apply_opacity(base.color, local_opacity),
+                    |value| apply_opacity(parse_rgba(value), span_opacity),
+                ),
+                background: xml_attribute(tag, "tts:backgroundColor").map_or_else(
+                    || apply_opacity(base.background, local_opacity),
+                    |value| apply_opacity(parse_rgba(value), span_opacity),
                 ),
                 font_size: parse_font_height(xml_attribute(tag, "tts:fontSize"))
                     .unwrap_or(base.font_size)
@@ -117,10 +160,11 @@ pub(super) fn styled_runs(
                 && content[..close_start].contains("<span")
             {
                 let nested = serde_json::json!({ "rich_body": &content[..close_start] });
-                runs.extend(styled_runs(
+                runs.extend(styled_runs_with_background(
                     &nested,
                     "",
                     span.color,
+                    span.background,
                     span.font_size,
                     span.letter_spacing,
                     span.outline,
@@ -183,6 +227,7 @@ fn push_text_run(runs: &mut Vec<StyledRun>, raw: &str, base: &StyledRun) {
             id: None,
             ruby_target_id: None,
             color: base.color,
+            background: base.background,
             font_size: base.font_size,
             letter_spacing: base.letter_spacing,
             outline: base.outline,

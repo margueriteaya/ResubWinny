@@ -118,6 +118,8 @@ Worker は固定サイズのストリーミングバッファと 64 ビットの
 | 依存関係 | 用途 | 統合方法 | ライセンス／状態 |
 | --- | --- | --- | --- |
 | [xqq/libaribcaption](https://github.com/xqq/libaribcaption) `v1.1.2` | ARIB STD-B24 デコードとネイティブレンダリング | 固定 commit の vendored ソースコード | MIT |
+| [makeding/libaribtlv](https://github.com/makeding/libaribtlv) `0.6.1` | optional な実験的 TLV/MMTP → B62 TTML demux | `libaribtlv` feature 有効時に固定 commit の vendored ソースを静的 link。project-owned narrow C ABI | MIT |
+| [Zlib](https://github.com/madler/zlib) `1.3.2` | libaribtlv の private compression dependency | 固定 commit の vendored ソースを静的 link。system Zlib は検出しない | Zlib License |
 | [mpv](https://mpv.io/) / libmpv | Windows ネイティブ映像プレビュー | 動的リンク、交換可能な DLL。ビルド時にハッシュに基づいてダウンロード | LGPL-2.1-or-later |
 | Rounded M+ 1m for ARIB `1.3` | ARIB 文字 fallback、字幕プレビュー、ASS フォントメトリクス | プロジェクトとともにフォントを配布 | M+ FONT LICENSE および WadaLab の許諾 |
 | Tauri 2 | デスクトップウィンドウ、ネイティブ API、パッケージング | Cargo 依存関係 | 依存関係ライセンス一覧を参照 |
