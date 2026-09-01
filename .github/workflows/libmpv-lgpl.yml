@@ -71,24 +71,27 @@ jobs:
           git -C build/libmpv/toolchain config user.name "ResubWinny Build"
           git -C build/libmpv/toolchain config user.email "build@resubwinny.invalid"
 
-      - name: Restore reusable libmpv sources and toolchain
+      - name: Restore reusable libmpv sources and Rust toolchain
         id: libmpv-source-cache
         timeout-minutes: 20
         uses: actions/cache/restore@v5
         with:
           path: |
             build/libmpv/toolchain/src_packages
-            build/libmpv/toolchain/clang_root
             build/libmpv/toolchain/install_rustup
-          key: ${{ runner.os }}-libmpv-sources-v1-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}
+          # v2 deliberately excludes clang_root.  The compiler wrapper requires
+          # the MinGW sysroot under build64, so both must be restored together.
+          key: ${{ runner.os }}-libmpv-sources-v2-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}
 
       - name: Restore exact reusable libmpv build state
         id: libmpv-build-cache
         timeout-minutes: 20
         uses: actions/cache/restore@v5
         with:
-          path: build/libmpv/toolchain/build64
-          key: ${{ runner.os }}-libmpv-build-v1-${{ hashFiles('.github/workflows/libmpv-lgpl.yml', 'third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}
+          path: |
+            build/libmpv/toolchain/build64
+            build/libmpv/toolchain/clang_root
+          key: ${{ runner.os }}-libmpv-build-v2-${{ hashFiles('.github/workflows/libmpv-lgpl.yml', 'third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}
 
       - name: Restore legacy libmpv state for one-time cache migration
         id: libmpv-legacy-cache
@@ -104,6 +107,11 @@ jobs:
           key: ${{ runner.os }}-libmpv-legacy-migration-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-libmpv-
+
+      - name: Remove unmatched cached build outputs
+        if: ${{ steps.libmpv-build-cache.outputs.cache-hit != 'true' }}
+        shell: bash
+        run: rm -rf build/libmpv/toolchain/build64 build/libmpv/toolchain/clang_root
 
       - name: Summarize libmpv cache restoration
         shell: bash
@@ -212,24 +220,25 @@ jobs:
             build/libmpv/toolchain/build*/**/*.log
             build/libmpv/toolchain/build*/**/CMakeCache.txt
 
-      - name: Save reusable libmpv sources and toolchain
+      - name: Save reusable libmpv sources and Rust toolchain
         if: ${{ always() && steps.libmpv-source-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
           path: |
             build/libmpv/toolchain/src_packages
-            build/libmpv/toolchain/clang_root
             build/libmpv/toolchain/install_rustup
-          key: ${{ runner.os }}-libmpv-sources-v1-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}
+          key: ${{ runner.os }}-libmpv-sources-v2-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}
 
       - name: Save exact reusable libmpv build state
         if: ${{ always() && steps.libmpv-build-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
-          path: build/libmpv/toolchain/build64
-          key: ${{ runner.os }}-libmpv-build-v1-${{ hashFiles('.github/workflows/libmpv-lgpl.yml', 'third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}
+          path: |
+            build/libmpv/toolchain/build64
+            build/libmpv/toolchain/clang_root
+          key: ${{ runner.os }}-libmpv-build-v2-${{ hashFiles('.github/workflows/libmpv-lgpl.yml', 'third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}
 
       - name: Locate and extract binary artifact
         shell: bash
