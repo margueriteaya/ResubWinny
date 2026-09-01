@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Code2, ExternalLink, ShieldAlert } from '@lucide/svelte'
+  import { BookOpen, Code2, ExternalLink, ShieldAlert } from '@lucide/svelte'
   import { backend, type AboutInfo } from '../../backend'
   import { t } from '../../i18n'
   import { isDesktopRuntime } from '../../shell/desktop'
@@ -12,6 +12,7 @@
   ]
   let info: AboutInfo | null = null
   let loadError = ''
+  export let onShowOnboarding: () => void = () => {}
 
   onMount(() => {
     if (!isDesktopRuntime()) return
@@ -37,6 +38,7 @@
 </section>
 <aside class="signing-note"><ShieldAlert size={17}/><p>{t('settings.signingDeclarationNote')}</p></aside>
 <div class="about-actions">
+  <button class="liquid-control" onclick={onShowOnboarding}><BookOpen size={16}/>{t('onboarding.reopen')}</button>
   {#each links as link, index}
     <button class="liquid-control" onclick={() => void backend.openProjectLink(link.target as 'source' | 'releases' | 'issues')}>{#if index === 0}<Code2 size={16}/>{:else}<ExternalLink size={16}/>{/if}{t(link.label)}</button>
   {/each}

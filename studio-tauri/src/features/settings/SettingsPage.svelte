@@ -14,7 +14,8 @@
   export let onSettingsSaved: (settings: AppSettings) => void | Promise<void> = () => {}
   export let onSettingsPreview: (settings: AppSettings) => void | Promise<void> = () => {}
   export let onError: (reason: unknown) => void = () => {}
-  const defaults: AppSettings = { uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', locale: 'system', theme: 'system', workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false } }
+  export let onShowOnboarding: () => void = () => {}
+  const defaults: AppSettings = { uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', locale: 'system', theme: 'system', workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false }, onboardingVersion: 0 }
   let preferences: AppSettings = { ...defaults }
   export let panel: Panel = 'general'
   let persistenceState: 'idle' | 'saving' | 'saved' | 'error' = 'idle'
@@ -178,7 +179,7 @@
           </dl>
         {/if}
       </div></section>
-    {:else if panel === 'about'}<AboutPanel />
+    {:else if panel === 'about'}<AboutPanel {onShowOnboarding} />
     {:else}<LicensesPanel />{/if}
     </div>
     {/key}

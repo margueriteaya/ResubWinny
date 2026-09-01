@@ -3,6 +3,10 @@
   "name": "简体中文（中国）",
   "messages": {
     "nav.home": "主页",
+    "onboarding.title": "让录制内容中的字幕，恢复为可用形态", "onboarding.subtitle": "提取、检查并保留字幕的时间、样式与结构，以便核验和导出。", "onboarding.sceneCaption": "字幕を、形にする", "onboarding.sceneDescription": "日文字幕示例“字幕を、形にする”：字幕二字为黄色，形字上方标有“ファイル”注音，句末为图形字形。",
+    "onboarding.step1Title": "选择录制文件", "onboarding.step1Body": "打开你合法持有的 TS、M2TS 或 TLV 文件。", "onboarding.step2Title": "检查字幕结构", "onboarding.step2Body": "核对节目、字幕轨、时间轴和诊断结果。", "onboarding.step3Title": "预览并导出", "onboarding.step3Body": "选择保真或兼容格式，确认结果后导出。",
+    "onboarding.noticeTitle": "使用前请确认", "onboarding.noticeBody": "ResubWinny 没有录制、媒体发现、文件共享或内容分发能力。请自行判断素材的权利状态，并遵守所在地法律及内容授权条件。", "onboarding.about": "关于 ResubWinny", "onboarding.complete": "我明白了，开始使用", "onboarding.saving": "正在保存…", "onboarding.saveFailed": "无法保存使用指引状态：{message}", "onboarding.reopen": "重新查看使用指引",
+    "home.rightsNotice": "请仅处理你合法持有或获准使用的录制内容。", "home.rightsWhy": "为什么？",
     "nav.tasks": "任务",
     "nav.batch": "多任务处理",
     "nav.drcs": "DRCS 字典",

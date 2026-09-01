@@ -3,6 +3,10 @@
   "name": "English (United States)",
   "messages": {
     "nav.home": "Home",
+    "onboarding.title": "Recover recorded subtitles into a usable form", "onboarding.subtitle": "Extract, inspect, and preserve subtitle timing, styling, and structure for verification and export.", "onboarding.sceneCaption": "字幕を、形にする", "onboarding.sceneDescription": "A Japanese subtitle sample reading ‘字幕を、形にする’: the first two characters are yellow, ‘形’ has the ruby ‘ファイル’, and a graphic glyph closes the line.",
+    "onboarding.step1Title": "Choose a recording", "onboarding.step1Body": "Open a TS, M2TS, or TLV recording you lawfully possess.", "onboarding.step2Title": "Inspect its structure", "onboarding.step2Body": "Review the programme, caption tracks, timeline, and diagnostics.", "onboarding.step3Title": "Preview and export", "onboarding.step3Body": "Choose faithful or compatible output, verify it, then export.",
+    "onboarding.noticeTitle": "Before you continue", "onboarding.noticeBody": "ResubWinny cannot record, discover media, share files, or distribute content. Judge the rights status of your material yourself and follow local law and its licence terms.", "onboarding.about": "About ResubWinny", "onboarding.complete": "I understand — get started", "onboarding.saving": "Saving…", "onboarding.saveFailed": "Could not save the guide state: {message}", "onboarding.reopen": "View the usage guide again",
+    "home.rightsNotice": "Only process recordings you lawfully possess or are allowed to use.", "home.rightsWhy": "Why?",
     "nav.tasks": "Tasks",
     "nav.batch": "Multi-task Processing",
     "nav.drcs": "DRCS Dictionary",

@@ -179,6 +179,7 @@ mod tests {
             locale: "ja".into(),
             theme: "dark".into(),
             workspace_layout: Default::default(),
+            onboarding_version: 1,
         });
         assert_eq!(settings.ui_font, "cjk");
         assert_eq!(settings.caption_font, "system");
@@ -201,6 +202,7 @@ mod tests {
                 source_collapsed: true,
                 output_collapsed: false,
             },
+            onboarding_version: 0,
         });
         assert_eq!(settings.ui_font, "system");
         assert_eq!(settings.caption_font, "arib");
@@ -210,5 +212,24 @@ mod tests {
         assert_eq!(settings.workspace_layout.source_width, 220);
         assert_eq!(settings.workspace_layout.output_width, 380);
         assert!(settings.workspace_layout.source_collapsed);
+    }
+
+    #[test]
+    fn old_settings_without_onboarding_version_require_the_guide_once() {
+        let settings: AppSettings = serde_json::from_value(serde_json::json!({
+            "uiFont": "system",
+            "captionFont": "arib",
+            "defaultFormat": "ASS",
+            "locale": "system",
+            "theme": "system",
+            "workspaceLayout": {
+                "sourceWidth": 240,
+                "outputWidth": 300,
+                "sourceCollapsed": false,
+                "outputCollapsed": false
+            }
+        }))
+        .expect("legacy settings");
+        assert_eq!(settings.onboarding_version, 0);
     }
 }

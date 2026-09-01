@@ -3,6 +3,10 @@
   "name": "日本語（日本）",
   "messages": {
     "nav.home": "ホーム",
+    "onboarding.title": "記録メディアの字幕を、使える形へ", "onboarding.subtitle": "字幕のタイミング、スタイル、構造を抽出・確認・保持し、検証と書き出しにつなげます。", "onboarding.sceneCaption": "字幕を、形にする", "onboarding.sceneDescription": "「字幕を、形にする」という字幕例。字幕の二文字は黄色で、形の上に「ファイル」のルビ、文末に図形字形があります。",
+    "onboarding.step1Title": "録画を選択", "onboarding.step1Body": "正当に保有する TS、M2TS、TLV ファイルを開きます。", "onboarding.step2Title": "字幕構造を確認", "onboarding.step2Body": "番組、字幕トラック、タイムライン、診断を確認します。", "onboarding.step3Title": "プレビューと書き出し", "onboarding.step3Body": "忠実度または互換性を選び、結果を確認して書き出します。",
+    "onboarding.noticeTitle": "使用前にご確認ください", "onboarding.noticeBody": "ResubWinny には録画、メディア探索、ファイル共有、コンテンツ配信の機能はありません。素材の権利状態を自ら判断し、所在地の法律と利用条件を守ってください。", "onboarding.about": "ResubWinny について", "onboarding.complete": "理解して使用を開始", "onboarding.saving": "保存中…", "onboarding.saveFailed": "ガイドの状態を保存できません：{message}", "onboarding.reopen": "使用ガイドをもう一度見る",
+    "home.rightsNotice": "正当に保有または利用を許可された録画のみを処理してください。", "home.rightsWhy": "なぜ？",
     "nav.tasks": "タスク",
     "nav.batch": "マルチタスク処理",
     "nav.drcs": "DRCS 辞書",

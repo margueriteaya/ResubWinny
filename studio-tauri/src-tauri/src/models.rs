@@ -14,6 +14,8 @@ pub struct AppSettings {
     pub theme: String,
     #[serde(default)]
     pub workspace_layout: WorkspaceLayoutSettings,
+    #[serde(default)]
+    pub onboarding_version: u32,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -52,6 +54,7 @@ impl Default for AppSettings {
             locale: default_locale(),
             theme: default_theme(),
             workspace_layout: WorkspaceLayoutSettings::default(),
+            onboarding_version: 0,
         }
     }
 }

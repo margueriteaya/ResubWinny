@@ -174,6 +174,7 @@ main[data-preview-active="true"] .shell-glass { transition: none; }
 .titlebar-tools .titlebar-icon { position: relative; top: auto; }
 .titlebar-icon > svg { display: block; width: 16px; height: 16px; margin: 0; transform: none; }
 .titlebar-tools .titlebar-icon, .sidebar-toggle { flex: 0 0 36px; }
+.window-titlebar.minimal .sidebar-toggle,.window-titlebar.minimal .titlebar-tools{display:none}
 
 .sidebar {
   position: relative;
@@ -344,15 +345,11 @@ main[data-page="tasks"] .workspace-header { display: none; }
 html[data-glass-static="true"] .liquid-visual-layer::before { display:none; }
 html[data-glass-static="true"] .liquid-visual-layer { backdrop-filter:none; -webkit-backdrop-filter:none; }
 
-/* The shell material needs an environment behind it to reveal Liquid Glass.
-   Content panes remain opaque; only navigation and chrome sample this layer. */
-html, body, #app { background: #dfe4e8; }
-main {
-  background-color: #cbd7dd !important;
-  background-image: url('/tokyo-glass-backdrop.png') !important;
-  background-position: center;
-  background-size: cover;
-}
+/* Match the platform window-material hierarchy: opaque content over a
+   theme-owned window substrate, with glass reserved for navigation/chrome.
+   Do not fake a desktop wallpaper inside the application window. */
+html, body, #app { background: var(--rw-surface); }
+main { background: var(--rw-surface) !important; }
   .sidebar {
   background: transparent !important;
   border-right-color: transparent !important;
@@ -392,8 +389,7 @@ main {
   color: var(--rw-accent) !important;
 }
 [data-theme="dark"] main {
-  background-color: #17191c !important;
-  background-image: linear-gradient(rgba(18,22,26,.66), rgba(18,22,26,.66)), url('/tokyo-glass-backdrop.png') !important;
+  background: var(--rw-surface) !important;
 }
 [data-theme="dark"] .shell-glass,
 [data-theme="dark"] .status-bar {
