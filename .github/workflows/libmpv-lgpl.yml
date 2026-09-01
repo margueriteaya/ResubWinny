@@ -15,6 +15,9 @@ jobs:
       # Cache downloads are segmented by actions/cache.  Bound a stalled segment so
       # an unavailable cache service cannot consume the entire six-hour job budget.
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 5
+      # Bump this only when the compiled ABI/recipe becomes incompatible. Workflow
+      # logging, cache plumbing, and timeout edits must not discard compiled output.
+      LIBMPV_BUILD_CACHE_VERSION: v3-r1
     steps:
       - name: Checkout ResubWinny
         uses: actions/checkout@v7
@@ -91,7 +94,12 @@ jobs:
           path: |
             build/libmpv/toolchain/build64
             build/libmpv/toolchain/clang_root
-          key: ${{ runner.os }}-libmpv-build-v2-${{ hashFiles('.github/workflows/libmpv-lgpl.yml', 'third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}
+          key: ${{ runner.os }}-libmpv-build-${{ env.LIBMPV_BUILD_CACHE_VERSION }}-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}
+          # The first v3 run migrates the complete state saved by run 33531724263.
+          # This exact fallback is intentionally compatible: the fix below repairs
+          # the previously failed subrandr build without changing completed outputs.
+          restore-keys: |
+            ${{ runner.os }}-libmpv-build-v2-86cd44af8a0eb88851a18c63542cf8c1694aa446e585e7f0b1e688f903b38396
 
       - name: Restore legacy libmpv state for one-time cache migration
         id: libmpv-legacy-cache
@@ -109,7 +117,7 @@ jobs:
             ${{ runner.os }}-libmpv-
 
       - name: Remove unmatched cached build outputs
-        if: ${{ steps.libmpv-build-cache.outputs.cache-hit != 'true' }}
+        if: ${{ steps.libmpv-build-cache.outputs.cache-matched-key == '' }}
         shell: bash
         run: rm -rf build/libmpv/toolchain/build64 build/libmpv/toolchain/clang_root
 
@@ -186,6 +194,32 @@ jobs:
               text = text[:line_end] + f"    GIT_TAG {commit}\n" + text[line_end:]
               path.write_text(text, encoding="utf-8", newline="\n")
 
+      - name: Verify provisioned nightly Rust cross target
+        shell: bash
+        run: |
+          set -euo pipefail
+          rust_root="$GITHUB_WORKSPACE/build/libmpv/toolchain/install_rustup"
+          rustup="$rust_root/.cargo/bin/rustup"
+          if [ ! -x "$rustup" ]; then
+            echo "Rust has not been provisioned yet; the clean build will install it."
+            exit 0
+          fi
+
+          export RUSTUP_HOME="$rust_root/.rustup"
+          export CARGO_HOME="$rust_root/.cargo"
+          export PATH="$CARGO_HOME/bin:$PATH"
+          export RUSTUP_TOOLCHAIN=nightly
+          target=x86_64-pc-windows-gnullvm
+          target_libdir="$(rustc --target "$target" --print target-libdir)"
+          if ! compgen -G "$target_libdir/libcore-*.rlib" >/dev/null; then
+            echo "Restored rustup metadata references $target, but libcore is missing; repairing it."
+            rustup target remove "$target" || true
+            rustup target add "$target"
+            target_libdir="$(rustc --target "$target" --print target-libdir)"
+          fi
+          compgen -G "$target_libdir/libcore-*.rlib" >/dev/null
+          rustup target list --installed | grep -Fx "$target"
+
       - name: Build LGPL libmpv directly on the runner
         shell: bash
         run: |
@@ -238,7 +272,7 @@ jobs:
           path: |
             build/libmpv/toolchain/build64
             build/libmpv/toolchain/clang_root
-          key: ${{ runner.os }}-libmpv-build-v2-${{ hashFiles('.github/workflows/libmpv-lgpl.yml', 'third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}
+          key: ${{ runner.os }}-libmpv-build-${{ env.LIBMPV_BUILD_CACHE_VERSION }}-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}
 
       - name: Locate and extract binary artifact
         shell: bash
