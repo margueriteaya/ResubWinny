@@ -38,7 +38,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefix studio-tauri
       - name: Download reviewed libmpv binary and corresponding source
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: libmpv-lgpl-windows-x86_64-release-candidate
           path: build/libmpv-candidate
