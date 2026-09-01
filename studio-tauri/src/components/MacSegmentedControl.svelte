@@ -6,12 +6,31 @@
   export let iconOnly = false;
   export let onChange: (value: string) => void = () => {};
   $: selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
+
+  function selectOption(index: number, group: HTMLElement | null) {
+    const option = options[index];
+    if (!option) return;
+    value = option.value;
+    onChange(value);
+    queueMicrotask(() => group?.querySelectorAll<HTMLButtonElement>('button')[index]?.focus());
+  }
+
+  function handleKeydown(event: KeyboardEvent, index: number) {
+    let next = index;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % options.length;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (index - 1 + options.length) % options.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = options.length - 1;
+    else return;
+    event.preventDefault();
+    selectOption(next, (event.currentTarget as HTMLElement).closest<HTMLElement>('[role="radiogroup"]'));
+  }
 </script>
 
 <div class:toolbar={size === "toolbar"} class:icon-only={iconOnly} class:liquid-control={size !== "toolbar"} class="mac-segmented" role="radiogroup" aria-label={ariaLabel} style={`--segment-count:${Math.max(1, options.length)};--segment-offset:${selectedIndex * 100}%`}>
   {#if size !== "toolbar"}<span class="segment-indicator" aria-hidden="true"></span>{/if}
-  {#each options as option (option.value)}
-    <button class:liquid-control={size === "toolbar"} class:selected={value === option.value} data-tooltip={iconOnly ? option.label : undefined} aria-label={iconOnly ? option.label : undefined} type="button" role="radio" aria-checked={value === option.value} onclick={() => { value = option.value; onChange(value); }}>
+  {#each options as option, index (option.value)}
+    <button class:liquid-control={size === "toolbar"} class:selected={value === option.value} data-tooltip={iconOnly ? option.label : undefined} aria-label={iconOnly ? option.label : undefined} type="button" role="radio" aria-checked={value === option.value} tabindex={selectedIndex === index ? 0 : -1} onclick={() => { value = option.value; onChange(value); }} onkeydown={(event) => handleKeydown(event, index)}>
       {#if option.icon}<svelte:component this={option.icon} size={14} strokeWidth={1.8} />{/if}{#if !iconOnly}<span>{option.label}</span>{/if}
     </button>
   {/each}
