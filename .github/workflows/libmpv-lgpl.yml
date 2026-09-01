@@ -94,11 +94,12 @@ jobs:
           path: |
             build/libmpv/toolchain/build64
             build/libmpv/toolchain/clang_root
-          key: ${{ runner.os }}-libmpv-build-${{ env.LIBMPV_BUILD_CACHE_VERSION }}-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}
-          # The first v3 run migrates the complete state saved by run 33531724263.
-          # This exact fallback is intentionally compatible: the fix below repairs
-          # the previously failed subrandr build without changing completed outputs.
+          # Recipe patches create a new immutable snapshot while workflow-only edits
+          # keep the same key. The prefix restores the newest compatible progress
+          # snapshot, including failed runs, instead of restarting completed work.
+          key: ${{ runner.os }}-libmpv-build-${{ env.LIBMPV_BUILD_CACHE_VERSION }}-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}-${{ hashFiles('third_party/libmpv/patches/*.patch') }}
           restore-keys: |
+            ${{ runner.os }}-libmpv-build-${{ env.LIBMPV_BUILD_CACHE_VERSION }}-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}
             ${{ runner.os }}-libmpv-build-v2-86cd44af8a0eb88851a18c63542cf8c1694aa446e585e7f0b1e688f903b38396
 
       - name: Restore legacy libmpv state for one-time cache migration
@@ -272,7 +273,7 @@ jobs:
           path: |
             build/libmpv/toolchain/build64
             build/libmpv/toolchain/clang_root
-          key: ${{ runner.os }}-libmpv-build-${{ env.LIBMPV_BUILD_CACHE_VERSION }}-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}
+          key: ${{ runner.os }}-libmpv-build-${{ env.LIBMPV_BUILD_CACHE_VERSION }}-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}-${{ hashFiles('third_party/libmpv/patches/*.patch') }}
 
       - name: Locate and extract binary artifact
         shell: bash
