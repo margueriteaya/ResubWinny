@@ -21,25 +21,19 @@
   function fract(v) { return v - Math.floor(v); }
   function hash01(x) { return fract(Math.sin(x) * 43758.5453123); }
 
-  function bsplineBasis(t) {
-    const t2 = t * t;
-    const t3 = t2 * t;
-    return [
-      (1 - 3 * t + 3 * t2 - t3) / 6,
-      (4 - 6 * t2 + 3 * t3) / 6,
-      (1 + 3 * t + 3 * t2 - 3 * t3) / 6,
-      t3 / 6,
-    ];
-  }
-
   function evalSpline(cp, u) {
     const n = cp.length - 3;
     if (n < 1) return 0;
     const s = Math.max(0, Math.min(u * n, n - 1e-6));
     const seg = Math.floor(s);
     const t = s - seg;
-    const b = bsplineBasis(t);
-    return b[0] * cp[seg] + b[1] * cp[seg + 1] + b[2] * cp[seg + 2] + b[3] * cp[seg + 3];
+    const t2 = t * t;
+    const t3 = t2 * t;
+    const b0 = (1 - 3 * t + 3 * t2 - t3) / 6;
+    const b1 = (4 - 6 * t2 + 3 * t3) / 6;
+    const b2 = (1 + 3 * t + 3 * t2 - 3 * t3) / 6;
+    const b3 = t3 / 6;
+    return b0 * cp[seg] + b1 * cp[seg + 1] + b2 * cp[seg + 2] + b3 * cp[seg + 3];
   }
 
   function tableIndexFromWord(word) {
@@ -140,7 +134,17 @@
       this.kernelPacked = new Float32Array(PS3.LOOP_ITERS * 8 * 4);
       this.kernelPackedPrev = new Float32Array(PS3.LOOP_ITERS * 8 * 4);
       this.controlPoints = new Float32Array(28);
+      this.kernelIndices = [0, 0, 0, 0];
+      this.kernelScratch = Array.from({ length: 12 }, () => new Float32Array(4));
+      this.kernelStores = this.kernelScratch.slice(4);
       this.debug = { lastIndices: new Uint16Array(PS3.LOOP_ITERS * 4) };
+      this.runtime = { b300: this.b300, b380: null };
+      this.state = {
+        table: this.table,
+        kernel: this.kernel,
+        kernelPacked: this.kernelPacked,
+        debug: this.debug,
+      };
     }
 
     buildRuntimeInputs(settings) {
@@ -161,7 +165,8 @@
       this.b300[14] = settings.waveHeightScale;
       this.b300[15] = 1.0;
 
-      return { b300: this.b300, b380: this.source.buildB380(settings) };
+      this.runtime.b380 = this.source.buildB380(settings);
+      return this.runtime;
     }
 
     buildSplineTable(runtime, settings, timeSec) {
@@ -195,7 +200,7 @@
         const blockBaseFloats = iter * PS3.STRIDE_FLOATS;
         const phase = timeSec * settings.reKernelPhaseStep + iter * 0.37;
 
-        const idxFloat = [0, 0, 0, 0];
+        const idxFloat = this.kernelIndices;
         for (let lane = 0; lane < 4; lane++) {
           const baseWord = (R37_WORDS[lane] + iter * 0x13) & 0xff;
           const baseIdx = tableIndexFromWord(baseWord);
@@ -204,10 +209,10 @@
           this.debug.lastIndices[iter * 4 + lane] = Math.round(idxFloat[lane]) % PS3.TABLE_ENTRY_COUNT;
         }
 
-        const v0 = new Float32Array(4);
-        const v1 = new Float32Array(4);
-        const v2 = new Float32Array(4);
-        const v3 = new Float32Array(4);
+        const v0 = this.kernelScratch[0];
+        const v1 = this.kernelScratch[1];
+        const v2 = this.kernelScratch[2];
+        const v3 = this.kernelScratch[3];
         sampleTableVec4(table, idxFloat[0], v0);
         sampleTableVec4(table, idxFloat[1], v1);
         sampleTableVec4(table, idxFloat[2], v2);
@@ -216,14 +221,14 @@
         const mixA = 0.5 + 0.5 * Math.sin(phase * 0.7);
         const mixB = 0.5 + 0.5 * Math.cos(phase * 0.9);
 
-        const r12 = new Float32Array(4);
-        const r13 = new Float32Array(4);
-        const r14 = new Float32Array(4);
-        const r15 = new Float32Array(4);
-        const r9 = new Float32Array(4);
-        const r4 = new Float32Array(4);
-        const r87 = new Float32Array(4);
-        const r89 = new Float32Array(4);
+        const r12 = this.kernelScratch[4];
+        const r13 = this.kernelScratch[5];
+        const r14 = this.kernelScratch[6];
+        const r15 = this.kernelScratch[7];
+        const r9 = this.kernelScratch[8];
+        const r4 = this.kernelScratch[9];
+        const r87 = this.kernelScratch[10];
+        const r89 = this.kernelScratch[11];
 
         vec4Mix(v0, v1, mixA, r12);
         vec4Mix(v1, v2, mixB, r13);
@@ -237,7 +242,7 @@
           r89[lane] = v0[lane] - v3[lane];
         }
 
-        const stores = [r12, r13, r14, r15, r9, r4, r87, r89];
+        const stores = this.kernelStores;
         for (let s = 0; s < stores.length; s++) {
           const floatOffset = blockBaseFloats + (PS3.STORE_OFFSETS_BYTES[s] >> 2);
           const vec = stores[s];
@@ -309,12 +314,7 @@
         }
       }
 
-      return {
-        table: this.table,
-        kernel: this.kernel,
-        kernelPacked: this.kernelPacked,
-        debug: this.debug,
-      };
+      return this.state;
     }
   }
 

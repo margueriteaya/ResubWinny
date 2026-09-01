@@ -3,8 +3,8 @@
 // Consumed by `particles.js` at render time and by `settings-panels.js` for live UI generation.
 
 window.PARTICLE_SETTINGS = {
-  count: 2000,
-  opacity: 0.75,
+  count: 1400,
+  opacity: 0.7875,
   sizeBase: 2.6,
   sizeVar: 1.5,
   flowSpeed: 0.18,

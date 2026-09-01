@@ -21,6 +21,7 @@
     "spline.js",
     "particles.js",
   ];
+  const targetFrameInterval = 1000 / 72;
 
   let canvas: HTMLCanvasElement;
   let ready = false;
@@ -56,6 +57,7 @@
     let stopped = false;
     let frame = 0;
     let previous = performance.now();
+    let frameAccumulator = targetFrameInterval;
     let splineTime = 0;
     let particleTime = Math.random() * 1000;
     const reduced = matchMedia("(prefers-reduced-motion: reduce)");
@@ -84,8 +86,10 @@
         const baseWaveOpacity = splineSettings.opacity;
         const baseWaveBrightness = splineSettings.brightness;
         const baseParticleOpacity = particleSettings.opacity;
+        const axisElement = document.querySelector<HTMLElement>("[data-wave-axis]");
+        let verticalOffset = 0;
 
-        const resize = () => {
+        const measureLayout = () => {
           if (!gl) return;
           const rect = canvas.getBoundingClientRect();
           const dpr = Math.min(devicePixelRatio || 1, 1.5);
@@ -96,16 +100,24 @@
             canvas.height = height;
             gl.viewport(0, 0, width, height);
           }
+          const axisRect = axisElement?.getBoundingClientRect();
+          const axisY = axisRect ? axisRect.top - rect.top : rect.height * .5;
+          verticalOffset = 1 - 2 * axisY / Math.max(1, rect.height);
         };
 
         const draw = (now: number) => {
           if (stopped || !gl) return;
-          resize();
           const staticMotion = reduced.matches || document.documentElement.dataset.glassStatic === "true";
-          const delta = staticMotion ? 0 : Math.max(0, (now - previous) / 1000);
+          const elapsed = staticMotion ? 0 : Math.max(0, now - previous);
           previous = now;
-          splineTime += delta;
-          particleTime += delta;
+          splineTime += elapsed / 1000;
+          particleTime += elapsed / 1000;
+          frameAccumulator += elapsed;
+          if (!staticMotion && frameAccumulator < targetFrameInterval) {
+            frame = requestAnimationFrame(draw);
+            return;
+          }
+          frameAccumulator = staticMotion ? 0 : frameAccumulator % targetFrameInterval;
           const isDark = document.documentElement.dataset.theme === "dark";
           const modulation = .5 + .25 * Math.sin(splineTime * .73 + 1.2) + .25 * Math.sin(splineTime * .31 + 2.1);
           const dayBoost = 1.05 + .02 * Math.max(0, Math.min(1, modulation));
@@ -113,10 +125,7 @@
           splineSettings.brightness = baseWaveBrightness * (isDark ? 1 : dayBoost);
           particleSettings.opacity = baseParticleOpacity * (isDark ? 1 : dayBoost);
           globals.RESUBWINNY_XMB_BACKGROUND_ALPHA = 0;
-          const canvasRect = canvas.getBoundingClientRect();
-          const axisRect = document.querySelector<HTMLElement>("[data-wave-axis]")?.getBoundingClientRect();
-          const axisY = axisRect ? axisRect.top - canvasRect.top : canvasRect.height * .5;
-          globals.RESUBWINNY_XMB_VERTICAL_OFFSET = 1 - 2 * axisY / Math.max(1, canvasRect.height);
+          globals.RESUBWINNY_XMB_VERTICAL_OFFSET = verticalOffset;
           splineLayer.render(staticMotion ? 8.25 : splineTime);
           particlesLayer.render(staticMotion ? 308.25 : particleTime);
           if (!staticMotion && document.visibilityState === "visible") frame = requestAnimationFrame(draw);
@@ -125,15 +134,21 @@
         const restart = () => {
           cancelAnimationFrame(frame);
           previous = performance.now();
+          frameAccumulator = targetFrameInterval;
           frame = requestAnimationFrame(draw);
         };
-        const preferenceObserver = new MutationObserver(restart);
+        const refreshLayout = () => {
+          measureLayout();
+          restart();
+        };
+        const preferenceObserver = new MutationObserver(refreshLayout);
         preferenceObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-glass-static", "data-theme"] });
-        const resizeObserver = new ResizeObserver(restart);
+        const resizeObserver = new ResizeObserver(refreshLayout);
         resizeObserver.observe(canvas);
-        document.addEventListener("visibilitychange", restart);
-        reduced.addEventListener("change", restart);
+        document.addEventListener("visibilitychange", refreshLayout);
+        reduced.addEventListener("change", refreshLayout);
         ready = true;
+        measureLayout();
         restart();
 
         return () => {
@@ -142,8 +157,8 @@
           particleSettings.opacity = baseParticleOpacity;
           preferenceObserver.disconnect();
           resizeObserver.disconnect();
-          document.removeEventListener("visibilitychange", restart);
-          reduced.removeEventListener("change", restart);
+          document.removeEventListener("visibilitychange", refreshLayout);
+          reduced.removeEventListener("change", refreshLayout);
         };
       } catch (error) {
         console.warn("Original XMB wave background unavailable", error);
