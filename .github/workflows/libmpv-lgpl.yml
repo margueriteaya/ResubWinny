@@ -11,6 +11,10 @@ jobs:
     name: Windows x86_64 libmpv and corresponding source
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    env:
+      # Cache downloads are segmented by actions/cache.  Bound a stalled segment so
+      # an unavailable cache service cannot consume the entire six-hour job budget.
+      SEGMENT_DOWNLOAD_TIMEOUT_MINS: 5
     steps:
       - name: Checkout ResubWinny
         uses: actions/checkout@v7
@@ -69,6 +73,7 @@ jobs:
 
       - name: Restore reusable libmpv sources and toolchain
         id: libmpv-source-cache
+        timeout-minutes: 20
         uses: actions/cache/restore@v5
         with:
           path: |
@@ -79,6 +84,7 @@ jobs:
 
       - name: Restore exact reusable libmpv build state
         id: libmpv-build-cache
+        timeout-minutes: 20
         uses: actions/cache/restore@v5
         with:
           path: build/libmpv/toolchain/build64
@@ -87,6 +93,7 @@ jobs:
       - name: Restore legacy libmpv state for one-time cache migration
         id: libmpv-legacy-cache
         if: ${{ steps.libmpv-source-cache.outputs.cache-hit != 'true' && steps.libmpv-build-cache.outputs.cache-hit != 'true' }}
+        timeout-minutes: 20
         uses: actions/cache/restore@v5
         with:
           path: |
