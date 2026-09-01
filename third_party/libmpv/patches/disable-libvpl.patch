@@ -1,0 +1,47 @@
+From 1f6a0fb0fe19ac485a3b3812c7fb496b4d8a2e64 Mon Sep 17 00:00:00 2001
+From: ResubWinny Build <build@resubwinny.invalid>
+Date: Sun, 30 Aug 2026 23:10:00 +0000
+Subject: [PATCH] ffmpeg: disable optional Intel VPL integration
+
+The pinned libvpl source does not compile with the LLVM/MinGW toolchain used
+by the reproducible Windows build. Intel VPL is an optional FFmpeg hardware
+acceleration backend and is not required by ResubWinny's libmpv playback API.
+Keep the LGPL build portable by excluding the dependency and its configure
+flag until the pinned toolchain and libvpl versions are known to be compatible.
+---
+ packages/CMakeLists.txt | 1 -
+ packages/ffmpeg.cmake  | 2 --
+ 2 files changed, 3 deletions(-)
+
+diff --git a/packages/CMakeLists.txt b/packages/CMakeLists.txt
+--- a/packages/CMakeLists.txt
++++ b/packages/CMakeLists.txt
+@@ -48,6 +48,5 @@ list(APPEND ep
+     libass
+     subrandr
+-    libvpl
+     amf-headers
+     avisynth-headers
+     nvcodec-headers
+
+diff --git a/packages/ffmpeg.cmake b/packages/ffmpeg.cmake
+--- a/packages/ffmpeg.cmake
++++ b/packages/ffmpeg.cmake
+@@ -23,7 +23,6 @@ ExternalProject_Add(ffmpeg
+         speex
+         vorbis
+         libxml2
+-        libvpl
+         libopenmpt
+         libjxl
+         libplacebo
+@@ -75,7 +74,6 @@ ExternalProject_Add(ffmpeg
+         --enable-openssl
+         --enable-libxml2
+         --enable-libmysofa
+-        --enable-libvpl
+         --enable-libjxl
+         --enable-libplacebo
+         --enable-libaribcaption
+-- 
+2.51.0

@@ -1,56 +1,40 @@
-# ARIB STD-B62 / ARIB-TTML compatibility
+[简体中文（权威）](b62-compatibility.md) | [English](b62-compatibility.en.md) | [日本語](b62-compatibility.ja.md) | [繁體中文](b62-compatibility.zh-TW.md)
 
-ResubWinny treats ARIB-TTML as a caption-data format, not as browser CSS. The
-transport and XML decoder remain independent from the renderer, and unknown
-assets stay raw evidence rather than being guessed into captions.
+> 本简体中文版本是唯一的权威来源。其他语言版本均为翻译。
 
-The viewer-facing visual baseline is
-[`libaribcaption` screenshot0](visual-reference.md): B24 remains
-libaribcaption-rendered RGBA, while B62 work must converge on the same logical
-plane, font/ruby/background/stroke relationships without using browser layout.
+# ARIB STD-B62 / ARIB-TTML 兼容性
 
-The project reviews `makeding/aribb62.js` as a public behaviour reference.
-The reviewed `74304d40a5b8556be1148e123ae70d60f937ecf5` package metadata
-declares MIT, but the repository and GitHub license endpoint currently provide
-no standalone `LICENSE` file. ResubWinny therefore ports independently verified
-semantics into the Rust backend and does not vendor its source until an
-redistributable copyright notice and license text are available. In particular,
-its browser-oriented stroke rendering is not considered a normative ARIB
-implementation and must not be silently promoted to the archive model.
+ResubWinny 将 ARIB-TTML 视为字幕数据格式，而不是浏览器 CSS。传输和 XML 解码器与渲染器保持独立，未知资源保留为原始证据，而不会被猜测为字幕。
 
-## Current semantic mapping
+面向观看者的视觉基准是 [`libaribcaption` screenshot0](visual-reference.md)：B24 仍由 libaribcaption 渲染为 RGBA，而 B62 工作必须在不使用浏览器布局的情况下，收敛到相同的逻辑平面以及字体/注音/背景/描边关系。
 
-| ARIB-TTML concern | ResubWinny behaviour |
+本项目将 `makeding/aribb62.js` 作为公开行为参考进行审查。所审查的 `74304d40a5b8556be1148e123ae70d60f937ecf5` 软件包元数据声明为 MIT，但该仓库和 GitHub 许可证端点目前都未提供独立的 `LICENSE` 文件。因此，在可再分发的版权声明和许可证文本可用之前，ResubWinny 会把经独立验证的语义移植到 Rust 后端，并且不将其源代码纳入项目。尤其是，其面向浏览器的描边渲染不被视为规范性的 ARIB 实现，不得被悄然提升为归档模型。
+
+## 当前语义映射
+
+| ARIB-TTML 关注项 | ResubWinny 行为 |
 | --- | --- |
-| `lrtb`, `rltb` | canonicalised to TTML `horizontal-tb` and retain derived `ltr`/`rtl` direction unless a source `tts:direction` explicitly overrides it; the native preview uses bounded character-cell RTL placement, not general Unicode bidirectional shaping |
-| `tblr` | canonicalised to `vertical-lr` |
-| `tbrl` | canonicalised to `vertical-rl` |
-| `arib-tt:ruby` / `ruby` / `rt` | preserved in safe inline TTML bodies and archive records; the basic horizontal native preview resolves an `arib-tt:ruby` annotation span to its `xml:id` base span and removes the annotation from inline body rendering |
-| inherited `div` timing and styles | resolved before caption intervals are emitted |
-| standard named TTML colours | `black`, `white`, `red`, `green`, `blue`, `yellow`, `cyan`, `magenta`, and `transparent` are parsed natively, case-insensitively, in addition to existing `#RRGGBB[AA]` support; no browser CSS colour parser is used |
-| horizontal `br`/newline, `textAlign`, `displayAlign`, `lineHeight` | the native preview keeps explicit line breaks, lays out each bounded line using `start`/`end`/`left`/`right`/`center`, and positions the line block using `before`/`center`/`after`. `start` and `end` observe the resolved LTR/RTL direction. This is native RGBA layout, not a browser fallback |
-| declared or evidenced display plane | a valid root `tts:extent` is authoritative and is normalised onto the backend's logical `1920×1080` caption plane. Without it, logical 2K remains the default; the parser infers only canonical 3840×2160 or 7680×4320 when complete pixel `origin`/`extent` geometry exceeds logical 2K on at least one axis and remains within that plane. Region origin/extent use independent horizontal/vertical scales; pixel font size, line height, letter spacing, and direct outline widths use the bounded uniform scale. Equivalent 2K, 4K, and 8K authored layouts therefore occupy the same viewer-relative area; ambiguous input is never guessed |
-| `subt://` images/fonts and `smpte:image` | numeric `subt://<index>` references are resolved only against the same `packet_id + mpu_sequence_number` resource state. When a bounded `subsampleNumber` resource is present, the archive writes a lossless `resource_evidence` record keyed by that scope plus subsample number, preserving data type, byte length, bounded format validation and base64 payload. The archive preview reader exposes only matching small structurally complete PNGs as low-frequency resource previews; font and non-PNG resources remain evidence, not rendered text. Missing or incomplete maps remain explicitly `unresolved`. Discovered MPT assets are emitted as bounded `asset_evidence` records, and complete non-`stpp` MPU/MFU payloads can be extracted by `dump-tlv` as `mmt_asset_payload` raw evidence with a matching scope key |
-| horizontal text with explicit `origin`/`extent` | the backend can rasterise it into a bounded 1920×1080 RGBA plane with the bundled Rounded M+ 1m for ARIB font, using source foreground/background RGBA. Missing bundled-font glyphs are counted and left blank rather than replaced with tofu or a generic glyph. This is an initial native preview path, not a full B62 renderer |
-| `vertical-lr` / `vertical-rl` | the backend has a bounded native vertical mode: it advances character cells vertically, opens a new column on region overflow, and observes left/right column direction. It maps punctuation with an explicit Unicode vertical-presentation form when that form exists in the bundled ARIB font. CJK/full-width glyphs remain upright; ASCII and Latin glyphs use a native clockwise bitmap rotation, while unclassified scripts remain upright rather than being guessed. An explicitly associated ruby annotation is rasterised beside its base cells, including a bounded continuation across automatically wrapped columns (`ttml-vertical-ruby-basic-native`). The annotation defaults to half the base font size, but its explicit `tts:color`, `tts:fontSize`, `tts:letterSpacing`, direct opacity, and supported direct `tts:textOutline` are retained. A direct `tts:textCombine="all"` or `digits` span containing one or two ASCII digits is rasterised horizontally within one vertical cell; longer runs remain vertical. Complete B62 orientation tables and source-specific ruby placement remain pending lawful corpus comparison. |
-| safe `rich_body` span style | bounded token extraction retains ordinary body text between tags and applies each source span's explicit foreground colour, font size, letter spacing, and direct opacity to the native text preview. Explicitly associated ruby text (`tts:ruby="text"` or `arib-tt:ruby`) remains structural instead of being inlined, and carries its own supported annotation presentation properties. |
-| horizontal `ruby` base/text pairs | the native preview associates a `tts:ruby="text"` span with the immediately preceding contiguous `tts:ruby="base"` group, or an `arib-tt:ruby` annotation span with its `xml:id` base span; one annotation is centred across the entire resolved base group. Annotation font size defaults to 0.5 of the base font size, while explicit supported annotation colour, font size, letter spacing, opacity, and direct outline take precedence. The snapshot reports `ttml-horizontal-ruby-basic-native` plus a rendered-ruby count. Non-contiguous/overlapping source-specific B62 ruby placement remains metadata until corpus comparison proves a placement rule. |
-| direct TTML `tts:textOutline` | a conservative native preview mapping accepts direct TTML named colours or `#RRGGBB`/`#RRGGBBAA` plus a `px` width, accepts `none`, clamps the radius to 1–4 pixels, and applies inherited opacity. Rounded M+/`丸ゴシック` captions without a repeated outline declaration use the receiver-baseline 2 px black stroke and are protected by a native PNG golden; explicit `none` disables it. Unsupported syntax remains metadata rather than becoming an invented outline |
-| `arib-tt:border` and browser stroke CSS | not converted to `tts:textOutline` automatically; this avoids claiming non-standard outline equivalence |
-| unknown writing modes or extensions | retained as source style metadata and reported through the diagnostic/raw route |
+| `lrtb`, `rltb` | 规范化为 TTML `horizontal-tb`，并保留派生的 `ltr`/`rtl` 方向，除非源 `tts:direction` 明确覆盖它；原生预览使用有界字符单元 RTL 放置，而非通用 Unicode 双向文本塑形 |
+| `tblr` | 规范化为 `vertical-lr` |
+| `tbrl` | 规范化为 `vertical-rl` |
+| `arib-tt:ruby` / `ruby` / `rt` | 保留在安全的内联 TTML 正文和归档记录中；基本的水平原生预览会将 `arib-tt:ruby` 注音 span 解析到其 `xml:id` 基文 span，并从内联正文渲染中移除该注音 |
+| 继承的 `div` 时间和样式 | 在发出字幕区间之前解析 |
+| 标准命名 TTML 颜色 | 除现有 `#RRGGBB[AA]` 支持外，还以不区分大小写的方式原生解析 `black`、`white`、`red`、`green`、`blue`、`yellow`、`cyan`、`magenta` 和 `transparent`；不使用浏览器 CSS 颜色解析器 |
+| 水平 `br`/换行、`textAlign`、`displayAlign`、`lineHeight` | 原生预览保留显式换行，使用 `start`/`end`/`left`/`right`/`center` 布局每一条有界行，并使用 `before`/`center`/`after` 定位行块。`start` 和 `end` 遵循解析后的 LTR/RTL 方向。这是原生 RGBA 布局，不是浏览器回退方案 |
+| 声明的或有证据支持的显示平面 | 有效的根 `tts:extent` 具有权威性，并被归一化到后端的逻辑 `1920×1080` 字幕平面。若无该值，逻辑 2K 仍为默认值；仅当完整像素 `origin`/`extent` 几何在至少一个轴上超过逻辑 2K 且仍处于相应平面范围内时，解析器才推断规范的 3840×2160 或 7680×4320。区域 origin/extent 使用独立的水平/垂直缩放比例；像素字体大小、行高、字母间距和直接轮廓宽度使用有界的统一缩放比例。因此，以等效 2K、4K 和 8K 创作的布局会占据相同的观看者相对区域；绝不猜测有歧义的输入 |
+| `subt://` 图像/字体和 `smpte:image` | 数字 `subt://<index>` 引用仅针对相同的 `packet_id + mpu_sequence_number` 资源状态解析。当存在有界的 `subsampleNumber` 资源时，归档会写入无损的 `resource_evidence` 记录，该记录以此作用域加子样本编号为键，并保留数据类型、字节长度、有界格式验证和 base64 载荷。归档预览读取器仅将匹配的、小型且结构完整的 PNG 公开为低频资源预览；字体和非 PNG 资源仍是证据，而非渲染文本。缺失或不完整的映射仍明确标记为 `unresolved`。发现的 MPT 资源作为有界 `asset_evidence` 记录发出，完整的非 `stpp` MPU/MFU 载荷可由 `dump-tlv` 提取为 `mmt_asset_payload` 原始证据，并带有匹配的作用域键 |
+| 带显式 `origin`/`extent` 的水平文本 | 后端可使用捆绑的 Rounded M+ 1m ARIB 字体和源前景/背景 RGBA，将其光栅化到有界的 1920×1080 RGBA 平面中。捆绑字体缺失的字形会被计数并留空，而不会替换为豆腐块或通用字形。这是一条初始原生预览路径，并非完整的 B62 渲染器 |
+| `vertical-lr` / `vertical-rl` | 后端具有有界的原生竖排模式：它垂直推进字符单元，在区域溢出时开启新列，并遵循左/右列方向。当捆绑 ARIB 字体中存在明确的 Unicode 竖排展示形式时，它会将标点映射到该形式。CJK/全角字形保持直立；ASCII 和拉丁字形使用原生顺时针位图旋转，而未分类文字体系保持直立，不进行猜测。明确关联的注音在其基文单元旁光栅化，包括跨自动换列的有界延续（`ttml-vertical-ruby-basic-native`）。注音默认为基文字体大小的一半，但会保留其显式 `tts:color`、`tts:fontSize`、`tts:letterSpacing`、直接 opacity 以及受支持的直接 `tts:textOutline`。包含一或两个 ASCII 数字且直接设置 `tts:textCombine="all"` 或 `digits` 的 span 会在一个竖排单元内水平光栅化；更长的序列仍保持竖排。完整的 B62 方向表和特定于来源的注音放置仍有待合法语料库比对。 |
+| 安全的 `rich_body` span 样式 | 有界 token 提取会保留标签之间的普通正文，并把每个源 span 的显式前景色、字体大小、字母间距和直接 opacity 应用于原生文本预览。明确关联的注音文本（`tts:ruby="text"` 或 `arib-tt:ruby`）保持结构化而非内联，并携带其自身受支持的注音呈现属性。 |
+| 水平 `ruby` 基文/注音对 | 原生预览将 `tts:ruby="text"` span 与紧邻其前且连续的 `tts:ruby="base"` 组关联，或将 `arib-tt:ruby` 注音 span 与其 `xml:id` 基文 span 关联；一条注音会在整个已解析的基文组上居中。注音字体大小默认为基文字体大小的 0.5，而显式支持的注音颜色、字体大小、字母间距、opacity 和直接轮廓优先。快照报告 `ttml-horizontal-ruby-basic-native` 以及已渲染注音计数。非连续/重叠且特定于来源的 B62 注音放置仍保留为元数据，直到语料库比对证明某种放置规则。 |
+| 直接 TTML `tts:textOutline` | 保守的原生预览映射接受直接 TTML 命名颜色或 `#RRGGBB`/`#RRGGBBAA` 加一个 `px` 宽度，接受 `none`，将半径限制为 1–4 像素，并应用继承的 opacity。未重复声明轮廓的 Rounded M+/`丸ゴシック` 字幕使用接收器基准的 2 px 黑色描边，并由原生 PNG golden 保护；显式 `none` 会禁用该描边。不受支持的语法仍为元数据，而不会变成虚构的轮廓 |
+| `arib-tt:border` 和浏览器描边 CSS | 不自动转换为 `tts:textOutline`；这避免宣称非标准轮廓等价性 |
+| 未知书写模式或扩展 | 保留为源样式元数据，并通过诊断/原始路径报告 |
 
-ASS remains an approximation. It can preserve position, colour, font size,
-and selected text styling, but it is not a lossless representation of B62
-writing, ruby, animation, bitmap resources, or broadcast stroke semantics.
+ASS 仍是一种近似表示。它可以保留位置、颜色、字体大小和部分文本样式，但并不是 B62 书写、注音、动画、位图资源或广播描边语义的无损表示。
 
-## Planned increments
+## 计划增量
 
-1. Compare the implemented bounded ruby grouping and conservative vertical-orientation path against lawful B62 captures; extend only rules demonstrated by the corpus.
-2. Compare the implemented receiver-baseline stroke golden with user-validated
-   ARIB captures before extending it to any additional font family or syntax;
-   never infer those extensions from browser `text-shadow` or
-   `-webkit-text-stroke`.
-3. Preserve native visual goldens for the current B24 RGBA compositor and
-   basic horizontal-ruby TTML plane; add B62 fixtures with nested timing,
-   vertical ruby, resource URLs, and unsupported extensions only when they
-   can be compared with lawful reference captures.
+1. 将已实现的有界注音分组和保守竖排方向路径与合法 B62 捕获进行比较；只扩展语料库所证明的规则。
+2. 在将已实现的接收器基准描边 golden 扩展到任何其他字体系列或语法之前，将其与用户验证的 ARIB 捕获进行比较；绝不从浏览器 `text-shadow` 或 `-webkit-text-stroke` 推断这些扩展。
+3. 为当前 B24 RGBA 合成器和基本水平注音 TTML 平面保留原生视觉 golden；只有在能够与合法参考捕获进行比较时，才添加包含嵌套时间、竖排注音、资源 URL 和不受支持扩展的 B62 fixture。

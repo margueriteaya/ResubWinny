@@ -1,6 +1,8 @@
 # Architecture Baseline (English Translation)
 
-> This is a translation of `architecture.zh-CN.md`. The Chinese document is normative whenever wording differs.
+[简体中文（唯一权威）](architecture.zh-CN.md) | [English](architecture.en.md) | [日本語](architecture.ja.md) | [繁體中文（台灣）](architecture.zh-TW.md)
+
+> This is a translation of `architecture.zh-CN.md`. The Simplified Chinese document is the sole authoritative architecture specification; the English, Japanese, and Traditional Chinese (Taiwan) versions are translations only. Any ambiguity or conflict is resolved exclusively by the Simplified Chinese document.
 
 > The third-stage core is implemented. Windows is the native-preview release
 > platform for the current Alpha. Native macOS/Linux preview backends are

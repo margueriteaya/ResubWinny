@@ -1,10 +1,11 @@
+[简体中文](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [English](README.en.md)
+
+> 简体中文版本是唯一权威来源。其他语言版本仅为同步译文。
+
 # ResubWinny
 
-⚠️本项目现在处于alpha前期，无法保证可用性，且可能存在破坏性变更！⚠️
-
-⚠️This project is currently in the early alpha stage; availability cannot be guaranteed, and there may be breaking changes! English documents is preparing!⚠️
-
-⚠️このプロジェクトは現在α版の初期段階にあり、安定した動作を保証できず、また破壊的な変更が行われる可能性があります。日本語の開発ドキュメントはまだまだ準備しています。⚠️
+> [!WARNING]
+> 本项目现在处于alpha前期，无法保证可用性，且可能存在破坏性变更！⚠
 
 ResubWinny 是一款在 Windows 上运行的面向泛日本内容视频档源文件的字幕抽取、检查、预览与转换工具，具有现代化的使用界面，也可使用命令行来进行操作。
 
@@ -12,7 +13,7 @@ ResubWinny 是一款在 Windows 上运行的面向泛日本内容视频档源文
 
 当前收敛期专注日本广播录制字幕；BD/DVD 图形字幕 OCR、插件系统、AI 翻译以及 macOS/Linux 原生预览均已明确延期，不属于当前路线或验收范围。DRCS 仅继续完善本地 hash → Unicode 映射，不扩建通用 OCR 系统。
 
-项目当前版本为 `v0.2.0-α`（源码版本 `0.2.0-alpha.1`）。目前仍处于开发阶段。
+项目当前版本为 `v0.2.2-α`（源码版本 `0.2.2-alpha.1`）。目前仍处于开发阶段。
 
 ## 特性
 

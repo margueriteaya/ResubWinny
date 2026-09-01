@@ -1,0 +1,20 @@
+RESUBWINNY UNSIGNED WINDOWS ALPHA
+================================
+
+This is an early Alpha build. It is not code-signed, so Windows may display
+Microsoft Defender SmartScreen or unknown-publisher warnings during download
+and installation. Those warnings do not verify whether a file is an authentic
+ResubWinny release.
+
+Before running this build:
+
+1. Download it only from the ResubWinny GitHub Releases page.
+2. Compare its SHA-256 value with SHA256SUMS.txt on the same Release.
+3. Confirm that RELEASE-MANIFEST.json names the expected Git tag and commit.
+
+The Release must also provide the source archive, THIRD_PARTY_NOTICES.md, and
+the complete corresponding-source archive and SOURCE-RECEIPT.json for the exact
+bundled libmpv DLL. If any of those materials are missing or hashes do not
+match, do not use or redistribute the build.
+
+Project releases: https://github.com/margueriteaya/ResubWinny/releases

@@ -1,99 +1,28 @@
-# Preview composition decision
+[简体中文](preview-composition.md) · [繁體中文](preview-composition.zh-TW.md) · [日本語](preview-composition.ja.md) · [English](preview-composition.en.md)
 
-The external `mpv.exe` sidecar is not a product requirement. ResubWinny is
-migrating to its own dynamic `libmpv` client ABI. The Windows x86_64 runtime is
-bundled as a replaceable LGPL dependency; macOS and Linux use the same ABI
-contract with their platform runtime.
+> **规范性说明：** 简体中文版本是唯一权威来源。其他语言版本是同步译文；如措辞存在歧义或冲突，以简体中文版本为准。
 
-| Backend | Platform | Caption fidelity | Main trade-off |
+# 预览构图决定
+外部 `mpv.exe` 边车不是产品要求。 ResubWinny 正在迁移到其自己的动态 `libmpv` 客户端 ABI。 Windows x86_64 运行时被捆绑为可替换的 LGPL 依赖项； macOS 和 Linux 在其平台运行时使用相同的 ABI 合约。
+
+| 后端 | 平台 | 字幕保真度 | 主要权衡 |
 | --- | --- | --- | --- |
-| `libmpv-render` | Windows/macOS/Linux | Highest; compose video and libaribcaption RGBA in one surface | Requires libmpv integration and a native texture/surface loop |
-| mpv `overlay-add` | mpv platforms | High for low-frequency RGBA frames | Raw pixel upload and mpv-version/VO constraints |
-| native window overlay | Windows first | High | HWND/Z-order, resize, DPI and platform-specific code |
-| WebView image layer | All | Good for archive inspection | Cannot reliably cover an embedded native child window |
-| ASS subtitle track | All | Approximate | Loses exact ARIB character-cell, ruby, DRCS and background semantics |
+| `libmpv-render` | Windows/macOS/Linux | 最高;在一个表面上合成视频和 libaribcaption RGBA | 需要 libmpv 集成和本机纹理/表面循环 |
+| 多用途乘用车 `overlay-add` | 多用途乘用车平台 | 高低频 RGBA 帧 | 原始像素上传和 mpv 版本/VO 限制 |
+| 本机窗口覆盖 | Windows优先 | 高的 | HWND/Z 顺序、调整大小、DPI 和平台特定代码 |
+| WebView图像层 | 全部 | 适合档案检查 | 无法可靠地覆盖嵌入的本机子窗口 |
+| ASS 字幕轨道 | 全部 | 近似 | 丢失精确的 ARIB 字符单元、ruby、DRCS 和背景语义 |
 
-The selected Windows route is `libmpv-render`. It keeps video and captions in
-the same project-owned WGL surface and avoids WebView/native-window stacking
-problems. A `wid` plus `overlay-add` client remains only as a per-source
-compatibility fallback when the render API or WGL startup fails. ResubWinny
-does not start `mpv.exe` or use a JSON named pipe. macOS and Linux will use the
-same caption model, but their native render surfaces are not implemented yet.
+所选的 Windows 路径是 `libmpv-render`。它将视频和字幕保留在同一个项目拥有的 WGL 表面中，并避免 WebView/本机窗口堆叠问题。当渲染 API 或 WGL 启动失败时，`wid` 和 `overlay-add` 客户端仅保留作为每源兼容性后备。 ResubWinny 不会启动 `mpv.exe` 或使用 JSON 命名管道。 macOS 和 Linux 将使用相同的字幕模型，但它们的原生渲染表面尚未实现。
 
-The typed `get_preview_capabilities` API exposes this choice without making
-the UI depend on Windows-specific details. In both the render route and its
-client-overlay fallback, the Tauri backend samples mpv time through the typed
-`sync_preview_overlay` operation and compares the returned native caption plane
-with the previous plane before uploading it. The WebView may schedule that
-operation, but does not calculate media time, compose captions, or implement a
-fallback clock.
-An unchanged caption plane therefore does not result in another raw-pixel IPC
-transfer; this keeps long, sparse recordings bounded without preloading their
-caption timeline. Changed RGBA planes are written to a per-preview temporary
-BGRA file and passed to mpv with its documented `overlay-add` file/offset
-arguments; the temporary file is removed when the preview stops. The Tauri
-archive reader keeps a forward-only cursor and at most 128 active intervals;
-seeking backwards resets that bounded cursor, so it never loads a multi-hour
-timeline into memory. mpv time queries have a short timeout; when IPC is not
-ready the backend returns `awaiting-player-time` and leaves the last plane in
-place rather than inventing a local-clock timeline.
+类型化的 `get_preview_capabilities` API 公开了此选择，而不使 UI 依赖于 Windows 特定的细节。在渲染路由及其客户端覆盖回退中，Tauri 后端通过键入的 `sync_preview_overlay` 操作对 mpv 时间进行采样，并在上传之前将返回的本机字幕平面与先前的平面进行比较。 WebView 可以安排该操作，但不会计算媒体时间、撰写字幕或实现后备时钟。因此，未更改的字幕平面不会导致另一次原始像素 IPC 传输；这可以限制长而稀疏的录音，而无需预加载字幕时间线。更改后的 RGBA 平面将写入每个预览的临时 BGRA 文件，并与其记录的 `overlay-add` 文件/偏移参数一起传递到 mpv；预览停止时临时文件将被删除。 Tauri 存档阅读器保留只向前的光标和最多 128 个活动间隔；向后查找会重置有界光标，因此它永远不会将多小时的时间线加载到内存中。 mpv时间查询的超时时间很短；当 IPC 未准备好时，后端返回 `awaiting-player-time` 并将最后一个平面保留在适当的位置，而不是发明本地时钟时间线。
 
-`get_preview_runtime` reports the loaded runtime path and whether that runtime
-exports the libmpv render API. On Windows, a complete render API selects the
-native render route by default; if a particular source cannot initialise that
-route, that preview safely falls back to the client-overlay route. A dedicated
-native thread owns the project-owned WGL context, `vo=libmpv` instance and
-render context. It creates
-the render context before `loadfile`, processes bounded control/resize/time
-messages, pumps pending frames at most once per 16 ms, presents on the default
-framebuffer, and frees the context while that same WGL context remains current.
-This keeps the fragile ABI/lifetime and thread ordering inside the backend.
+`get_preview_runtime` 报告加载的运行时路径以及该运行时是否导出 libmpv 渲染 API。在Windows上，完整的渲染API默认选择本机渲染路由；如果特定源无法初始化该路由，则该预览会安全地回退到客户端覆盖路由。专用的本机线程拥有项目拥有的 WGL 上下文、`vo=libmpv` 实例和渲染上下文。它在 `loadfile` 之前创建渲染上下文，处理有界控制/调整大小/时间消息，每 16 毫秒最多泵送一次挂起帧，呈现在默认帧缓冲区上，并在相同的 WGL 上下文保持当前状态时释放上下文。这将脆弱的 ABI/生命周期和线程排序保留在后端内。
 
-The same render thread accepts only backend-composed BGRA caption planes. It
-uploads a bounded OpenGL texture when a plane changes and blends that texture
-after the mpv video frame; the WebView never receives a video frame or performs
-caption layout. It asks libmpv for its display-correct video aspect and maps
-the caption plane to the resulting letterbox/pillarbox viewport; if the media
-parameters are not ready, it safely falls back to the full surface and retries.
-The Windows route is available through the typed capability contract once the
-runtime exposes the complete render API. It requests `hwdec=auto-safe`, then
-reports libmpv's actual `hwdec-current` selection when available. This may use
-compatible copy-back acceleration but is not a zero-copy D3D/ANGLE
-hardware-decode claim. The real-corpus Windows 4K long gate described below is
-complete. Independent 2K/8K gates, reference screenshot comparison, and DPI
-review remain release-quality work rather than hidden fallbacks.
+同一渲染线程仅接受后端组成的 BGRA 字幕平面。当平面发生变化时，它会上传有界的 OpenGL 纹理，并在 mpv 视频帧之后混合该纹理； WebView 从不接收视频帧或执行标题布局。它向 libmpv 询问其显示正确的视频方面，并将字幕平面映射到生成的信箱/柱箱视口；如果媒体参数尚未准备好，它会安全地回落到整个表面并重试。一旦运行时公开完整的渲染 API，Windows 路由就可以通过类型化功能合约获得。它请求 `hwdec=auto-safe`，然后报告 libmpv 的实际 `hwdec-current` 选择（如果可用）。这可能使用兼容的回拷加速，但不是零拷贝 D3D/ANGLE 硬件解码声明。下面介绍的真实语料库Windows 4K长门就完成了。独立的 2K/8K 门、参考屏幕截图比较和 DPI 审查仍然是发布质量的工作，而不是隐藏的后备工作。
 
-`scripts/validate-preview.ps1` is the Windows native smoke gate. It uses a
-legal local recording supplied through `ARIB_FIXTURE_DIR`, creates a real WGL
-host, loads the bundled libmpv runtime, starts the dedicated render worker, and
-requires a non-uniform decoded video framebuffer plus one backend RGBA
-caption-texture upload and clear without a worker error. It captures the WGL
-back buffer on the same render thread and asserts that the uploaded opaque
-green test texture is present in captured RGBA pixels. The `bs4k_test_2.ts`
-smoke passed on 2026-07-29. This verifies lifecycle, TS opening, decoded video,
-native present, texture blend, and bounded framebuffer readback. The smoke exercises a 3840×2160 HEVC source,
-captures the blended plane at 1920×1080, then resizes the native surface to
-3840×2160 and requires retained dimensions plus measurable presentation cadence.
-This is a Windows route regression gate, not a claim of 8K throughput or
-zero-copy decode. Reference screenshot capture, application-DPI review, and
-image-difference approval remain separate gates.
+`scripts/validate-preview.ps1`是Windows原生的烟门。它使用通过 `ARIB_FIXTURE_DIR` 提供的合法本地记录，创建一个真正的 WGL 主机，加载捆绑的 libmpv 运行时，启动专用渲染工作器，并需要一个非均匀解码视频帧缓冲区以及一个后端 RGBA 字幕纹理上传和清除，而不会出现工作器错误。它在同一渲染线程上捕获 WGL 后台缓冲区，并断言捕获的 RGBA 像素中存在上传的不透明绿色测试纹理。 `bs4k_test_2.ts` 烟雾于 2026 年 7 月 29 日过去。这将验证生命周期、TS 打开、解码视频、本机呈现、纹理混合和有界帧缓冲区读回。烟雾使用 3840×2160 HEVC 源，捕获 1920×1080 的混合平面，然后将原始表面大小调整为 3840×2160，并需要保留尺寸和可测量的呈现节奏。这是一个 Windows 路由回归门，而不是 8K 吞吐量或零拷贝解码的声明。参考屏幕截图捕获、应用程序 DPI 审核和图像差异批准仍然是独立的。
 
-Passing `-Long` adds a thresholded 120-second 4K playback gate. It runs the
-same in-process native route, keeps a 3840x2160 surface active, performs three
-complete 1920x1080 caption-plane replacements, and exercises pause, resume,
-exact seek, and bounded shutdown. The default gate thresholds are at least
-20 presented frames/s, at most 10 s startup, 1 s control/caption-update
-latency, 3 s shutdown, 2048 MiB absolute working set, and 512 MiB growth after
-the warmed 4K baseline. Results are written as schema-versioned JSON below
-`build/validation/`.
+通过 `-Long` 会增加 120 秒 4K 播放门限。它运行相同的进程内本机路径，保持 3840x2160 表面活动，执行三个完整的 1920x1080 字幕平面替换，并执行暂停、恢复、精确搜索和有界关闭。默认门阈值为至少 20 呈现帧/秒、最多 10 秒启动、1 秒控制/字幕更新延迟、3 秒关闭、2048 MiB 绝对工作集以及预热 4K 基线后 512 MiB 增长。结果以架构版本化 JSON 形式写入 `build/validation/` 下面。
 
-The 2026-07-30 run against the real 3840x2160 HEVC `bs4k_test_2.ts` sustained
-34.74 presented frames/s for 120 seconds with `d3d11va-copy`, started in 1.69
-s, peaked at 1526.9 MiB, grew 111.9 MiB after warm-up, uploaded a complete
-caption plane in at most 34.6 ms, completed controls in at most 14.7 ms, and
-stopped in 337 ms without a render error. These are regression measurements
-for this Windows machine, not universal hardware requirements beyond the
-explicit pass/fail thresholds. The harness uses Cargo's test profile while the
-bundled libmpv binary, WGL surface, decoder and composition route are the same
-native runtime used by the application; a packaged-release rerun remains a
-separate artifact-acceptance step.
+2026 年 7 月 30 日，与真实 3840x2160 HEVC `bs4k_test_2.ts` 的运行，使用 `d3d11va-copy` 在 120 秒内维持 34.74 呈现帧/秒，在 1.69 秒内开始，峰值为 1526.9 MiB，在预热后增长了 111.9 MiB，最多上传了完整的字幕平面34.6 毫秒，最多 14.7 毫秒完成控制，并在 337 毫秒内停止，没有渲染错误。这些是针对此 Windows 计算机的回归测量，而不是超出明确的通过/失败阈值的通用硬件要求。该工具使用 Cargo 的测试配置文件，而捆绑的 libmpv 二进制文件、WGL 表面、解码器和组合路由与应用程序使用的本机运行时相同；打包发布重新运行仍然是一个单独的工件接受步骤。

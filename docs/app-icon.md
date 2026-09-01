@@ -1,50 +1,43 @@
-# ResubWinny app icon
+# ResubWinny 应用图标
 
-The canonical Apple-platform source is layered artwork for Icon Composer. It
-must not contain a platform mask, simulated Liquid Glass, bevels, glows,
-blurred edges, specular highlights, or inter-layer shadows.
+[简体中文](app-icon.md) · [繁體中文](app-icon.zh-TW.md) · [日本語](app-icon.ja.md) · [English](app-icon.en.md)
 
-## Source layers
+> **规范性声明：**简体中文版本是唯一的权威来源。其他语言版本均为同步翻译；若措辞存在歧义或冲突，以简体中文版本为准。
 
-All source artwork is a 1024 x 1024 square and lives in
-`studio-tauri/src-tauri/icons/source/apple/`:
+Apple 平台的规范源文件是供 Icon Composer 使用的分层图稿。其中不得包含平台蒙版、模拟的 Liquid Glass、斜面、辉光、模糊边缘、镜面高光或图层间阴影。
 
-- `01-background.svg`: full-bleed opaque background.
-- `02-broadcast-plane.svg`: the 16:9 broadcast plane foreground layer.
-- `03-captions.svg`: caption regions, ruby cells, and the independent side
-  region.
-- `04-composite-preview.svg`: unmasked preview only; do not import it as a
-  layered Icon Composer source.
+## 源图层
 
-Import the first three layers into Icon Composer in that order. Keep the two
-foreground SVGs fully opaque and tune translucency, refraction, specular
-highlights, and shadows in Icon Composer. The system supplies platform masks
-and dynamic effects for Default, Dark, Clear, and Tinted appearances.
+所有源图稿均为 1024 x 1024 的正方形，位于 `studio-tauri/src-tauri/icons/source/apple/`：
 
-The flat Tauri fallback is `icons/source/flat-app-icon.svg`. Its rounded
-background is intentional for platforms that do not apply an Apple system
-mask. It is not an Icon Composer source layer.
+- `01-background.svg`：全出血不透明背景。
+- `02-broadcast-plane.svg`：16:9 播放平面的前景图层。
+- `03-captions.svg`：字幕区域、注音单元格和独立侧边区域。
+- `04-composite-preview.svg`：仅供无蒙版预览；请勿将其作为 Icon Composer 分层源文件导入。
 
-## Geometry
+按上述顺序将前三个图层导入 Icon Composer。保持两个前景 SVG 完全不透明，并在 Icon Composer 中调整半透明度、折射、镜面高光和阴影。系统会为 Default、Dark、Clear 和 Tinted 外观提供平台蒙版与动态效果。
 
-- Canvas: 1024 x 1024.
-- Broadcast plane: 620 x 348.75, an exact 16:9 ratio, centered on the canvas.
-- Primary content remains within the circular watchOS crop.
-- Foreground edges are solid and unfeathered.
-- No text, platform hardware, screenshots, or replicated application UI is
-  included.
+Tauri 的扁平后备图标是 `icons/source/flat-app-icon.svg`。其圆角背景是为不会应用 Apple 系统蒙版的平台特意设计的。它不是 Icon Composer 源图层。
 
-## Regeneration
+## 几何规格
 
-From `studio-tauri/`, regenerate the cross-platform Tauri fallback icons:
+- 画布：1024 x 1024。
+- 播放平面：620 x 348.75，比例精确为 16:9，位于画布中央。
+- 主要内容保持在 watchOS 的圆形裁剪范围内。
+- 前景边缘为实边，不作羽化处理。
+- 不包含文字、平台硬件、屏幕截图或复刻的应用程序 UI。
+
+## 重新生成
+
+在 `studio-tauri/` 中重新生成跨平台 Tauri 后备图标：
 
 ```powershell
 npm run tauri -- icon src-tauri/icons/source/flat-app-icon.svg
 ```
 
-## References
+## 参考资料
 
-- Apple Human Interface Guidelines: App icons
+- Apple Human Interface Guidelines：App icons
   <https://developer.apple.com/design/human-interface-guidelines/app-icons/>
 - Apple Icon Composer
   <https://developer.apple.com/icon-composer/>

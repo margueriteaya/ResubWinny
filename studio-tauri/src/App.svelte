@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
+  import { TriangleAlert, X } from "@lucide/svelte";
   import HomePage from "./features/home/HomePage.svelte";
+  import OnboardingPage from "./features/onboarding/OnboardingPage.svelte";
+  import { OnboardingSession } from "./features/onboarding/session";
   import { PreviewSession } from "./features/tasks/preview-session";
   import { SourceSession } from "./features/tasks/source-session";
   import { ExportSession } from "./features/tasks/export-session";
@@ -76,6 +79,11 @@
   let BatchPageComponent: any = null;
   let DrcsPageComponent: any = null;
   let SettingsPageComponent: any = null;
+  let onboardingVisible = false;
+  let onboardingRequired = false;
+  let onboardingSaving = false;
+  let onboardingError = "";
+  let startupReady = false;
   const sidebarCompactQuery = "(max-width: 1250px)";
   const layoutSession = new LayoutSession(typeof window !== "undefined" && window.matchMedia(sidebarCompactQuery).matches);
   let { sidebarCollapsed, sidebarAutoCollapsed, compactTaskViewport, compactSourceOpen, compactOutputOpen } = layoutSession.state;
@@ -100,11 +108,10 @@
     },
     failExport: (reason) => {
       isExporting = false;
-      previewIndexing = false;
+      exportPending = false;
       reportBackendFailure(reason);
     },
     beginIndex: () => {
-      isExporting = true;
       previewIndexing = true;
     },
     completeIndex: (path) => {
@@ -112,7 +119,7 @@
       appendNotice("notice.previewIndexStarted");
     },
     failIndex: (reason) => {
-      isExporting = false;
+      previewIndexing = false;
       reportBackendFailure(reason);
     },
   });
@@ -163,6 +170,7 @@
   });
   let isExporting = false;
   let previewIndexing = false;
+  let exportPending = false;
   let isPaused = false;
   let logs: string[] = [];
   let lastLoggedProgressBucket = -1;
@@ -183,7 +191,6 @@
     uiFont: "system",
     captionFont: "arib",
     defaultFormat: "ASS",
-    defaultTimeline: "Auto (Gap Merge + Overlap Resolve)",
     locale: "system",
     theme: "system",
     workspaceLayout: {
@@ -192,8 +199,9 @@
       sourceCollapsed: false,
       outputCollapsed: false,
     },
+    onboardingVersion: 0,
   };
-  let settingsPanel: "appearance" | "typography" | "output" | "player" = "typography";
+  let settingsPanel: "general" | "typography" | "output" | "playback" | "about" | "licenses" = "general";
   let outputDirectory = "";
   let taskTab: "preview" | "events" | "diagnostics" = "preview";
   let currentJobId = "";
@@ -292,6 +300,7 @@
   // `__TAURI_INTERNALS__.metadata` is not stable across Tauri/WebView2
   // releases and can incorrectly disable every real desktop action.
   const desktopRuntime = isDesktopRuntime();
+  const onboardingSession = new OnboardingSession(desktopRuntime);
   restoreCachedTheme();
   const feedbackSession = new FeedbackSession();
   const selectionSession = new TaskSelectionSession();
@@ -364,6 +373,34 @@
   function updateWorkspaceLayout(workspaceLayout: AppSettings["workspaceLayout"]) {
     appSettings = { ...appSettings, workspaceLayout };
     preferencesSession.persist(appSettings);
+  }
+
+  function showOnboarding() {
+    onboardingRequired = false;
+    onboardingError = "";
+    onboardingVisible = true;
+  }
+
+  async function completeOnboarding() {
+    if (!onboardingRequired) { onboardingVisible = false; return; }
+    onboardingSaving = true;
+    onboardingError = "";
+    try {
+      const next = onboardingSession.completed(appSettings);
+      appSettings = desktopRuntime ? await backend.updateSettings(next) : next;
+      onboardingSession.cacheCompletion();
+      onboardingVisible = false;
+      onboardingRequired = false;
+      page = "home";
+    } catch (reason) {
+      onboardingError = formatMessage("onboarding.saveFailed", { message: String(reason) });
+    } finally { onboardingSaving = false; }
+  }
+
+  function openOnboardingAbout() {
+    onboardingVisible = false;
+    settingsPanel = "about";
+    selectView("settings");
   }
 
   $: sourceInspectorCollapsed = compactTaskViewport ? !compactSourceOpen : appSettings.workspaceLayout.sourceCollapsed;
@@ -502,7 +539,7 @@
       error = t("error.desktopExport");
       return;
     }
-    if (!inspection || isExporting) return;
+    if (!inspection || isExporting || exportPending) return;
     const activeInspection = inspection;
     error = "";
     if (!outputDirectory.trim()) {
@@ -520,6 +557,18 @@
       error = t("tracks.selectionRequired");
       return;
     }
+    if (previewIndexing) {
+      exportPending = true;
+      try {
+        await exportSession.cancel(() => backend.cancelExportAndWait());
+        previewIndexing = false;
+      } catch (reason) {
+        exportPending = false;
+        reportBackendFailure(reason);
+        return;
+      }
+    }
+    exportPending = false;
     await exportSession.runExport(
       (onCreated) => startTaskExport(
           activeInspection,
@@ -537,7 +586,7 @@
   }
 
   async function startPreviewIndex(expectedPath = inspection?.path ?? "") {
-    if (!desktopRuntime || !inspection || isExporting) return;
+    if (!desktopRuntime || !inspection || isExporting || exportPending || previewIndexing) return;
     if (!expectedPath || inspection.path !== expectedPath) return;
     const sourcePath = inspection.path;
     const selected = inspection.tracks.find((track) => selectedTracks.has(taskTrackKey(track)));
@@ -841,10 +890,7 @@
       return;
     }
 
-    if (!inspection) {
-      void chooseSource();
-      return;
-    }
+    if (!inspection) return;
     if (taskTab !== "preview") return;
     // A page change creates a fresh host.  Start only after it has been laid
     // out, and abandon the work if the user has navigated again meanwhile.
@@ -876,9 +922,13 @@
     if (desktopRuntime) {
       void preferencesSession.load(true).then((settings) => {
         if (settings) {
+          appSettings = settings;
           selectedFormats = new Set([settings.defaultFormat as ExportFormat]);
           void preferencesSession.saveCaptionFont(settings.captionFont);
         }
+        onboardingRequired = onboardingSession.shouldShow(settings);
+        onboardingVisible = onboardingRequired;
+        startupReady = true;
       });
       void bootstrapSession.load().then((state) => {
         if (state.playbackMapping) setAppliedPlaybackMapping(state.playbackMapping);
@@ -889,6 +939,10 @@
           {},
         );
       });
+    } else {
+      onboardingRequired = onboardingSession.shouldShow(null);
+      onboardingVisible = onboardingRequired;
+      startupReady = true;
     }
     if (!desktopRuntime) return;
     return () => {
@@ -904,7 +958,7 @@
 
 <svelte:head><meta name="color-scheme" content="light dark" /></svelte:head>
 
-<main class:dark-workspace={page !== "home"} class:sidebar-collapsed={sidebarCollapsed} data-page={page} data-preview-active={playerRunning}>
+<main class:dark-workspace={page !== "home"} class:sidebar-collapsed={sidebarCollapsed} class:onboarding-shell={onboardingVisible || !startupReady} data-page={page} data-preview-active={playerRunning}>
   <div class="shell-glass" aria-hidden="true"></div>
   {#key `shell:${$localeRevision}`}
     <WindowChrome
@@ -920,25 +974,30 @@
       onToggleSourceInspector={toggleSourceInspector}
       onToggleOutputInspector={toggleOutputInspector}
       onChooseSource={() => void chooseSource()}
+      minimal={onboardingVisible || !startupReady}
     />
-    <AppSidebar {page} collapsed={sidebarCollapsed} hasTask={Boolean(inspection)} taskName={inspection?.name ?? ""} busy={isInspecting || isExporting || batchRunning} onNavigate={selectView} />
+    {#if startupReady && !onboardingVisible}<AppSidebar {page} collapsed={sidebarCollapsed} hasTask={Boolean(inspection)} taskName={inspection?.name ?? ""} busy={isInspecting || isExporting || batchRunning} onNavigate={selectView} />{/if}
   {/key}
 
-  <section class="application">
+  {#if error}
+    <div class="global-error" role="alert">
+      <TriangleAlert class="global-error-icon" size={17} aria-hidden="true" />
+      <span>{error}</span>
+      <button type="button" aria-label={t("common.dismiss")} onclick={() => error = ""}><X size={16} /></button>
+    </div>
+  {/if}
+
+  {#if startupReady && onboardingVisible}
+  <OnboardingPage saving={onboardingSaving} error={onboardingError} onComplete={completeOnboarding} onOpenAbout={openOnboardingAbout} />
+  {:else if startupReady}<section class="application">
     {#key $localeRevision}
     {#if page === "home"}
       <HomePage
-        formats={supportedFormats}
         {history}
         {isInspecting}
         onChooseSource={chooseSource}
-        onOpenTask={() => selectView("tasks")}
         onOpenHistory={(item) => void openHistory(item)}
         onNavigate={(target) => selectView(target)}
-        onChooseFormat={(name) => {
-          selectedFormats = new Set([name as ExportFormat]);
-          selectView("tasks");
-        }}
       />
     {:else if page === "tasks"}
       {#if TaskWorkspaceComponent}
@@ -954,6 +1013,7 @@
         {desktopRuntime}
         {logs}
         {captions}
+        {warnings}
         {diagnosticsCount}
         {bytesRead}
         {progress}
@@ -971,6 +1031,7 @@
         {preservation}
         {error}
         {isExporting}
+        {exportPending}
         bind:outputDirectory
         canResume={canResumeCurrentJob}
         {resumeBusy}
@@ -1051,17 +1112,23 @@
         {saveCaptionFont}
         onSettingsSaved={applyPreferences}
         onSettingsPreview={applyPreferences}
+        onError={reportBackendFailure}
+        onShowOnboarding={showOnboarding}
       />
       {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
     {/if}
-    {/key}
+  {/key}
   </section>
   {#key `status:${$localeRevision}`}
     <StatusBar sourceSize={inspection?.size ?? 0} container={inspection?.container ?? ""} trackCount={inspection?.tracks.length ?? 0} {warnings} {isExporting} {previewIndexing} {isPaused} {progress} onPause={pauseExport} onResume={resumeExport} onCancel={cancelExport} />
   {/key}
+  {/if}
 </main>
 
 <style>
+  .global-error{position:fixed;z-index:50;right:18px;bottom:42px;left:calc(var(--rw-sidebar-width, 220px) + 18px);display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:9px;min-height:42px;padding:8px 10px;border:1px solid color-mix(in srgb,#bb3d3d 65%,var(--rw-border));border-radius:8px;color:var(--rw-text);background:color-mix(in srgb,#bb3d3d 10%,var(--rw-surface-raised));box-shadow:0 8px 28px rgba(0,0,0,.2);backdrop-filter:blur(18px)}:global(.global-error-icon){color:#bb3d3d}.global-error span{font-size:12px;line-height:1.4}.global-error button{display:grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:50%;color:var(--rw-text-secondary);background:transparent}.global-error button:hover{background:color-mix(in srgb,var(--rw-text) 8%,transparent)}.sidebar-collapsed .global-error{left:76px}@media(max-width:700px){.global-error{right:10px;bottom:38px;left:10px}.sidebar-collapsed .global-error{left:10px}}
   .route-loading{display:grid;place-items:center;min-height:240px}.route-loading span{width:16px;height:16px;border:2px solid color-mix(in srgb,var(--rw-text) 16%,transparent);border-top-color:var(--rw-accent);border-radius:50%;animation:route-spin 700ms linear infinite}@keyframes route-spin{to{transform:rotate(1turn)}}
   @media(prefers-reduced-motion:reduce){.route-loading span{animation:none;border-top-color:inherit}}
+  :global(main.onboarding-shell){grid-template-columns:1fr!important;grid-template-rows:var(--rw-titlebar-height) minmax(0,1fr)!important;background:var(--rw-content)!important;overflow:auto}
+  :global(main.onboarding-shell .shell-glass){clip-path:inset(0 0 calc(100% - var(--rw-titlebar-height)) 0)}
 </style>

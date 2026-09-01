@@ -1,46 +1,49 @@
-# Release checklist
+# 发布检查清单
 
-ResubWinny distinguishes a public source release from a public Windows binary
-release. Source publication does not imply that the current private-test
-installer is ready for redistribution.
+[简体中文](release-checklist.md) · [繁體中文](release-checklist.zh-TW.md) · [日本語](release-checklist.ja.md) · [English](release-checklist.en.md)
 
-The absence of redistributable broadcast recordings is not a release defect.
-Real recordings are legally held and tested only in the private validation
-environment; public CI uses constructed protocol fixtures and publishes test
-results without recording bytes, captions derived from those recordings, or
-screenshots. A release may proceed with a skipped private-corpus gate when
-the release notes identify the skipped gate and the public synthetic checks
-pass.
+> **规范性声明：**简体中文版本是唯一的权威来源。其他语言版本均为同步翻译；若措辞存在歧义或冲突，以简体中文版本为准。
 
-## Public source release
+ResubWinny 有三个公开发布层级。通过某一层级并不意味着下一层级已准备就绪：
 
-- [ ] The tagged revision passes `scripts/check.ps1`.
-- [ ] `scripts/verify-repository.ps1` reports no generated, downloaded,
-  private-corpus, nested-repository, or oversized tracked files.
-- [ ] All package versions and the UI version label describe the same release.
-- [ ] `THIRD_PARTY_NOTICES.md`, `third_party/versions.json`, and
-  `docs/dependency-licenses.md` are current.
-- [ ] Architecture and backend-contract claims distinguish verified routes
-  from experimental TLV/MMTP behaviour.
-- [ ] `scripts/package-source.ps1` produces the source archive and checksum
-  from a clean tag.
-- [ ] Release notes identify known limitations and any skipped corpus gate.
+1. **源代码发布版**仅发布带标签的源代码归档。
+2. **未签名 Windows Alpha 版**发布明确标注为未签名的 Windows 构建，供早期公开测试，并提供完整的哈希值、来源证明、对应源代码和许可证材料。
+3. **已签名稳定版**增加受保护的代码签名，以及稳定 Windows 版本应具备的更严格安装与升级保证。
 
-## Public Windows binary release
+缺少可再分发的广播录像并非发布缺陷。真实录像因法律原因仅在私有验证环境中保存和测试；公共 CI 使用构造的协议夹具，并在不发布录像字节、从这些录像衍生的字幕或屏幕截图的情况下公布测试结果。如果发布说明指明已跳过的门禁，且公共合成检查通过，则即使跳过私有语料库门禁，也可继续发布。
 
-Complete every source-release item, then also require:
+## 源代码发布版
 
-- [ ] Worker, frontend, and desktop binaries are built by the pinned workflow.
-- [ ] The exact bundled libmpv binary and complete corresponding-source
-  archive are produced by the same reviewed workflow and published together.
-- [ ] `SOURCE-RECEIPT.json`, DLL hashes, installer hashes, and notices match.
-- [ ] The installer includes MPL-2.0, libaribcaption, libmpv, and Rounded M+
-  notices and leaves libmpv replaceable.
-- [ ] Native preview smoke, seek/pause/resume, overlay timing, resize/DPI, and
-  long 4K performance gates pass on the packaged executable.
-- [ ] The release executables and installers are signed by the protected
-  project signing identity.
-- [ ] Installation, upgrade, uninstall, and clean-machine startup are tested.
+- [ ] 带标签的修订版本通过 `scripts/check.ps1`。
+- [ ] `scripts/verify-repository.ps1` 报告不存在已生成、已下载、私有语料库、嵌套仓库或超大且受跟踪的文件。
+- [ ] 所有软件包版本和 UI 版本标签描述同一版本。
+- [ ] `THIRD_PARTY_NOTICES.md`、`third_party/versions.json` 和 `docs/dependency-licenses.md` 均为最新。
+- [ ] 架构和后端契约声明明确区分已验证路径与实验性 TLV/MMTP 行为。
+- [ ] `scripts/package-source.ps1` 从干净的标签生成源代码归档和校验和。
+- [ ] 发布说明指明已知限制及任何已跳过的语料库门禁。
 
-Until every binary item is complete, workflows may upload private-test
-artifacts but must not create a public GitHub Release.
+## 未签名 Windows Alpha 版
+
+完成源代码发布版的每一项后，还必须满足：
+
+- [ ] Worker、前端和桌面端二进制文件均由固定版本的工作流构建。
+- [ ] 完全一致的捆绑 libmpv 二进制文件及完整对应源代码归档由同一经过审查的工作流生成并一同发布。
+- [ ] `SOURCE-RECEIPT.json`、DLL 哈希值、安装程序哈希值和声明相互一致。
+- [ ] 安装程序包含 MPL-2.0、libaribcaption、libmpv 和 Rounded M+ 声明，并允许替换 libmpv。
+- [ ] 发布标题和说明注明 **未签名 Windows Alpha 版**，解释 Windows 可能显示未知发布者警告，且不得暗示已通过代码签名证明真实性。
+- [ ] 该版本为每个可下载归档、可执行文件和安装程序提供 SHA-256 校验和，并提供用于构建它们的确切 Git 标签和提交。
+- [ ] 原生预览冒烟测试、跳转/暂停/继续、叠加层定时、缩放/DPI 和长时间 4K 性能门禁均在已打包的可执行文件上通过。
+- [ ] 已测试安装、卸载和干净机器启动；发布说明指明所有 Alpha 限制及已跳过的私有语料库门禁。使用 `windows-alpha-acceptance.md` 记录打包工作流结果。
+
+代码签名并非此层级的前提条件。捆绑 libmpv 构建的对应源代码和许可证合规性仍属强制要求，不得以构建为 Alpha 版或未签名为由免除。
+
+## 已签名稳定版
+
+完成未签名 Windows Alpha 版的每一项后，还必须满足：
+
+- [ ] 发布版可执行文件和安装程序均由受保护的项目签名身份签名。
+- [ ] 下载最终公开制品后，验证签名和证书身份。
+- [ ] 针对每条受支持的安装程序路径测试安装、升级、卸载、回滚和干净机器启动。
+- [ ] 稳定版发布说明记录受支持的 Windows 版本和升级兼容性策略。
+
+在所选层级的每一项完成前，自动化系统不得发布该层级。工作流仍可上传私有测试制品。尤其是，无论是否配置签名，任何 Windows 二进制文件在没有完全一致的捆绑 libmpv 对应源代码、收据、哈希值和声明时均不得发布。

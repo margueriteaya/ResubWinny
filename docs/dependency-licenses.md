@@ -4,18 +4,18 @@ This file is generated from the committed Cargo and npm lock data by
 `scripts/generate-license-report.ps1`. It records package metadata for review;
 the dependency source distributions remain the authoritative license texts.
 
-Generated inventory: 450 Cargo packages and 112 npm packages.
+Generated inventory: 465 Cargo packages and 112 npm packages.
 
 ## Cargo
 
 | Package | Version | License expression | Used by |
 | --- | --- | --- | --- |
 | `adler2` | `2.0.1` | 0BSD OR MIT OR Apache-2.0 | Desktop service, Worker |
-| `aho-corasick` | `1.1.4` | Unlicense OR MIT | Desktop service |
+| `aho-corasick` | `1.1.5` | Unlicense OR MIT | Desktop service |
 | `alloc-no-stdlib` | `2.0.4` | BSD-3-Clause | Desktop service |
 | `alloc-stdlib` | `0.2.4` | BSD-3-Clause | Desktop service |
 | `allocator-api2` | `0.2.21` | MIT OR Apache-2.0 | Desktop service |
-| `android_system_properties` | `0.1.5` | MIT/Apache-2.0 | Desktop service |
+| `android_system_properties` | `0.1.6` | MIT OR Apache-2.0 | Desktop service |
 | `anyhow` | `1.0.104` | MIT OR Apache-2.0 | Desktop service |
 | `arbitrary` | `1.4.2` | MIT OR Apache-2.0 | Fuzz targets |
 | `atk` | `0.18.2` | MIT | Desktop service |
@@ -40,26 +40,27 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `bytes` | `1.12.1` | MIT | Desktop service |
 | `cairo-rs` | `0.18.5` | MIT | Desktop service |
 | `cairo-sys-rs` | `0.18.2` | MIT | Desktop service |
-| `camino` | `1.2.4` | MIT OR Apache-2.0 | Desktop service |
+| `camino` | `1.2.5` | MIT OR Apache-2.0 | Desktop service |
 | `cargo_metadata` | `0.19.2` | MIT | Desktop service |
 | `cargo_toml` | `0.22.3` | Apache-2.0 OR MIT | Desktop service |
 | `cargo-platform` | `0.1.9` | MIT OR Apache-2.0 | Desktop service |
-| `cc` | `1.3.0` | MIT OR Apache-2.0 | Desktop service, Worker |
 | `cc` | `1.4.0` | MIT OR Apache-2.0 | Fuzz targets |
+| `cc` | `1.4.4` | MIT OR Apache-2.0 | Desktop service, Worker |
 | `cesu8` | `1.1.0` | Apache-2.0/MIT | Desktop service |
 | `cfb` | `0.7.3` | MIT | Desktop service |
 | `cfg-expr` | `0.15.8` | MIT OR Apache-2.0 | Desktop service |
 | `cfg-if` | `1.0.4` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `chrono` | `0.4.45` | MIT OR Apache-2.0 | Desktop service |
 | `cmake` | `0.1.58` | MIT OR Apache-2.0 | Fuzz targets, Worker |
-| `combine` | `4.6.7` | MIT | Desktop service |
-| `cookie` | `0.18.1` | MIT OR Apache-2.0 | Desktop service |
+| `combine` | `4.6.8` | MIT | Desktop service |
+| `cookie` | `0.18.2` | MIT OR Apache-2.0 | Desktop service |
+| `core_maths` | `0.1.1` | MIT | Desktop service |
 | `core-foundation` | `0.10.1` | MIT OR Apache-2.0 | Desktop service |
 | `core-foundation-sys` | `0.8.7` | MIT OR Apache-2.0 | Desktop service |
 | `core-graphics` | `0.25.0` | MIT OR Apache-2.0 | Desktop service |
 | `core-graphics-types` | `0.2.0` | MIT OR Apache-2.0 | Desktop service |
 | `cpufeatures` | `0.2.17` | MIT OR Apache-2.0 | Desktop service |
-| `crc32fast` | `1.5.0` | MIT OR Apache-2.0 | Desktop service, Worker |
+| `crc32fast` | `1.5.1` | MIT OR Apache-2.0 | Desktop service, Worker |
 | `crossbeam-channel` | `0.5.16` | MIT OR Apache-2.0 | Desktop service |
 | `crossbeam-utils` | `0.8.22` | MIT OR Apache-2.0 | Desktop service |
 | `crypto-common` | `0.1.7` | MIT OR Apache-2.0 | Desktop service |
@@ -71,6 +72,9 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `darling_core` | `0.23.0` | MIT | Desktop service |
 | `darling_macro` | `0.23.0` | MIT | Desktop service |
 | `dbus` | `0.9.12` | Apache-2.0/MIT | Desktop service |
+| `defmt` | `1.1.1` | MIT OR Apache-2.0 | Desktop service |
+| `defmt-macros` | `1.1.1` | MIT OR Apache-2.0 | Desktop service |
+| `defmt-parser` | `1.0.0` | MIT OR Apache-2.0 | Desktop service |
 | `deranged` | `0.5.8` | MIT OR Apache-2.0 | Desktop service |
 | `derive_more` | `2.1.1` | MIT | Desktop service |
 | `derive_more-impl` | `2.1.1` | MIT | Desktop service |
@@ -78,7 +82,7 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `dirs` | `6.0.0` | MIT OR Apache-2.0 | Desktop service |
 | `dirs-sys` | `0.5.0` | MIT OR Apache-2.0 | Desktop service |
 | `dispatch2` | `0.3.1` | Zlib OR Apache-2.0 OR MIT | Desktop service |
-| `displaydoc` | `0.2.6` | MIT OR Apache-2.0 | Desktop service |
+| `displaydoc` | `0.2.7` | MIT OR Apache-2.0 | Desktop service |
 | `dlopen2` | `0.8.2` | MIT | Desktop service |
 | `dlopen2_derive` | `0.4.3` | MIT | Desktop service |
 | `dom_query` | `0.27.0` | MIT | Desktop service |
@@ -97,24 +101,25 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `fastrand` | `2.5.0` | Apache-2.0 OR MIT | Desktop service |
 | `fdeflate` | `0.3.7` | MIT OR Apache-2.0 | Desktop service, Worker |
 | `field-offset` | `0.3.6` | MIT OR Apache-2.0 | Desktop service |
-| `find-msvc-tools` | `0.1.9` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
-| `flate2` | `1.1.9` | MIT OR Apache-2.0 | Desktop service, Worker |
+| `find-msvc-tools` | `0.1.11` | MIT OR Apache-2.0 | Desktop service, Worker |
+| `find-msvc-tools` | `0.1.9` | MIT OR Apache-2.0 | Fuzz targets |
+| `flate2` | `1.1.10` | MIT OR Apache-2.0 | Desktop service, Worker |
 | `fnv` | `1.0.7` | Apache-2.0 / MIT | Desktop service |
 | `foldhash` | `0.1.5` | Zlib | Desktop service |
 | `foldhash` | `0.2.0` | Zlib | Desktop service |
-| `fontdue` | `0.9.3` | MIT OR Apache-2.0 OR Zlib | Desktop service |
+| `fontdue` | `0.9.4` | MIT OR Apache-2.0 OR Zlib | Desktop service |
 | `foreign-types` | `0.5.0` | MIT/Apache-2.0 | Desktop service |
 | `foreign-types-macros` | `0.2.4` | MIT/Apache-2.0 | Desktop service |
 | `foreign-types-shared` | `0.3.1` | MIT/Apache-2.0 | Desktop service |
 | `form_urlencoded` | `1.2.2` | MIT OR Apache-2.0 | Desktop service |
-| `futures-channel` | `0.3.33` | MIT OR Apache-2.0 | Desktop service |
-| `futures-core` | `0.3.33` | MIT OR Apache-2.0 | Desktop service |
-| `futures-executor` | `0.3.33` | MIT OR Apache-2.0 | Desktop service |
-| `futures-io` | `0.3.33` | MIT OR Apache-2.0 | Desktop service |
-| `futures-macro` | `0.3.33` | MIT OR Apache-2.0 | Desktop service |
-| `futures-sink` | `0.3.33` | MIT OR Apache-2.0 | Desktop service |
-| `futures-task` | `0.3.33` | MIT OR Apache-2.0 | Desktop service |
-| `futures-util` | `0.3.33` | MIT OR Apache-2.0 | Desktop service |
+| `futures-channel` | `0.3.34` | MIT OR Apache-2.0 | Desktop service |
+| `futures-core` | `0.3.34` | MIT OR Apache-2.0 | Desktop service |
+| `futures-executor` | `0.3.34` | MIT OR Apache-2.0 | Desktop service |
+| `futures-io` | `0.3.34` | MIT OR Apache-2.0 | Desktop service |
+| `futures-macro` | `0.3.34` | MIT OR Apache-2.0 | Desktop service |
+| `futures-sink` | `0.3.34` | MIT OR Apache-2.0 | Desktop service |
+| `futures-task` | `0.3.34` | MIT OR Apache-2.0 | Desktop service |
+| `futures-util` | `0.3.34` | MIT OR Apache-2.0 | Desktop service |
 | `gdk` | `0.18.2` | MIT | Desktop service |
 | `gdk-pixbuf` | `0.18.5` | MIT | Desktop service |
 | `gdk-pixbuf-sys` | `0.18.0` | MIT | Desktop service |
@@ -143,39 +148,44 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `heck` | `0.5.0` | MIT OR Apache-2.0 | Desktop service |
 | `hex` | `0.4.3` | MIT OR Apache-2.0 | Desktop service |
 | `html5ever` | `0.38.0` | MIT OR Apache-2.0 | Desktop service |
-| `http` | `1.4.2` | MIT OR Apache-2.0 | Desktop service |
+| `http` | `1.5.0` | MIT OR Apache-2.0 | Desktop service |
 | `http-body` | `1.1.0` | MIT | Desktop service |
-| `http-body-util` | `0.1.4` | MIT | Desktop service |
+| `http-body-util` | `0.1.5` | MIT | Desktop service |
 | `httparse` | `1.10.1` | MIT OR Apache-2.0 | Desktop service |
-| `hyper` | `1.11.0` | MIT | Desktop service |
+| `hyper` | `1.11.1` | MIT | Desktop service |
 | `hyper-util` | `0.1.20` | MIT | Desktop service |
 | `iana-time-zone` | `0.1.65` | MIT OR Apache-2.0 | Desktop service |
 | `iana-time-zone-haiku` | `0.1.2` | MIT OR Apache-2.0 | Desktop service |
 | `ico` | `0.5.0` | MIT | Desktop service |
-| `icu_collections` | `2.2.0` | Unicode-3.0 | Desktop service |
-| `icu_locale_core` | `2.2.0` | Unicode-3.0 | Desktop service |
-| `icu_normalizer` | `2.2.0` | Unicode-3.0 | Desktop service |
-| `icu_normalizer_data` | `2.2.0` | Unicode-3.0 | Desktop service |
-| `icu_properties` | `2.2.0` | Unicode-3.0 | Desktop service |
-| `icu_properties_data` | `2.2.0` | Unicode-3.0 | Desktop service |
-| `icu_provider` | `2.2.0` | Unicode-3.0 | Desktop service |
+| `icu_collections` | `2.3.0` | Unicode-3.0 | Desktop service |
+| `icu_locale_core` | `2.3.0` | Unicode-3.0 | Desktop service |
+| `icu_normalizer` | `2.3.0` | Unicode-3.0 | Desktop service |
+| `icu_normalizer_data` | `2.3.0` | Unicode-3.0 | Desktop service |
+| `icu_properties` | `2.3.0` | Unicode-3.0 | Desktop service |
+| `icu_properties_data` | `2.3.0` | Unicode-3.0 | Desktop service |
+| `icu_provider` | `2.3.1` | Unicode-3.0 | Desktop service |
 | `ident_case` | `1.0.1` | MIT/Apache-2.0 | Desktop service |
 | `idna` | `1.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `idna_adapter` | `1.2.2` | Apache-2.0 OR MIT | Desktop service |
 | `image` | `0.25.10` | MIT OR Apache-2.0 | Worker |
 | `indexmap` | `1.9.3` | Apache-2.0 OR MIT | Desktop service |
-| `indexmap` | `2.14.0` | Apache-2.0 OR MIT | Desktop service |
+| `indexmap` | `2.14.1` | Apache-2.0 OR MIT | Desktop service |
 | `infer` | `0.19.0` | MIT | Desktop service |
-| `ipnet` | `2.12.0` | MIT OR Apache-2.0 | Desktop service |
+| `ipnet` | `2.12.1` | MIT OR Apache-2.0 | Desktop service |
 | `itoa` | `1.0.18` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `javascriptcore-rs` | `1.1.2` | MIT | Desktop service |
 | `javascriptcore-rs-sys` | `1.1.1` | MIT | Desktop service |
+| `jiff` | `0.2.35` | Unlicense OR MIT | Desktop service |
+| `jiff-core` | `0.1.0` | Unlicense OR MIT | Desktop service |
+| `jiff-static` | `0.2.35` | Unlicense OR MIT | Desktop service |
+| `jiff-tzdb` | `0.1.8` | Unlicense OR MIT | Desktop service |
+| `jiff-tzdb-platform` | `0.1.3` | Unlicense OR MIT | Desktop service |
 | `jni` | `0.21.1` | MIT/Apache-2.0 | Desktop service |
 | `jni-sys` | `0.3.1` | MIT OR Apache-2.0 | Desktop service |
 | `jni-sys` | `0.4.1` | MIT OR Apache-2.0 | Desktop service |
 | `jni-sys-macros` | `0.4.1` | MIT OR Apache-2.0 | Desktop service |
 | `jobserver` | `0.1.35` | MIT OR Apache-2.0 | Fuzz targets |
-| `js-sys` | `0.3.103` | MIT OR Apache-2.0 | Desktop service |
+| `js-sys` | `0.3.104` | MIT OR Apache-2.0 | Desktop service |
 | `json-patch` | `3.0.1` | MIT/Apache-2.0 | Desktop service |
 | `jsonptr` | `0.6.3` | MIT OR Apache-2.0 | Desktop service |
 | `keyboard-types` | `0.7.0` | MIT OR Apache-2.0 | Desktop service |
@@ -186,15 +196,17 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `libfuzzer-sys` | `0.4.13` | (MIT OR Apache-2.0) AND NCSA | Fuzz targets |
 | `libloading` | `0.7.4` | ISC | Desktop service |
 | `libloading` | `0.8.9` | ISC | Desktop service |
-| `libredox` | `0.1.18` | MIT | Desktop service |
-| `litemap` | `0.8.2` | Unicode-3.0 | Desktop service |
+| `libm` | `0.2.16` | MIT | Desktop service |
+| `libredox` | `0.1.21` | MIT | Desktop service |
+| `litemap` | `0.8.3` | Unicode-3.0 | Desktop service |
 | `lock_api` | `0.4.14` | MIT OR Apache-2.0 | Desktop service |
-| `log` | `0.4.33` | MIT OR Apache-2.0 | Desktop service |
+| `log` | `0.4.34` | MIT OR Apache-2.0 | Desktop service |
 | `markup5ever` | `0.38.0` | MIT OR Apache-2.0 | Desktop service |
 | `memchr` | `2.8.3` | Unlicense OR MIT | Desktop service, Fuzz targets, Worker |
 | `memoffset` | `0.9.1` | MIT | Desktop service |
 | `mime` | `0.3.17` | MIT OR Apache-2.0 | Desktop service |
 | `miniz_oxide` | `0.8.9` | MIT OR Zlib OR Apache-2.0 | Desktop service, Worker |
+| `miniz_oxide` | `0.9.1` | MIT OR Zlib OR Apache-2.0 | Desktop service, Worker |
 | `mio` | `1.2.2` | MIT | Desktop service |
 | `moxcms` | `0.8.1` | BSD-3-Clause OR Apache-2.0 | Worker |
 | `muda` | `0.19.3` | Apache-2.0 OR MIT | Desktop service |
@@ -235,11 +247,13 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `phf_macros` | `0.13.1` | MIT | Desktop service |
 | `phf_shared` | `0.13.1` | MIT | Desktop service |
 | `pin-project-lite` | `0.2.17` | Apache-2.0 OR MIT | Desktop service |
-| `pkg-config` | `0.3.33` | MIT OR Apache-2.0 | Desktop service |
+| `pkg-config` | `0.3.34` | MIT OR Apache-2.0 | Desktop service |
 | `plist` | `1.10.0` | MIT | Desktop service |
 | `png` | `0.17.16` | MIT OR Apache-2.0 | Desktop service |
 | `png` | `0.18.1` | MIT OR Apache-2.0 | Desktop service, Worker |
-| `potential_utf` | `0.1.5` | Unicode-3.0 | Desktop service |
+| `portable-atomic` | `1.15.0` | Apache-2.0 OR MIT | Desktop service |
+| `portable-atomic-util` | `0.2.7` | Apache-2.0 OR MIT | Desktop service |
+| `potential_utf` | `0.1.6` | Unicode-3.0 | Desktop service |
 | `powerfmt` | `0.2.0` | MIT OR Apache-2.0 | Desktop service |
 | `precomputed-hash` | `0.1.1` | MIT | Desktop service |
 | `proc-macro-crate` | `1.3.1` | MIT OR Apache-2.0 | Desktop service |
@@ -256,10 +270,10 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `raw-window-handle` | `0.6.2` | MIT OR Apache-2.0 OR Zlib | Desktop service |
 | `redox_syscall` | `0.5.18` | MIT | Desktop service |
 | `redox_users` | `0.5.2` | MIT | Desktop service |
-| `ref-cast` | `1.0.26` | MIT OR Apache-2.0 | Desktop service |
-| `ref-cast-impl` | `1.0.26` | MIT OR Apache-2.0 | Desktop service |
+| `ref-cast` | `1.0.27` | MIT OR Apache-2.0 | Desktop service |
+| `ref-cast-impl` | `1.0.27` | MIT OR Apache-2.0 | Desktop service |
 | `regex` | `1.13.1` | MIT OR Apache-2.0 | Desktop service |
-| `regex-automata` | `0.4.16` | MIT OR Apache-2.0 | Desktop service |
+| `regex-automata` | `0.4.18` | MIT OR Apache-2.0 | Desktop service |
 | `regex-syntax` | `0.8.11` | MIT OR Apache-2.0 | Desktop service |
 | `reqwest` | `0.13.4` | MIT OR Apache-2.0 | Desktop service |
 | `rfd` | `0.16.0` | MIT | Desktop service |
@@ -270,7 +284,7 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `same-file` | `1.0.6` | Unlicense/MIT | Desktop service |
 | `schemars` | `0.8.22` | MIT | Desktop service |
 | `schemars` | `0.9.0` | MIT | Desktop service |
-| `schemars` | `1.2.1` | MIT | Desktop service |
+| `schemars` | `1.2.2` | MIT | Desktop service |
 | `schemars_derive` | `0.8.22` | MIT | Desktop service |
 | `scopeguard` | `1.2.0` | MIT OR Apache-2.0 | Desktop service |
 | `selectors` | `0.36.1` | MPL-2.0 | Desktop service |
@@ -283,8 +297,8 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `serde_repr` | `0.1.21` | MIT OR Apache-2.0 | Desktop service |
 | `serde_spanned` | `0.6.9` | MIT OR Apache-2.0 | Desktop service |
 | `serde_spanned` | `1.1.1` | MIT OR Apache-2.0 | Desktop service |
-| `serde_with` | `3.21.0` | MIT OR Apache-2.0 | Desktop service |
-| `serde_with_macros` | `3.21.0` | MIT OR Apache-2.0 | Desktop service |
+| `serde_with` | `3.22.0` | MIT OR Apache-2.0 | Desktop service |
+| `serde_with_macros` | `3.22.0` | MIT OR Apache-2.0 | Desktop service |
 | `serde-untagged` | `0.1.9` | MIT OR Apache-2.0 | Desktop service |
 | `serialize-to-javascript` | `0.1.2` | MIT OR Apache-2.0 | Desktop service |
 | `serialize-to-javascript-impl` | `0.1.2` | MIT OR Apache-2.0 | Desktop service |
@@ -303,15 +317,16 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `string_cache` | `0.9.0` | MIT OR Apache-2.0 | Desktop service |
 | `string_cache_codegen` | `0.6.1` | MIT OR Apache-2.0 | Desktop service |
 | `strsim` | `0.11.1` | MIT | Desktop service |
-| `swift-rs` | `1.0.7` | MIT OR Apache-2.0 | Desktop service |
+| `swift-rs` | `1.0.8` | MIT OR Apache-2.0 | Desktop service |
 | `syn` | `1.0.109` | MIT OR Apache-2.0 | Desktop service |
 | `syn` | `2.0.119` | MIT OR Apache-2.0 | Desktop service |
-| `syn` | `3.0.3` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
+| `syn` | `3.0.3` | MIT OR Apache-2.0 | Fuzz targets |
+| `syn` | `3.0.4` | MIT OR Apache-2.0 | Desktop service, Worker |
 | `sync_wrapper` | `1.0.2` | Apache-2.0 | Desktop service |
 | `synstructure` | `0.13.2` | MIT | Desktop service |
 | `system-deps` | `6.2.2` | MIT OR Apache-2.0 | Desktop service |
 | `tao` | `0.35.3` | Apache-2.0 | Desktop service |
-| `tao-macros` | `0.1.3` | MIT OR Apache-2.0 | Desktop service |
+| `tao-macros` | `0.1.4` | MIT OR Apache-2.0 | Desktop service |
 | `target-lexicon` | `0.12.16` | Apache-2.0 WITH LLVM-exception | Desktop service |
 | `tauri` | `2.11.5` | Apache-2.0 OR MIT | Desktop service |
 | `tauri-build` | `2.6.3` | Apache-2.0 OR MIT | Desktop service |
@@ -326,27 +341,27 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `tauri-winres` | `0.3.6` | MIT | Desktop service |
 | `tendril` | `0.5.1` | MIT OR Apache-2.0 | Desktop service |
 | `thiserror` | `1.0.69` | MIT OR Apache-2.0 | Desktop service |
-| `thiserror` | `2.0.19` | MIT OR Apache-2.0 | Desktop service |
+| `thiserror` | `2.0.20` | MIT OR Apache-2.0 | Desktop service |
 | `thiserror-impl` | `1.0.69` | MIT OR Apache-2.0 | Desktop service |
-| `thiserror-impl` | `2.0.19` | MIT OR Apache-2.0 | Desktop service |
-| `time` | `0.3.54` | MIT OR Apache-2.0 | Desktop service |
+| `thiserror-impl` | `2.0.20` | MIT OR Apache-2.0 | Desktop service |
+| `time` | `0.3.55` | MIT OR Apache-2.0 | Desktop service |
 | `time-core` | `0.1.9` | MIT OR Apache-2.0 | Desktop service |
 | `time-macros` | `0.2.32` | MIT OR Apache-2.0 | Desktop service |
-| `tinystr` | `0.8.3` | Unicode-3.0 | Desktop service |
+| `tinystr` | `0.8.4` | Unicode-3.0 | Desktop service |
 | `tinyvec` | `1.12.0` | Zlib OR Apache-2.0 OR MIT | Desktop service |
 | `tinyvec_macros` | `0.1.1` | MIT OR Apache-2.0 OR Zlib | Desktop service |
 | `tokio` | `1.53.1` | MIT | Desktop service |
 | `tokio-util` | `0.7.19` | MIT | Desktop service |
 | `toml` | `0.8.2` | MIT OR Apache-2.0 | Desktop service |
 | `toml` | `0.9.12+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
-| `toml` | `1.1.3+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
+| `toml` | `1.1.4+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `toml_datetime` | `0.6.3` | MIT OR Apache-2.0 | Desktop service |
 | `toml_datetime` | `0.7.5+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `toml_datetime` | `1.1.1+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `toml_edit` | `0.19.15` | MIT OR Apache-2.0 | Desktop service |
 | `toml_edit` | `0.20.2` | MIT OR Apache-2.0 | Desktop service |
 | `toml_edit` | `0.25.13+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
-| `toml_parser` | `1.1.2+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
+| `toml_parser` | `1.1.3+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `toml_writer` | `1.1.2+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `tower` | `0.5.3` | MIT | Desktop service |
 | `tower-http` | `0.6.11` | MIT | Desktop service |
@@ -354,10 +369,9 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `tower-service` | `0.3.3` | MIT | Desktop service |
 | `tracing` | `0.1.44` | MIT | Desktop service |
 | `tracing-core` | `0.1.36` | MIT | Desktop service |
-| `tray-icon` | `0.24.1` | MIT OR Apache-2.0 | Desktop service |
+| `tray-icon` | `0.24.2` | MIT OR Apache-2.0 | Desktop service |
 | `try-lock` | `0.2.5` | MIT | Desktop service |
-| `ttf-parser` | `0.21.1` | MIT OR Apache-2.0 | Desktop service |
-| `ttf-parser` | `0.25.1` | MIT OR Apache-2.0 | Fuzz targets, Worker |
+| `ttf-parser` | `0.25.1` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `typeid` | `1.0.3` | MIT OR Apache-2.0 | Desktop service |
 | `typenum` | `1.20.1` | MIT OR Apache-2.0 | Desktop service |
 | `unic-char-property` | `0.9.0` | MIT/Apache-2.0 | Desktop service |
@@ -370,7 +384,7 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `url` | `2.5.8` | MIT OR Apache-2.0 | Desktop service |
 | `urlpattern` | `0.3.0` | MIT | Desktop service |
 | `utf8_iter` | `1.0.4` | Apache-2.0 OR MIT | Desktop service |
-| `uuid` | `1.24.0` | Apache-2.0 OR MIT | Desktop service |
+| `uuid` | `1.26.0` | Apache-2.0 OR MIT | Desktop service |
 | `version_check` | `0.9.5` | MIT/Apache-2.0 | Desktop service |
 | `version-compare` | `0.2.1` | MIT | Desktop service |
 | `vswhom` | `0.1.0` | MIT | Desktop service |
@@ -379,14 +393,14 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `want` | `0.3.1` | MIT | Desktop service |
 | `wasi` | `0.11.1+wasi-snapshot-preview1` | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | Desktop service |
 | `wasip2` | `1.0.4+wasi-0.2.12` | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | Desktop service |
-| `wasm-bindgen` | `0.2.126` | MIT OR Apache-2.0 | Desktop service |
-| `wasm-bindgen-futures` | `0.4.76` | MIT OR Apache-2.0 | Desktop service |
-| `wasm-bindgen-macro` | `0.2.126` | MIT OR Apache-2.0 | Desktop service |
-| `wasm-bindgen-macro-support` | `0.2.126` | MIT OR Apache-2.0 | Desktop service |
-| `wasm-bindgen-shared` | `0.2.126` | MIT OR Apache-2.0 | Desktop service |
+| `wasm-bindgen` | `0.2.127` | MIT OR Apache-2.0 | Desktop service |
+| `wasm-bindgen-futures` | `0.4.77` | MIT OR Apache-2.0 | Desktop service |
+| `wasm-bindgen-macro` | `0.2.127` | MIT OR Apache-2.0 | Desktop service |
+| `wasm-bindgen-macro-support` | `0.2.127` | MIT OR Apache-2.0 | Desktop service |
+| `wasm-bindgen-shared` | `0.2.127` | MIT OR Apache-2.0 | Desktop service |
 | `wasm-streams` | `0.5.0` | MIT OR Apache-2.0 | Desktop service |
-| `web_atoms` | `0.2.5` | MIT OR Apache-2.0 | Desktop service |
-| `web-sys` | `0.3.103` | MIT OR Apache-2.0 | Desktop service |
+| `web_atoms` | `0.2.6` | MIT OR Apache-2.0 | Desktop service |
+| `web-sys` | `0.3.104` | MIT OR Apache-2.0 | Desktop service |
 | `webkit2gtk` | `2.0.2` | MIT | Desktop service |
 | `webkit2gtk-sys` | `2.0.2` | MIT | Desktop service |
 | `webview2-com` | `0.38.2` | MIT | Desktop service |
@@ -448,7 +462,7 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `winnow` | `1.0.4` | MIT | Desktop service |
 | `winreg` | `0.55.0` | MIT | Desktop service |
 | `wit-bindgen` | `0.57.1` | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | Desktop service |
-| `writeable` | `0.6.3` | Unicode-3.0 | Desktop service |
+| `writeable` | `0.6.4` | Unicode-3.0 | Desktop service |
 | `wry` | `0.55.1` | Apache-2.0 OR MIT | Desktop service |
 | `x11` | `2.21.0` | MIT | Desktop service |
 | `x11-dl` | `2.21.0` | MIT | Desktop service |
@@ -456,74 +470,76 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `yoke-derive` | `0.8.2` | Unicode-3.0 | Desktop service |
 | `zerofrom` | `0.1.8` | Unicode-3.0 | Desktop service |
 | `zerofrom-derive` | `0.1.7` | Unicode-3.0 | Desktop service |
-| `zerotrie` | `0.2.4` | Unicode-3.0 | Desktop service |
-| `zerovec` | `0.11.6` | Unicode-3.0 | Desktop service |
-| `zerovec-derive` | `0.11.3` | Unicode-3.0 | Desktop service |
+| `zerotrie` | `0.2.5` | Unicode-3.0 | Desktop service |
+| `zerovec` | `0.11.8` | Unicode-3.0 | Desktop service |
+| `zerovec-derive` | `0.11.6` | Unicode-3.0 | Desktop service |
+| `zlib-rs` | `0.6.7` | Zlib | Desktop service, Worker |
 | `zmij` | `1.0.23` | MIT | Desktop service, Fuzz targets, Worker |
 
 ## npm
 
 | Package | Version | License expression |
 | --- | --- | --- |
-| `@esbuild/aix-ppc64` | `0.28.1` | MIT |
-| `@esbuild/android-arm` | `0.28.1` | MIT |
-| `@esbuild/android-arm64` | `0.28.1` | MIT |
-| `@esbuild/android-x64` | `0.28.1` | MIT |
-| `@esbuild/darwin-arm64` | `0.28.1` | MIT |
-| `@esbuild/darwin-x64` | `0.28.1` | MIT |
-| `@esbuild/freebsd-arm64` | `0.28.1` | MIT |
-| `@esbuild/freebsd-x64` | `0.28.1` | MIT |
-| `@esbuild/linux-arm` | `0.28.1` | MIT |
-| `@esbuild/linux-arm64` | `0.28.1` | MIT |
-| `@esbuild/linux-ia32` | `0.28.1` | MIT |
-| `@esbuild/linux-loong64` | `0.28.1` | MIT |
-| `@esbuild/linux-mips64el` | `0.28.1` | MIT |
-| `@esbuild/linux-ppc64` | `0.28.1` | MIT |
-| `@esbuild/linux-riscv64` | `0.28.1` | MIT |
-| `@esbuild/linux-s390x` | `0.28.1` | MIT |
-| `@esbuild/linux-x64` | `0.28.1` | MIT |
-| `@esbuild/netbsd-arm64` | `0.28.1` | MIT |
-| `@esbuild/netbsd-x64` | `0.28.1` | MIT |
-| `@esbuild/openbsd-arm64` | `0.28.1` | MIT |
-| `@esbuild/openbsd-x64` | `0.28.1` | MIT |
-| `@esbuild/openharmony-arm64` | `0.28.1` | MIT |
-| `@esbuild/sunos-x64` | `0.28.1` | MIT |
-| `@esbuild/win32-arm64` | `0.28.1` | MIT |
-| `@esbuild/win32-ia32` | `0.28.1` | MIT |
-| `@esbuild/win32-x64` | `0.28.1` | MIT |
+| `@esbuild/aix-ppc64` | `0.28.2` | MIT |
+| `@esbuild/android-arm` | `0.28.2` | MIT |
+| `@esbuild/android-arm64` | `0.28.2` | MIT |
+| `@esbuild/android-x64` | `0.28.2` | MIT |
+| `@esbuild/darwin-arm64` | `0.28.2` | MIT |
+| `@esbuild/darwin-x64` | `0.28.2` | MIT |
+| `@esbuild/freebsd-arm64` | `0.28.2` | MIT |
+| `@esbuild/freebsd-x64` | `0.28.2` | MIT |
+| `@esbuild/linux-arm` | `0.28.2` | MIT |
+| `@esbuild/linux-arm64` | `0.28.2` | MIT |
+| `@esbuild/linux-ia32` | `0.28.2` | MIT |
+| `@esbuild/linux-loong64` | `0.28.2` | MIT |
+| `@esbuild/linux-mips64el` | `0.28.2` | MIT |
+| `@esbuild/linux-ppc64` | `0.28.2` | MIT |
+| `@esbuild/linux-riscv64` | `0.28.2` | MIT |
+| `@esbuild/linux-s390x` | `0.28.2` | MIT |
+| `@esbuild/linux-x64` | `0.28.2` | MIT |
+| `@esbuild/netbsd-arm64` | `0.28.2` | MIT |
+| `@esbuild/netbsd-x64` | `0.28.2` | MIT |
+| `@esbuild/openbsd-arm64` | `0.28.2` | MIT |
+| `@esbuild/openbsd-x64` | `0.28.2` | MIT |
+| `@esbuild/openharmony-arm64` | `0.28.2` | MIT |
+| `@esbuild/sunos-x64` | `0.28.2` | MIT |
+| `@esbuild/win32-arm64` | `0.28.2` | MIT |
+| `@esbuild/win32-ia32` | `0.28.2` | MIT |
+| `@esbuild/win32-x64` | `0.28.2` | MIT |
 | `@jridgewell/gen-mapping` | `0.3.13` | MIT |
 | `@jridgewell/remapping` | `2.3.5` | MIT |
 | `@jridgewell/resolve-uri` | `3.1.2` | MIT |
 | `@jridgewell/sourcemap-codec` | `1.5.5` | MIT |
 | `@jridgewell/trace-mapping` | `0.3.31` | MIT |
-| `@lucide/svelte` | `1.26.0` | ISC |
-| `@rollup/rollup-android-arm-eabi` | `4.62.2` | MIT |
-| `@rollup/rollup-android-arm64` | `4.62.2` | MIT |
-| `@rollup/rollup-darwin-arm64` | `4.62.2` | MIT |
-| `@rollup/rollup-darwin-x64` | `4.62.2` | MIT |
-| `@rollup/rollup-freebsd-arm64` | `4.62.2` | MIT |
-| `@rollup/rollup-freebsd-x64` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-arm-gnueabihf` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-arm-musleabihf` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-arm64-gnu` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-arm64-musl` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-loong64-gnu` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-loong64-musl` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-ppc64-gnu` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-ppc64-musl` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-riscv64-gnu` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-riscv64-musl` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-s390x-gnu` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-x64-gnu` | `4.62.2` | MIT |
-| `@rollup/rollup-linux-x64-musl` | `4.62.2` | MIT |
-| `@rollup/rollup-openbsd-x64` | `4.62.2` | MIT |
-| `@rollup/rollup-openharmony-arm64` | `4.62.2` | MIT |
-| `@rollup/rollup-win32-arm64-msvc` | `4.62.2` | MIT |
-| `@rollup/rollup-win32-ia32-msvc` | `4.62.2` | MIT |
-| `@rollup/rollup-win32-x64-gnu` | `4.62.2` | MIT |
-| `@rollup/rollup-win32-x64-msvc` | `4.62.2` | MIT |
+| `@lucide/svelte` | `1.37.0` | ISC |
+| `@napi-rs/lzma-linux-x64-gnu` | `1.5.1` | MIT |
+| `@rollup/rollup-android-arm-eabi` | `4.63.1` | MIT |
+| `@rollup/rollup-android-arm64` | `4.63.1` | MIT |
+| `@rollup/rollup-darwin-arm64` | `4.63.1` | MIT |
+| `@rollup/rollup-darwin-x64` | `4.63.1` | MIT |
+| `@rollup/rollup-freebsd-arm64` | `4.63.1` | MIT |
+| `@rollup/rollup-freebsd-x64` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-arm-gnueabihf` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-arm-musleabihf` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-arm64-gnu` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-arm64-musl` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-loong64-gnu` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-loong64-musl` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-ppc64-gnu` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-ppc64-musl` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-riscv64-gnu` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-riscv64-musl` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-s390x-gnu` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-x64-gnu` | `4.63.1` | MIT |
+| `@rollup/rollup-linux-x64-musl` | `4.63.1` | MIT |
+| `@rollup/rollup-openbsd-x64` | `4.63.1` | MIT |
+| `@rollup/rollup-openharmony-arm64` | `4.63.1` | MIT |
+| `@rollup/rollup-win32-arm64-msvc` | `4.63.1` | MIT |
+| `@rollup/rollup-win32-ia32-msvc` | `4.63.1` | MIT |
+| `@rollup/rollup-win32-x64-gnu` | `4.63.1` | MIT |
+| `@rollup/rollup-win32-x64-msvc` | `4.63.1` | MIT |
 | `@sveltejs/acorn-typescript` | `1.0.11` | MIT |
-| `@sveltejs/load-config` | `0.2.0` | MIT |
+| `@sveltejs/load-config` | `0.2.3` | MIT |
 | `@sveltejs/vite-plugin-svelte` | `6.2.4` | MIT |
 | `@sveltejs/vite-plugin-svelte-inspector` | `5.0.2` | MIT |
 | `@tauri-apps/api` | `2.11.1` | Apache-2.0 OR MIT |
@@ -542,7 +558,6 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `@tauri-apps/plugin-dialog` | `2.7.2` | MIT OR Apache-2.0 |
 | `@tsconfig/svelte` | `5.0.8` | MIT |
 | `@types/estree` | `1.0.9` | MIT |
-| `@types/trusted-types` | `2.0.7` | MIT |
 | `acorn` | `8.17.0` | MIT |
 | `aria-query` | `5.3.1` | Apache-2.0 |
 | `axobject-query` | `4.1.0` | Apache-2.0 |
@@ -550,7 +565,7 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `clsx` | `2.1.1` | MIT |
 | `deepmerge` | `4.3.1` | MIT |
 | `devalue` | `5.8.2` | MIT |
-| `esbuild` | `0.28.1` | MIT |
+| `esbuild` | `0.28.2` | MIT |
 | `esm-env` | `1.2.2` | MIT |
 | `esrap` | `2.3.0` | MIT |
 | `fdir` | `6.5.0` | MIT |
@@ -566,11 +581,11 @@ Generated inventory: 450 Cargo packages and 112 npm packages.
 | `picomatch` | `4.0.5` | MIT |
 | `postcss` | `8.5.26` | MIT |
 | `readdirp` | `4.1.2` | MIT |
-| `rollup` | `4.62.2` | MIT |
+| `rollup` | `4.63.1` | MIT |
 | `sade` | `1.8.1` | MIT |
 | `source-map-js` | `1.2.1` | BSD-3-Clause |
-| `svelte` | `5.56.7` | MIT |
-| `svelte-check` | `4.7.3` | MIT |
+| `svelte` | `5.57.0` | MIT |
+| `svelte-check` | `4.7.6` | MIT |
 | `tinyglobby` | `0.2.17` | MIT |
 | `tslib` | `2.8.1` | 0BSD |
 | `typescript` | `5.9.3` | Apache-2.0 |

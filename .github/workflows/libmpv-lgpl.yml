@@ -37,8 +37,20 @@ jobs:
             libtool-bin gcc-multilib g++-multilib clang lld libc++-dev \
             libc++abi-dev libgmp-dev libmpfr-dev libmpc-dev libgcrypt20-dev \
             gperf ragel texinfo autopoint re2c asciidoc python3-roman \
-            python3-mako python3-jsonschema python3-rst2pdf python3-cairo \
+            python3-mako python3-jsonschema python3-venv rst2pdf python3-cairo \
             docbook2x unzip p7zip-full curl wget libmimalloc-dev ccache glslc
+
+      - name: Install pinned Python build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv build/libmpv-python-tools
+          build/libmpv-python-tools/bin/python -m pip install \
+            --disable-pip-version-check \
+            --require-hashes \
+            --requirement third_party/libmpv/build-requirements.txt
+          echo "$GITHUB_WORKSPACE/build/libmpv-python-tools/bin" >> "$GITHUB_PATH"
+          build/libmpv-python-tools/bin/meson --version
 
       - name: Check out pinned build sources
         shell: bash
@@ -55,6 +67,33 @@ jobs:
           git -C build/libmpv/toolchain config user.name "ResubWinny Build"
           git -C build/libmpv/toolchain config user.email "build@resubwinny.invalid"
 
+      - name: Restore reusable libmpv build state
+        id: libmpv-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            build/libmpv/toolchain/build64
+            build/libmpv/toolchain/src_packages
+            build/libmpv/toolchain/clang_root
+            build/libmpv/toolchain/install_rustup
+          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}-
+            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}
+
+      - name: Sanitize restored source repositories
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d build/libmpv/toolchain/src_packages ]; then
+            find build/libmpv/toolchain/src_packages -type d -name .git -prune -print0 |
+              while IFS= read -r -d '' git_dir; do
+                repo="${git_dir%/.git}"
+                git -C "$repo" am --abort >/dev/null 2>&1 || true
+                git -C "$repo" reset --hard
+              done
+          fi
+
       - name: Apply reviewed LGPL recipe
         shell: bash
         run: |
@@ -63,6 +102,9 @@ jobs:
             git -C build/libmpv/toolchain am --3way "$GITHUB_WORKSPACE/$patch"
           done
           git -C build/libmpv/toolchain am --3way "$GITHUB_WORKSPACE/build/libmpv/recipe/compile-lgpl-libmpv.patch"
+          for patch in "$GITHUB_WORKSPACE"/third_party/libmpv/patches/*.patch; do
+            git -C build/libmpv/toolchain apply "$patch"
+          done
 
       - name: Pin mpv and FFmpeg source commits
         shell: python
@@ -90,6 +132,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config --global user.name "ResubWinny Build"
+          git config --global user.email "build@resubwinny.invalid"
           git config --global --add safe.directory "$GITHUB_WORKSPACE/build/libmpv/toolchain"
           git config --global --add safe.directory "$GITHUB_WORKSPACE/build/libmpv/recipe"
           sed -i "/ccache_conf.in/d" build/libmpv/toolchain/CMakeLists.txt
@@ -97,6 +141,38 @@ jobs:
           chmod +x build/libmpv/recipe/build.sh
           cd build/libmpv/toolchain
           bash ../recipe/build.sh -t 64 -c clang -s true
+
+      - name: Summarize failed build diagnostics
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          df -h
+          du -sh build/libmpv/toolchain/build* build/libmpv/toolchain/src_packages 2>/dev/null || true
+          find build/libmpv/toolchain/build* -type f \
+            \( -name '*.log' -o -name CMakeCache.txt \) -print 2>/dev/null || true
+
+      - name: Upload failed build diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: libmpv-build-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            build/libmpv/toolchain/build*/**/*.log
+            build/libmpv/toolchain/build*/**/CMakeCache.txt
+
+      - name: Save reusable libmpv build state
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            build/libmpv/toolchain/build64
+            build/libmpv/toolchain/src_packages
+            build/libmpv/toolchain/clang_root
+            build/libmpv/toolchain/install_rustup
+          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}-${{ github.run_id }}
 
       - name: Locate and extract binary artifact
         shell: bash
@@ -147,6 +223,7 @@ jobs:
               "tools": {
                   "clang": output("clang", "--version").splitlines()[0],
                   "cmake": output("cmake", "--version").splitlines()[0],
+                  "meson": output("meson", "--version"),
                   "ninja": output("ninja", "--version"),
                   "python": platform.python_version(),
               },
@@ -175,6 +252,8 @@ jobs:
           retention-days: 30
           path: |
             build/libmpv/mpv-dev-lgpl-x86_64-*.7z
+            build/libmpv/binary/libmpv-2.dll
+            build/libmpv/binary/libmpv.dll.a
             build/libmpv/corresponding-source/libmpv-corresponding-source-*.tar.gz
             build/libmpv/corresponding-source/SOURCE-RECEIPT.json
             build/libmpv/corresponding-source/PATCHED-TOOLCHAIN.diff
