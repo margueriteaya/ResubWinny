@@ -1,5 +1,7 @@
 # Changelog
 
+> **唯一权威原文（简体中文）**。其他语言： [English](CHANGELOG.en.md) · [繁體中文](CHANGELOG.zh-TW.md) · [日本語](CHANGELOG.ja.md)
+
 本项目仍处于早期 Alpha 阶段，版本可能包含破坏性变更。
 
 ## [0.2.2-alpha.1] - 2026-08-30

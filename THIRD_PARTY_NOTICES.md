@@ -94,6 +94,21 @@ production control first appears or changes size; WebView2 performs live
 backdrop sampling through its SVG filter compositor. The demo shell, dragging
 code, and continuous mouse-driven map generation are not included.
 
+## PlayStation-3-XMB
+
+- Upstream: <https://github.com/linkev/PlayStation-3-XMB>
+- Reviewed commit: `1ec453a9dddec5448d615116ff428349f42d454e`
+- License: MIT
+- Copyright: Copyright (c) 2025 Mart
+- Local license: `third_party/playstation-3-xmb/LICENSE`
+
+The onboarding hero directly integrates the upstream default spline renderer,
+reverse-engineered displacement pipeline, settings, background pass, and
+particle renderer. ResubWinny supplies its own Svelte lifecycle and right-to-left
+reveal, transparent background-pass integration, and onboarding colour field;
+the upstream wave displacement and particle geometry remain unchanged. The
+upstream controls, logos, and optional gradient presets are excluded.
+
 ## Package-managed dependencies
 
 Rust and npm dependencies are pinned by `Cargo.lock` and

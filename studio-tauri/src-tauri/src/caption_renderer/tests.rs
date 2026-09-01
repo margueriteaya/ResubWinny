@@ -7,6 +7,7 @@ use super::{
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use fontdue::{Font, FontSettings};
 use serde_json::json;
+use std::path::{Path, PathBuf};
 
 fn visible_alpha_bounds(frame: &super::CaptionPlaneFrame) -> Option<(u32, u32, u32, u32)> {
     let bytes = BASE64
@@ -32,6 +33,422 @@ fn visible_alpha_bounds(frame: &super::CaptionPlaneFrame) -> Option<(u32, u32, u
         }
     }
     bounds
+}
+
+const ONBOARDING_ASSET_NAMES: [&str; 5] = [
+    "00-positioning.png",
+    "01-white-copy.png",
+    "02-yellow-caption.png",
+    "03-ruby.png",
+    "04-drcs.png",
+];
+
+const ONBOARDING_MOTION_ASSET_NAMES: [&str; 3] =
+    ["00-main-cell.png", "00-ruby-cell.png", "05-drcs.png"];
+
+const ONBOARDING_TITLE_ELEMENT_ASSETS: [(&str, usize, usize, usize, usize); 7] = [
+    ("06-title-subtitle.png", 495, 690, 741, 842),
+    ("07-title-wo.png", 741, 690, 851, 842),
+    ("08-title-comma.png", 851, 760, 919, 842),
+    ("09-title-shape-ruby.png", 919, 635, 1128, 842),
+    ("10-title-ni.png", 1128, 705, 1204, 842),
+    ("11-title-suru.png", 1204, 690, 1441, 842),
+    ("12-title-drcs.png", 1441, 690, 1550, 842),
+];
+
+const ONBOARDING_TITLE_LIGHT_ASSET_NAMES: [&str; 7] = [
+    "06-title-subtitle-light.png",
+    "07-title-wo-light.png",
+    "08-title-comma-light.png",
+    "09-title-shape-ruby-light.png",
+    "10-title-ni-light.png",
+    "11-title-suru-light.png",
+    "12-title-drcs-light.png",
+];
+
+const ONBOARDING_UNIFIED_TITLE_LIGHT_ASSET_NAME: &str = "13-title-unified-light.png";
+
+fn onboarding_asset_directory() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../public/onboarding")
+}
+
+fn onboarding_pixel(frame: &[u8], x: usize, y: usize) -> &[u8] {
+    let index = (y * 1920 + x) * 4;
+    &frame[index..index + 4]
+}
+
+fn onboarding_interval(rich_body: &str) -> serde_json::Value {
+    json!({
+        "text": "字幕を、形にする",
+        "x": 400,
+        "y": 620,
+        "width": 1150,
+        "height": 230,
+        "rich_body": rich_body,
+        "style": {
+            "font_family": "丸ゴシック",
+            "font_size": "112px",
+            "line_height": "132px",
+            "letter_spacing": "5px",
+            "writing_mode": "horizontal-tb",
+            "text_align": "center",
+            "display_align": "center",
+            "color": "#FFFFFFFF",
+            "background_color": "#00000000",
+            "text_outline": "4px #000000"
+        }
+    })
+}
+
+fn onboarding_frame(rich_body: &str) -> super::CaptionPlaneFrame {
+    compose(&[onboarding_interval(rich_body)]).expect("onboarding caption frame")
+}
+
+fn onboarding_main_background() -> Vec<u8> {
+    let mut pixels = vec![0_u8; 1920 * 1080 * 4];
+    super::fill_rect(&mut pixels, 495, 700, 1055, 130, [0, 0, 0, 153]);
+    pixels
+}
+
+fn onboarding_ruby_background() -> Vec<u8> {
+    let mut pixels = vec![0_u8; 1920 * 1080 * 4];
+    super::fill_rect(&mut pixels, 905, 655, 245, 45, [0, 0, 0, 153]);
+    pixels
+}
+
+fn onboarding_background() -> Vec<u8> {
+    let mut pixels = onboarding_main_background();
+    let ruby = onboarding_ruby_background();
+    super::blend_layer(&mut pixels, 1920, 1080, 0, 0, 1920, 1080, &ruby);
+    pixels
+}
+
+fn add_synthetic_file_drcs(mut pixels: Vec<u8>) -> Vec<u8> {
+    const DRCS: [&str; 12] = [
+        "111111110000",
+        "100000011000",
+        "100000010100",
+        "100000011111",
+        "100000000001",
+        "100111110001",
+        "100100010001",
+        "100101010001",
+        "100100010001",
+        "100111110001",
+        "100000000001",
+        "111111111111",
+    ];
+    let scale = 6_i32;
+    let origin_x = 1454_i32;
+    let origin_y = 728_i32;
+    for (row, source) in DRCS.iter().enumerate() {
+        for (column, value) in source.bytes().enumerate() {
+            if value != b'1' {
+                continue;
+            }
+            super::fill_rect(
+                &mut pixels,
+                origin_x + column as i32 * scale,
+                origin_y + row as i32 * scale,
+                scale - 1,
+                scale - 1,
+                [255, 255, 255, 255],
+            );
+        }
+    }
+    pixels
+}
+
+fn onboarding_title_element(
+    source: &[u8],
+    left: usize,
+    top: usize,
+    right: usize,
+    bottom: usize,
+) -> Vec<u8> {
+    let width = right - left;
+    let height = bottom - top;
+    let mut element = vec![0_u8; width * height * 4];
+    for (target_y, source_y) in (top..bottom).enumerate() {
+        let source_start = (source_y * 1920 + left) * 4;
+        let source_end = (source_y * 1920 + right) * 4;
+        let target_start = target_y * width * 4;
+        element[target_start..target_start + width * 4]
+            .copy_from_slice(&source[source_start..source_end]);
+    }
+    element
+}
+
+fn onboarding_title_light_mask(element: &[u8]) -> Vec<u8> {
+    element
+        .chunks_exact(4)
+        .flat_map(|pixel| {
+            let luminance = pixel[0].max(pixel[1]).max(pixel[2]);
+            let light_alpha = if luminance <= 64 {
+                0
+            } else {
+                ((u16::from(pixel[3]) * u16::from(luminance - 64)) / 191) as u8
+            };
+            [255, 255, 255, light_alpha]
+        })
+        .collect()
+}
+
+#[test]
+#[ignore = "explicitly regenerates checked-in onboarding overlay assets"]
+fn generate_onboarding_overlay_assets() {
+    assert_eq!(
+        std::env::var("RESUBWINNY_UPDATE_ONBOARDING_ASSETS").as_deref(),
+        Ok("1")
+    );
+    let directory = onboarding_asset_directory();
+    std::fs::create_dir_all(&directory).expect("onboarding asset directory");
+    let main_background = onboarding_main_background();
+    let ruby_background = onboarding_ruby_background();
+    let blank = onboarding_background();
+    let white = onboarding_frame("字幕を、形にする");
+    let yellow = onboarding_frame("<span tts:color='#FFFF00FF'>字幕</span>を、形にする");
+    let ruby = onboarding_frame(
+        "<span tts:color='#FFFF00FF'>字幕</span>を、<ruby><span tts:ruby='base'>形</span><rt><span tts:ruby='text' tts:fontSize='44px'>ファイル</span></rt></ruby>にする",
+    );
+    let white_pixels = white.pixels.to_vec();
+    let yellow_pixels = yellow.pixels.to_vec();
+    let ruby_pixels = ruby.pixels.to_vec();
+    let final_pixels = add_synthetic_file_drcs(ruby_pixels.clone());
+    let frames: [&[u8]; 5] = [
+        &blank,
+        &white_pixels,
+        &yellow_pixels,
+        &ruby_pixels,
+        &final_pixels,
+    ];
+    for (name, pixels) in ONBOARDING_ASSET_NAMES.iter().zip(frames) {
+        let bytes = super::encode_png(1920, 1080, pixels).expect("encoded onboarding PNG");
+        std::fs::write(directory.join(name), bytes).expect("written onboarding PNG");
+    }
+    let drcs_pixels = add_synthetic_file_drcs(vec![0_u8; 1920 * 1080 * 4]);
+    for (name, pixels) in ONBOARDING_MOTION_ASSET_NAMES.iter().zip([
+        main_background.as_slice(),
+        ruby_background.as_slice(),
+        drcs_pixels.as_slice(),
+    ]) {
+        let bytes = super::encode_png(1920, 1080, pixels).expect("encoded onboarding motion PNG");
+        std::fs::write(directory.join(name), bytes).expect("written onboarding motion PNG");
+    }
+    for ((name, left, top, right, bottom), light_name) in ONBOARDING_TITLE_ELEMENT_ASSETS
+        .into_iter()
+        .zip(ONBOARDING_TITLE_LIGHT_ASSET_NAMES)
+    {
+        let pixels = onboarding_title_element(&final_pixels, left, top, right, bottom);
+        let bytes = super::encode_png((right - left) as u32, (bottom - top) as u32, &pixels)
+            .expect("encoded onboarding title element PNG");
+        std::fs::write(directory.join(name), bytes).expect("written onboarding title element PNG");
+        let light_mask = onboarding_title_light_mask(&pixels);
+        let bytes = super::encode_png((right - left) as u32, (bottom - top) as u32, &light_mask)
+            .expect("encoded onboarding title light mask PNG");
+        std::fs::write(directory.join(light_name), bytes)
+            .expect("written onboarding title light mask PNG");
+    }
+    let unified_light_mask = onboarding_title_light_mask(&final_pixels);
+    let bytes = super::encode_png(1920, 1080, &unified_light_mask)
+        .expect("encoded unified onboarding title light mask PNG");
+    std::fs::write(
+        directory.join(ONBOARDING_UNIFIED_TITLE_LIGHT_ASSET_NAME),
+        bytes,
+    )
+    .expect("written unified onboarding title light mask PNG");
+}
+
+#[test]
+fn checked_in_onboarding_overlay_assets_are_transparent_native_planes() {
+    let directory = onboarding_asset_directory();
+    let mut decoded = Vec::new();
+    for name in ONBOARDING_ASSET_NAMES {
+        let bytes = std::fs::read(directory.join(name)).expect("checked-in onboarding asset");
+        let (pixels, width, height) = super::decode_png(&bytes).expect("valid onboarding PNG");
+        assert_eq!((width, height), (1920, 1080));
+        assert_eq!(
+            &pixels[0..4],
+            &[0, 0, 0, 0],
+            "outside the caption region remains transparent"
+        );
+        decoded.push(pixels);
+    }
+    for name in ONBOARDING_MOTION_ASSET_NAMES {
+        let bytes =
+            std::fs::read(directory.join(name)).expect("checked-in onboarding motion asset");
+        let (_, width, height) = super::decode_png(&bytes).expect("valid onboarding motion PNG");
+        assert_eq!((width, height), (1920, 1080));
+    }
+    for ((name, left, top, right, bottom), light_name) in ONBOARDING_TITLE_ELEMENT_ASSETS
+        .into_iter()
+        .zip(ONBOARDING_TITLE_LIGHT_ASSET_NAMES)
+    {
+        let bytes =
+            std::fs::read(directory.join(name)).expect("checked-in onboarding title element");
+        let (pixels, width, height) =
+            super::decode_png(&bytes).expect("valid onboarding title element PNG");
+        assert_eq!(
+            (width, height),
+            ((right - left) as u32, (bottom - top) as u32)
+        );
+        assert!(
+            pixels.chunks_exact(4).any(|pixel| pixel[3] > 0),
+            "{name} contains visible ink"
+        );
+        assert!(
+            left < right && top < bottom,
+            "{name} has a non-empty local element boundary"
+        );
+        let bytes = std::fs::read(directory.join(light_name))
+            .expect("checked-in onboarding title light mask");
+        let (light_pixels, light_width, light_height) =
+            super::decode_png(&bytes).expect("valid onboarding title light mask PNG");
+        assert_eq!((light_width, light_height), (width, height));
+        assert!(
+            light_pixels.chunks_exact(4).any(|pixel| pixel[3] > 0),
+            "{light_name} contains a luminous stroke mask"
+        );
+        assert!(
+            light_pixels
+                .chunks_exact(4)
+                .all(|pixel| pixel[3] == 0 || pixel[0..3] == [255, 255, 255]),
+            "{light_name} is a neutral alpha mask"
+        );
+        if light_name == "09-title-shape-ruby-light.png" {
+            let ruby_band_end = width as usize * 80 * 4;
+            assert!(
+                light_pixels[..ruby_band_end]
+                    .chunks_exact(4)
+                    .any(|pixel| pixel[3] > 0),
+                "ファイル participates in the luminous stroke mask"
+            );
+            assert!(
+                light_pixels[ruby_band_end..]
+                    .chunks_exact(4)
+                    .any(|pixel| pixel[3] > 0),
+                "形 remains in the same luminous element"
+            );
+        }
+    }
+    let bytes = std::fs::read(directory.join(ONBOARDING_UNIFIED_TITLE_LIGHT_ASSET_NAME))
+        .expect("checked-in unified onboarding title light mask");
+    let (unified_light, width, height) =
+        super::decode_png(&bytes).expect("valid unified onboarding title light mask PNG");
+    assert_eq!((width, height), (1920, 1080));
+    assert!(
+        (650..705).any(|y| (940..1128).any(|x| onboarding_pixel(&unified_light, x, y)[3] > 0)),
+        "unified light includes ファイル"
+    );
+    assert!(
+        (710..830).any(|y| (495..1440).any(|x| onboarding_pixel(&unified_light, x, y)[3] > 0)),
+        "unified light includes the main title line"
+    );
+    assert!(
+        (728..799).any(|y| (1454..1525).any(|x| onboarding_pixel(&unified_light, x, y)[3] > 0)),
+        "unified light includes DRCS"
+    );
+    for (label, left, right) in [
+        ("字", 495, 618),
+        ("幕", 618, 741),
+        ("を", 741, 851),
+        ("、", 851, 919),
+        ("形", 919, 1128),
+        ("に", 1128, 1204),
+        ("す", 1204, 1322),
+        ("る", 1322, 1441),
+    ] {
+        assert!(
+            (690..842)
+                .any(|y| (left..right).any(|x| onboarding_pixel(&unified_light, x, y)[3] > 0)),
+            "{label} has luminous source strokes"
+        );
+    }
+    assert!(
+        decoded[0]
+            .chunks_exact(4)
+            .any(|pixel| pixel == [0, 0, 0, 153])
+    );
+    assert!(
+        decoded[0]
+            .chunks_exact(4)
+            .all(|pixel| pixel[3] == 0 || pixel[3] == 153),
+        "background is one uniform-alpha union without stacked shadows"
+    );
+    assert_eq!(
+        onboarding_pixel(&decoded[0], 500, 705),
+        &[0, 0, 0, 153],
+        "main-line cell background"
+    );
+    assert_eq!(
+        onboarding_pixel(&decoded[0], 910, 660),
+        &[0, 0, 0, 153],
+        "raised ruby cell background"
+    );
+    assert_eq!(
+        onboarding_pixel(&decoded[0], 800, 660),
+        &[0, 0, 0, 0],
+        "ruby background does not span the line"
+    );
+    assert_eq!(
+        onboarding_pixel(&decoded[0], 500, 835),
+        &[0, 0, 0, 0],
+        "main-line background stays optically tight"
+    );
+    let mut main_bounds = (usize::MAX, usize::MAX, 0_usize, 0_usize);
+    for y in 700..830 {
+        for x in 495..1450 {
+            if onboarding_pixel(&decoded[3], x, y)[3] <= 180 {
+                continue;
+            }
+            main_bounds = (
+                main_bounds.0.min(x),
+                main_bounds.1.min(y),
+                main_bounds.2.max(x),
+                main_bounds.3.max(y),
+            );
+        }
+    }
+    let mut drcs_bounds = (usize::MAX, usize::MAX, 0_usize, 0_usize);
+    for y in 700..830 {
+        for x in 1400..1550 {
+            if onboarding_pixel(&decoded[3], x, y) == onboarding_pixel(&decoded[4], x, y) {
+                continue;
+            }
+            drcs_bounds = (
+                drcs_bounds.0.min(x),
+                drcs_bounds.1.min(y),
+                drcs_bounds.2.max(x),
+                drcs_bounds.3.max(y),
+            );
+        }
+    }
+    let main_center_y = (main_bounds.1 + main_bounds.3) as isize;
+    let drcs_center_y = (drcs_bounds.1 + drcs_bounds.3) as isize;
+    assert!(
+        (main_center_y - drcs_center_y).abs() <= 1,
+        "DRCS and main-line ink share an optical vertical centre"
+    );
+    let preceding_gap = drcs_bounds.0 - main_bounds.2 - 1;
+    let trailing_gap = 1549 - drcs_bounds.2;
+    assert!(
+        (preceding_gap as isize - trailing_gap as isize).abs() <= 1,
+        "DRCS is optically balanced in the final cell"
+    );
+    assert_ne!(
+        decoded[1], decoded[2],
+        "yellow caption state differs from white copy"
+    );
+    assert_ne!(decoded[2], decoded[3], "ruby adds a distinct native layer");
+    assert_ne!(
+        decoded[3], decoded[4],
+        "synthetic DRCS adds a distinct bitmap cell"
+    );
+    assert!(
+        decoded[2]
+            .chunks_exact(4)
+            .any(|pixel| pixel[0] > 220 && pixel[1] > 210 && pixel[2] < 80 && pixel[3] > 0)
+    );
 }
 
 #[test]

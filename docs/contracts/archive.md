@@ -1,46 +1,38 @@
-# Caption archive contract
+[简体中文](archive.md) · [繁體中文](archive.zh-TW.md) · [日本語](archive.ja.md) · [English](archive.en.md)
 
-The caption archive is a UTF-8 JSON Lines (`.caption.jsonl`) format. It is the
-project's durable intermediate representation; ASS, TTML, and preview output
-may be derived from it without treating those presentation formats as
-lossless.
+> 简体中文版本是唯一权威来源。其他语言版本仅为同步译文。
 
-## Header and schema version
+# 字幕 archive 合同
 
-The first complete line is an archive header:
+字幕 archive 是 UTF-8 JSON Lines（`.caption.jsonl`）格式。它是项目的持久中间表示；
+可从中派生 ASS、TTML 和预览输出，而不把这些呈现格式视为无损格式。
+
+## 文件头与 schema 版本
+
+第一行完整记录是 archive 文件头：
 
 ```json
 {"type":"arib_caption_studio_archive","schemaVersion":1,"version":1,"source":"recording.ts","route":"arib_std_b24","format":"jsonl"}
 ```
 
-`schemaVersion` is the authoritative archive compatibility version. Version 1
-also writes the original `version` field as a compatibility alias; the two
-values must agree. New writers must not silently change the meaning or shape
-of existing records without incrementing `schemaVersion`.
+`schemaVersion` 是权威的 archive 兼容性版本。版本 1 还把原有的 `version` 字段写作兼容别名；
+两个值必须一致。新的写入器不得在不递增 `schemaVersion` 的情况下，静默改变现有记录的含义或结构。
 
-Readers that only need bounded timeline or preview records may ignore unknown
-record types. A reader that needs complete semantic fidelity must reject an
-unsupported `schemaVersion` instead of guessing. Files produced before the
-explicit `schemaVersion` field used `version: 1` and remain version 1 archives.
+只需要有界时间轴或预览记录的读取器可以忽略未知记录类型。需要完整语义保真度的读取器必须拒绝
+不受支持的 `schemaVersion`，而不能猜测。显式 `schemaVersion` 字段引入前生成的文件使用
+`version: 1`，仍属于版本 1 archive。
 
-## Records
+## 记录
 
-Every following complete line is an independent JSON object with a stable
-`type`. Caption payload records use an envelope shaped as
-`{"type":"caption","value":{...}}`; other current types include
-`region_interval`, `scene`, `resource_reference`, `resource_evidence`,
-`asset_evidence`, and `summary`.
+之后的每一完整行都是带稳定 `type` 的独立 JSON 对象。字幕 payload 记录使用
+`{"type":"caption","value":{...}}` 形式的 envelope；其他现有类型包括 `region_interval`、
+`scene`、`resource_reference`、`resource_evidence`、`asset_evidence` 和 `summary`。
 
-The writer flushes complete caption records while conversion is running so
-the desktop can tail the file. Readers must ignore an incomplete final line
-until a later append completes it. Transport-specific B24 and B62 evidence
-remains distinct; common semantics are represented in caption records rather
-than by pretending the transports share a decoder model.
+转换运行期间，写入器会 flush 完整字幕记录，使桌面端能够跟随读取文件。读取器必须忽略不完整的
+最后一行，直到后续追加使其完整。B24 与 B62 的传输专属证据保持分离；公共语义通过字幕记录表达，
+而不是假装两种传输共用同一个解码器模型。
 
-Inside the Worker, both routes cross the closed, zero-copy `CaptionCueRef`
-semantic boundary before archive publication. It standardises timing, region,
-route identity, plain text, ruby count, and DRCS presence while retaining each
-route's faithful payload. Style, glyph pixels, and TTML resource evidence stay
-route-specific. Schema v1
-therefore continues to publish B24 as `region_interval` and ARIB-TTML as
-`caption`; the shared internal boundary does not relabel or duplicate records.
+在 Worker 内，两条路线都要先跨越封闭、零拷贝的 `CaptionCueRef` 语义边界，再发布到 archive。
+它统一时间、区域、路线标识、纯文本、ruby 数量和 DRCS 存在性，同时保留每条路线的忠实 payload。
+样式、字形像素与 TTML 资源证据仍为路线专属。因此 schema v1 继续把 B24 发布为
+`region_interval`、把 ARIB-TTML 发布为 `caption`；共享的内部边界不会重命名或复制记录。

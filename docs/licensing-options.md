@@ -1,89 +1,48 @@
-# ResubWinny licensing options
+# ResubWinny 许可证选项
 
-This is an engineering compatibility review, not legal advice. The repository
-owner selected MPL-2.0 for ResubWinny on 2026-07-27. The alternatives below are
-retained as decision history rather than active licensing choices.
+[简体中文](licensing-options.md) · [繁體中文](licensing-options.zh-TW.md) · [日本語](licensing-options.ja.md) · [English](licensing-options.en.md)
 
-## Selected: MPL-2.0
+> **规范性说明：** 简体中文版本是唯一权威来源。其他语言版本仅为同步译文；如有歧义或冲突，以简体中文版本为准。
 
-MPL-2.0 applies copyleft at the source-file level. A distributor may combine
-ResubWinny with a larger proprietary product, but modifications to MPL-covered
-files must remain available under MPL-2.0. This fits the project's stated goal:
-prevent improvements to the caption core from returning only as opaque
-binaries without making every program that invokes the Worker adopt the same
-license.
+这是一份工程兼容性审查，不构成法律意见。仓库所有者于 2026-07-27 为 ResubWinny 选择 MPL-2.0。下列替代方案作为决策历史保留，而非当前有效的许可证选择。
 
-Use one license for the Rust Worker, Tauri service, and Svelte application.
-Keep the versioned Worker protocol and CLI usable by separately licensed tools.
-The canonical root `LICENSE` text and `license = "MPL-2.0"` package metadata
-are now present. Desktop bundles also include the root license.
+## 已选择：MPL-2.0
 
-## Stronger alternative: GPL-3.0-or-later
+MPL-2.0 在源文件层面施加 copyleft。分发者可以将 ResubWinny 与更大的专有产品结合，但对 MPL 覆盖文件的修改必须继续以 MPL-2.0 提供。这符合项目既定目标：防止字幕核心的改进只以不透明二进制形式回流，同时不要求每个调用 Worker 的程序采用同一许可证。
 
-GPL-3.0-or-later requires distributed derivative applications to provide their
-corresponding source under the GPL. It offers stronger protection against
-closed forks, but makes proprietary desktop integration and some store or
-appliance distribution significantly harder. Choose it only if that exclusion
-is intentional.
+Rust Worker、Tauri 服务和 Svelte 应用使用同一许可证。保留带版本的 Worker 协议和 CLI，以供使用其他许可证的工具使用。权威根目录 `LICENSE` 文本和 `license = "MPL-2.0"` 包元数据现已存在。桌面捆绑包也包含根许可证。
 
-## Split alternative: LGPL-2.1-or-later core, MPL-2.0 desktop
+## 更强的替代方案：GPL-3.0-or-later
 
-The Worker/core can use LGPL-2.1-or-later while the Tauri/Svelte application
-uses MPL-2.0. This is useful if binary linking to a future shared core library
-is a primary product goal. Today the narrow boundary is a process protocol, not
-a public shared library, so the split adds contributor and release complexity
-without a concrete benefit. It is not the recommended v0.1 arrangement.
+GPL-3.0-or-later 要求被分发的衍生应用在 GPL 下提供其对应源代码。它对闭源分叉提供更强保护，但会显著增加专有桌面集成，以及某些商店或设备分发的难度。仅当这种排除是有意为之时才选择它。
 
-## Permissive alternative: Apache-2.0 OR MIT
+## 拆分替代方案：LGPL-2.1-or-later 核心，MPL-2.0 桌面端
 
-This is the easiest option for embedding, packaging and corporate adoption.
-It permits closed modified forks and therefore does not meet the project's
-original reciprocity goal. Apache-2.0 adds an express patent grant; MIT is
-shorter. Dual `Apache-2.0 OR MIT` is conventional in the Rust ecosystem.
+Worker/核心可以使用 LGPL-2.1-or-later，而 Tauri/Svelte 应用使用 MPL-2.0。若将来对共享核心库进行二进制链接是主要产品目标，这一做法会有用。当前狭窄边界是进程协议，而非公共共享库；因此拆分会增加贡献和发布复杂性，却没有具体收益。它不是推荐的 v0.1 安排。
 
-## Not recommended: Anti 996 License 1.0
+## 宽松替代方案：Apache-2.0 OR MIT
 
-Anti 996 License 1.0 is not an appropriate operative license for a project
-that intends to be distributed as open-source software. The reviewed upstream
-text labels itself a draft and conditions use on compliance with the strictest
-applicable labour rules across several jurisdictions. Those conditions are an
-ethical-use restriction, not ordinary copyright reciprocity. They conflict
-with the Open Source Definition's non-discrimination principles and the
-license is not present on the OSI-approved license list.
+这是最便于嵌入、打包和企业采用的选项。它允许闭源的修改版分叉，因而不符合项目最初的互惠目标。Apache-2.0 增加明确的专利授权；MIT 更简短。双重 `Apache-2.0 OR MIT` 在 Rust 生态中很常见。
 
-It should not be combined with MPL-2.0:
+## 不推荐：Anti 996 License 1.0
 
-- `MPL-2.0 OR Anti-996-1.0` lets every recipient choose MPL-2.0 and therefore
-  does not enforce the Anti-996 conditions.
-- `MPL-2.0 AND Anti-996-1.0` adds non-standard restrictions to MPL-covered
-  files, creates uncertain compatibility and enforcement, and is likely to be
-  rejected by package repositories and downstream distributors.
+Anti 996 License 1.0 不适合作为拟以开源软件形式分发项目的有效许可证。已审查的上游文本将其标为草案，并将使用条件设为遵守多个司法辖区中最严格的适用劳动规则。这些条件是伦理使用限制，而非通常的版权互惠。它们与《开放源代码定义》的非歧视原则冲突，且该许可证不在 OSI 批准的许可证列表中。
 
-ResubWinny may state support for fair labour practices in its README, code of
-conduct, or project governance without turning that position into a software
-use restriction. Such a statement must be identified as non-binding and must
-not be presented as part of the MPL-2.0 grant.
+它不应与 MPL-2.0 结合：
 
-## Third-party and asset boundaries
+- `MPL-2.0 OR Anti-996-1.0` 允许每个接收者选择 MPL-2.0，因此不能执行 Anti-996 条件。
+- `MPL-2.0 AND Anti-996-1.0` 会给 MPL 覆盖文件增加非标准限制，造成不确定的兼容性和执行问题，并且很可能被包仓库和下游分发者拒绝。
 
-The project license does not replace dependency obligations:
+ResubWinny 可在其 README、行为准则或项目治理中声明对公平劳动实践的支持，而不把该立场变为软件使用限制。这类声明必须标识为不具约束力，且不得被表述为 MPL-2.0 授权的一部分。
 
-- `libaribcaption` is MIT and its copyright/license notice must be retained.
-- The bundled Windows `libmpv-2.dll` is an LGPL build. It must remain
-  replaceable, ship the applicable LGPL notices, and have a valid
-  corresponding-source mechanism for that exact build.
-- Rounded M+ 1m for ARIB is redistributed under the M+ FONT LICENSE. Its
-  additional WadaLabMaruGo2004ARIB glyph source permits modification,
-  commercial use, bundling, and redistribution and is published as public
-  domain/Unlicense by its current upstream. The exact bundled binary matches
-  `5ym/arib-font` by SHA-256. Its provenance and both grants are recorded next
-  to the font in `third_party/rounded-mplus-1m-arib/` and must ship with bundles.
-- `makeding/aribb62.js` declares MIT in package metadata but had no standalone
-  license file at the reviewed commit. Behavioural references are documented;
-  copied source must not be vendored without a redistributable notice.
-- Broadcast corpus files are not covered by the source license. Public tests
-  must use redistributable constructed fixtures, hashes, or independently
-  licensed excerpts.
+## 第三方与资源边界
 
-Before public distribution, add `THIRD_PARTY_NOTICES.md` and include the
-relevant third-party notices in every installer.
+项目许可证不替代依赖义务：
+
+- `libaribcaption` 为 MIT，必须保留其版权/许可证声明。
+- 随附的 Windows `libmpv-2.dll` 是 LGPL 构建。它必须保持可替换，随附适用 LGPL 声明，并为该精确构建提供有效的对应源代码机制。
+- 用于 ARIB 的 Rounded M+ 1m 在 M+ FONT LICENSE 下再分发。其附加的 WadaLabMaruGo2004ARIB 字形源允许修改、商业使用、捆绑和再分发，当前上游以公有领域/Unlicense 发布。精确随附的二进制文件按 SHA-256 与 `5ym/arib-font` 一致。其来源及两项授权记录在字体旁的 `third_party/rounded-mplus-1m-arib/` 中，并且必须随捆绑包发布。
+- `makeding/aribb62.js` 在包元数据中声明 MIT，但已审查提交中没有独立许可证文件。行为参考已有记录；没有可再分发声明时，不得随附复制的源代码。
+- 广播语料文件不受源代码许可证覆盖。公开测试必须使用可再分发的构造 fixture、哈希或独立许可的摘录。
+
+公开分发前，应添加 `THIRD_PARTY_NOTICES.md`，并在每个安装程序中包含相关第三方声明。

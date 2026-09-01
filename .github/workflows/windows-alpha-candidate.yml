@@ -38,7 +38,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefix studio-tauri
       - name: Download reviewed libmpv binary and corresponding source
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: libmpv-lgpl-windows-x86_64-release-candidate
           path: build/libmpv-candidate
@@ -64,7 +64,11 @@ jobs:
         run: ./scripts/package-source.ps1 -Revision '${{ inputs.release_tag }}'
       - name: Build installers
         shell: pwsh
-        run: ./scripts/build.ps1 -SkipNpmInstall
+        run: |
+          $env:RESUBWINNY_RELEASE_TIER = 'UnsignedWindowsAlpha'
+          $env:RESUBWINNY_BUILD_TAG = '${{ inputs.release_tag }}'
+          $env:RESUBWINNY_BUILD_COMMIT = (git rev-parse --verify '${{ inputs.release_tag }}^{commit}').Trim()
+          ./scripts/build.ps1 -SkipNpmInstall
       - name: Assemble auditable unsigned Alpha candidate
         shell: pwsh
         run: |

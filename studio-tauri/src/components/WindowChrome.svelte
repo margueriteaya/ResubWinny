@@ -20,6 +20,7 @@
   export let workspaceLayout: WorkspaceLayoutSettings = { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false };
   export let sourceInspectorCollapsed = workspaceLayout.sourceCollapsed;
   export let outputInspectorCollapsed = workspaceLayout.outputCollapsed;
+  export let minimal = false;
   export let onWindowAction: (action: "minimize" | "maximize" | "close") => void = () => {};
   export let onBeginDrag: () => void = () => {};
   export let onBeginResize: (direction: string) => void = () => {};
@@ -44,7 +45,7 @@
   <div role="presentation" class={`resize-handle resize-${edge}`} onmousedown={() => onBeginResize(direction)}></div>
 {/each}
 
-<header class="window-titlebar" data-liquid-region aria-label={t("app.titleBar")}>
+<header class="window-titlebar" class:minimal data-liquid-region aria-label={t("app.titleBar")}>
   <div class="traffic-lights" data-liquid-ignore aria-label={t("app.windowControls")}>
     {#each lights as light}
       <button class={`traffic-light traffic-${light.action}`} aria-label={light.label()} onclick={(event) => { event.stopPropagation(); onWindowAction(light.action); }}>

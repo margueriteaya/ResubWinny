@@ -108,4 +108,7 @@ import { FileType2, Filter, Grid3X3, Image, Maximize2, Minus, Plus, RotateCcw, S
   .dictionary-empty{display:grid;place-items:center;gap:8px;min-height:0;color:var(--rw-muted);text-align:center}.dictionary-empty h2,.dictionary-empty p{margin:0}.dictionary-empty h2{color:var(--rw-text);font-size:15px}
   @media(max-width:980px){.dictionary-content{grid-template-columns:minmax(0,1fr) 270px}.glyph-heading,.glyph-row{grid-template-columns:72px minmax(130px,1fr) 96px}.dictionary-tools{flex-wrap:wrap}.search{width:min(240px,48%)}}
   @media(max-width:720px){.dictionary-shell{height:auto;overflow:visible}.dictionary-content{grid-template-columns:1fr;overflow:visible}.glyph-table{overflow:visible;border-right:0}.dictionary-inspector{overflow:visible;border-top:1px solid var(--rw-border-subtle)}.dictionary-tools .tool-button:first-of-type{margin-left:0}}
+
+  /* DRCS identifiers and mapping notes are work data, not decorative labels. */
+  .tool-button{font-size:12px}.glyph-heading{height:34px;font-size:11px}.glyph-row{min-height:74px;contain-intrinsic-size:auto 74px}.mapping small,.mapping-status small{font-size:11px;line-height:15px}.mapping-status{font-size:12px}.table-footer{height:34px;font-size:11px}.filter-empty p,.dictionary-inspector header p{font-size:12px;line-height:16px}.zoom-row b{font-size:12px}.dictionary-inspector>label,.dictionary-inspector legend{font-size:12px}.dictionary-inspector input[type="text"]{font-size:12px}.mapping-hint{font-size:11px;line-height:15px}.save-mapping,.reset{font-size:12px}
 </style>
