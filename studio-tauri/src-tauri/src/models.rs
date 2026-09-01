@@ -8,13 +8,14 @@ pub struct AppSettings {
     pub ui_font: String,
     pub caption_font: String,
     pub default_format: String,
-    pub default_timeline: String,
     #[serde(default = "default_locale")]
     pub locale: String,
     #[serde(default = "default_theme")]
     pub theme: String,
     #[serde(default)]
     pub workspace_layout: WorkspaceLayoutSettings,
+    #[serde(default)]
+    pub onboarding_version: u32,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -50,10 +51,10 @@ impl Default for AppSettings {
             ui_font: "system".into(),
             caption_font: "arib".into(),
             default_format: "ASS".into(),
-            default_timeline: "Auto (Gap Merge + Overlap Resolve)".into(),
             locale: default_locale(),
             theme: default_theme(),
             workspace_layout: WorkspaceLayoutSettings::default(),
+            onboarding_version: 0,
         }
     }
 }

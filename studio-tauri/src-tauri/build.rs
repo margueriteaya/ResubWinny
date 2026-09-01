@@ -1,4 +1,7 @@
 fn main() {
+    println!("cargo:rerun-if-env-changed=RESUBWINNY_RELEASE_TIER");
+    println!("cargo:rerun-if-env-changed=RESUBWINNY_BUILD_TAG");
+    println!("cargo:rerun-if-env-changed=RESUBWINNY_BUILD_COMMIT");
     // Tauri validates bundle resources while compiling its build script. A
     // normal debug check should not require a prebuilt release Worker; release
     // builds still validate and bundle every resource from tauri.conf.json.

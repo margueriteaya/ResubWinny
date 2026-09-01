@@ -1,38 +1,25 @@
-# Security policy
+# 安全策略
 
-## Supported versions
+> **唯一权威原文（简体中文）**。其他语言： [English](SECURITY.en.md) · [繁體中文](SECURITY.zh-TW.md) · [日本語](SECURITY.ja.md)
 
-ResubWinny is currently an Alpha project. Security fixes are applied to the
-latest source revision and the newest `0.1.x` development package only. Older
-development binaries are not maintained.
+## 受支持版本
 
-Native preview is release-tested on Windows. macOS and Linux desktop preview
-backends are deferred and are not currently supported security surfaces. The
-cross-platform Worker and build checks do not imply native preview support.
+ResubWinny 目前仍是 Alpha 项目。安全修复仅适用于最新源码修订版和最新的 `0.1.x` 开发包；较旧的开发二进制文件不再维护。
 
-## Reporting a vulnerability
+原生预览仅在 Windows 上进行发布验收。macOS 和 Linux 的桌面预览后端已延期，目前不是受支持的安全边界。跨平台 Worker 和构建检查不代表原生预览获得支持。
 
-Do not publish an issue containing an exploitable broadcast sample, private
-recording, credential, or working proof of concept. Use the repository host's
-private vulnerability-reporting feature when available. Include:
+## 报告漏洞
 
-- affected revision and platform;
-- input route and the smallest legally shareable reproducer;
-- expected and observed behaviour;
-- whether the issue crosses a length, memory, filesystem, IPC, native-library,
-  or archive boundary; and
-- crash diagnostics with personal paths and programme data removed.
+请勿公开含有可利用广播样本、私有录制文件、凭据或可运行 PoC 的 issue。可用时，请使用仓库托管方的私有漏洞报告功能。报告应包括：
 
-Until a public repository has a private reporting channel, contact the project
-owner privately and request one before sending sensitive material. The project
-will acknowledge a complete report, assess affected versions, and coordinate a
-fix and disclosure window. No response-time guarantee is made during Alpha.
+- 受影响的修订版与平台；
+- 输入路线及可合法分享的最小复现样本；
+- 预期行为与实际行为；
+- 问题是否跨越长度、内存、文件系统、IPC、原生库或 archive 边界；以及
+- 已移除个人路径和节目数据的崩溃诊断信息。
 
-## Security boundaries
+在公开仓库具备私有报告渠道前，请先私下联系项目所有者并请求建立渠道，再发送敏感材料。项目将确认完整报告、评估受影响版本，并协调修复和披露窗口。Alpha 期间不保证响应时间。
 
-Recordings, TTML/XML, DRCS, archives, language packs, and dependency artifacts
-are untrusted input. Parsers must enforce length and allocation limits. The
-WebView does not receive video frames and does not parse media or calculate
-caption layout. Runtime components must not download or silently replace
-libmpv, libaribcaption, fonts, or language packs.
+## 安全边界
 
+录制文件、TTML/XML、DRCS、archive、语言包和依赖产物均为不受信任输入。解析器必须执行长度和分配限制。WebView 不接收视频帧，也不解析媒体或计算字幕排版。运行时组件不得下载或静默替换 libmpv、libaribcaption、字体或语言包。

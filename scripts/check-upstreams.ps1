@@ -36,20 +36,30 @@ function Get-RemoteHead {
 
 function Get-SourceSnapshotHash([string]$Directory) {
     $root = (Resolve-Path -LiteralPath $Directory).Path
-    $gitPrefix = (Join-Path $root '.git') + [IO.Path]::DirectorySeparatorChar
+    $repository = (& git -C $root rev-parse --show-toplevel).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $repository) {
+        throw "Could not locate the repository containing $Directory."
+    }
+    $relativeRoot = [IO.Path]::GetRelativePath($repository, $root).Replace('\', '/')
+    & git -C $repository diff --quiet HEAD -- $relativeRoot
+    if ($LASTEXITCODE -ne 0) {
+        throw "Source snapshot contains uncommitted changes: $relativeRoot"
+    }
+    $entries = @(& git -C $repository ls-tree -r HEAD -- $relativeRoot)
+    if ($LASTEXITCODE -ne 0 -or $entries.Count -eq 0) {
+        throw "Source snapshot has no tracked files: $relativeRoot"
+    }
     $hash = [Security.Cryptography.IncrementalHash]::CreateHash(
         [Security.Cryptography.HashAlgorithmName]::SHA256
     )
     try {
-        Get-ChildItem -LiteralPath $root -Recurse -File |
-            Where-Object { -not $_.FullName.StartsWith($gitPrefix) } |
-            Sort-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') } |
-            ForEach-Object {
-                $relative = [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/')
+        $entries | ForEach-Object {
+                $metadata, $path = $_ -split "`t", 2
+                $object = ($metadata -split '\s+')[2]
+                $relative = $path.Substring($relativeRoot.Length).TrimStart('/')
                 $hash.AppendData([Text.Encoding]::UTF8.GetBytes($relative))
                 $hash.AppendData([byte[]]@(0))
-                $hash.AppendData([BitConverter]::GetBytes([Int64]$_.Length))
-                $hash.AppendData([IO.File]::ReadAllBytes($_.FullName))
+                $hash.AppendData([Text.Encoding]::ASCII.GetBytes($object))
             }
         return [Convert]::ToHexString($hash.GetHashAndReset())
     } finally {

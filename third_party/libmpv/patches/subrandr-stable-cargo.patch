@@ -1,0 +1,32 @@
+From 0cc2e95275a18536dc2435a533c233782171e2b5 Mon Sep 17 00:00:00 2001
+From: ResubWinny Build <build@resubwinny.invalid>
+Date: Mon, 1 Sep 2026 00:10:00 +0000
+Subject: [PATCH] subrandr: use stable Cargo invocation
+
+The pinned subrandr source requires stable Rust 1.85 or newer. The pinned
+toolchain only uses Cargo's nightly-only `-C` option to select the source
+directory. Let CMake select that directory instead, so the existing stable
+Rust toolchain can build the same static library without nightly Cargo flags.
+---
+ packages/subrandr.cmake | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/packages/subrandr.cmake b/packages/subrandr.cmake
+--- a/packages/subrandr.cmake
++++ b/packages/subrandr.cmake
+@@ -12,10 +12,11 @@ ExternalProject_Add(subrandr
+     PATCH_COMMAND ""
+     CONFIGURE_COMMAND ""
+-    BUILD_COMMAND ${EXEC}
++    BUILD_COMMAND ${CMAKE_COMMAND} -E chdir <SOURCE_DIR>
++        ${EXEC}
+         LD_PRELOAD=
+         CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+         ${cargo_lto_rustflags}
+-        cargo -Z unstable-options -C <SOURCE_DIR> xtask install
++        cargo xtask install
+         --prefix ${MINGW_INSTALL_PREFIX}
+         --target ${TARGET_CPU}-pc-windows-${rust_target}
+         --static-library true
+-- 
+2.51.0

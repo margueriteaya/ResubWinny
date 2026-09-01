@@ -31,12 +31,15 @@ try {
 
     $limit = $MaxTrackedFileMiB * 1MB
     $oversized = foreach ($path in $tracked) {
+        if ($path -match '(^|/)\.') { continue }
         $absolutePath = Join-Path $root $path
         if (Test-Path -LiteralPath $absolutePath -PathType Leaf) {
             $item = Get-Item -LiteralPath $absolutePath
             if ($item.Length -gt $limit) {
                 "$path ($([math]::Round($item.Length / 1MB, 2)) MiB)"
             }
+        } elseif ($path -notmatch '(^|/)\.') {
+            throw "Tracked file is missing from the checkout: $path"
         }
     }
     if ($oversized) {
@@ -77,6 +80,22 @@ try {
     foreach ($required in @('LICENSE', 'THIRD_PARTY_NOTICES.md', 'SECURITY.md', 'CONTRIBUTING.md')) {
         if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
             throw "Required public repository file is missing: $required"
+        }
+    }
+
+    $dependencyManifest = Get-Content -Raw third_party/versions.json | ConvertFrom-Json
+    $libmpv = $dependencyManifest.dependencies.libmpvWindowsX86_64
+    $thirdPartyNotices = Get-Content -Raw THIRD_PARTY_NOTICES.md
+    $noticePins = [ordered]@{
+        buildTag = $libmpv.buildTag
+        asset = $libmpv.asset
+        assetSha256 = $libmpv.assetSha256
+        dllSha256 = $libmpv.dllSha256
+        importLibrarySha256 = $libmpv.importLibrarySha256
+    }
+    foreach ($pin in $noticePins.GetEnumerator()) {
+        if (-not $thirdPartyNotices.Contains([string]$pin.Value)) {
+            throw "THIRD_PARTY_NOTICES.md is missing the pinned libmpv $($pin.Key): $($pin.Value)"
         }
     }
 

@@ -1,8 +1,10 @@
 # 架构基线（中文规范）
 
+[简体中文（唯一权威）](architecture.zh-CN.md) | [English](architecture.en.md) | [日本語](architecture.ja.md) | [繁體中文（台灣）](architecture.zh-TW.md)
+
 > 当前桌面实现为 Tauri 2 + Svelte 5；文中历史版本记录中的 Slint 仅作历史说明，不代表当前架构。第三阶段核心已经落地：B62/受限 TLV 资源证据、同 MPU PNG 资源到 archive/低频预览的接线、职责拆分、archive 时间点预览、B24 原生字幕平面合成、TTML 横排与竖排文字光栅化、连续 base ruby 分组、跨列竖排 ruby、保守的 CJK/全角正立与拉丁字符旋转、TS/PSI/PES/B24 fuzz target、Windows `libmpv-render`、真实 4K 录制样本的阈值化长时性能门槛以及 Windows/macOS/Linux CI 检查矩阵已完成。标准 B62 描边、资源完整预览、独立 2K/8K 与 DPI/截图差分仍属于质量收敛项。Windows 是当前 Alpha 的原生预览发布平台；macOS/Linux 原生预览后端已明确延期，不属于当前阶段验收范围。WGL 零拷贝硬解互操作不是当前产品承诺。
 
-> 本文件是项目的唯一规范性架构文档。英语与日语版本是同步译文；歧义或冲突一律以本文件为准。
+> 本简体中文文件是项目唯一具权威性的规范架构文档。英语、日语与繁体中文（台湾）版本仅为同步译文；任何歧义或冲突一律以本简体中文文件为准。
 
 ## 收敛期边界（2026-08-29）
 

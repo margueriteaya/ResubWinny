@@ -105,6 +105,7 @@ pub fn get_preview_runtime(app: AppHandle) -> PreviewRuntime {
 }
 
 #[tauri::command]
+#[cfg(windows)]
 pub fn get_preview_render_diagnostics(
     state: State<'_, Arc<AppState>>,
 ) -> Result<PreviewRenderDiagnostics, String> {
@@ -159,6 +160,27 @@ pub fn get_preview_render_diagnostics(
         last_error: stats.last_error,
     })
 }
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn get_preview_render_diagnostics(
+    _: State<'_, Arc<AppState>>,
+) -> Result<PreviewRenderDiagnostics, String> {
+    Ok(PreviewRenderDiagnostics {
+        route: "none".into(),
+        active: false,
+        frames_presented: 0,
+        presents_per_second: 0.0,
+        caption_texture_uploads: 0,
+        caption_texture_clears: 0,
+        video_aspect: None,
+        surface_width: None,
+        surface_height: None,
+        decoder_mode: None,
+        fallback_reason: Some("Native preview is only implemented on Windows.".into()),
+        last_error: None,
+    })
+}
 #[cfg(test)]
 fn parse_mpv_time_response(response: &str) -> Option<f64> {
     let value = serde_json::from_str::<serde_json::Value>(response).ok()?;
@@ -186,6 +208,7 @@ fn mpv_overlay_command(path: &Path, x: i32, y: i32, width: i32, height: i32) -> 
 }
 
 #[path = "preview/native.rs"]
+#[cfg(windows)]
 mod native;
 #[cfg(test)]
 #[path = "preview/tests.rs"]

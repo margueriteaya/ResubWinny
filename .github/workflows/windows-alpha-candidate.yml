@@ -2,9 +2,19 @@ name: Windows Alpha candidate
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Annotated ResubWinny release tag to package
+        required: true
+        type: string
+      libmpv_run_id:
+        description: Successful libmpv LGPL workflow run containing binary and corresponding source
+        required: true
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   package:
@@ -13,6 +23,9 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.97.1
@@ -24,43 +37,59 @@ jobs:
           cache-dependency-path: studio-tauri/package-lock.json
       - name: Install frontend dependencies
         run: npm ci --prefix studio-tauri
-      - name: Install pinned Windows libmpv runtime
+      - name: Download reviewed libmpv binary and corresponding source
+        uses: actions/download-artifact@v8
+        with:
+          name: libmpv-lgpl-windows-x86_64-release-candidate
+          path: build/libmpv-candidate
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.libmpv_run_id }}
+      - name: Install the reviewed libmpv candidate
         shell: pwsh
-        run: ./scripts/setup-libmpv.ps1
+        run: |
+          $dll = Get-ChildItem build/libmpv-candidate -Recurse -File -Filter libmpv-2.dll
+          $import = Get-ChildItem build/libmpv-candidate -Recurse -File -Filter libmpv.dll.a
+          if (@($dll).Count -ne 1 -or @($import).Count -ne 1) {
+            throw 'The libmpv compliance artifact must contain exactly one DLL and import library.'
+          }
+          $destination = 'third_party/libmpv/windows-x86_64'
+          New-Item -ItemType Directory -Force -Path $destination | Out-Null
+          Copy-Item -LiteralPath $dll.FullName -Destination "$destination/libmpv-2.dll" -Force
+          Copy-Item -LiteralPath $import.FullName -Destination "$destination/libmpv.dll.a" -Force
       - name: Run package quality gate
         shell: pwsh
         run: ./scripts/check.ps1 -SkipFrontend -SkipFuzz -RequireLibmpvRuntime
       - name: Package public source candidate
         shell: pwsh
-        run: ./scripts/package-source.ps1
+        run: ./scripts/package-source.ps1 -Revision '${{ inputs.release_tag }}'
       - name: Build installers
         shell: pwsh
-        run: ./scripts/build.ps1 -SkipNpmInstall
-      - name: Write artifact hashes
+        run: |
+          $env:RESUBWINNY_RELEASE_TIER = 'UnsignedWindowsAlpha'
+          $env:RESUBWINNY_BUILD_TAG = '${{ inputs.release_tag }}'
+          $env:RESUBWINNY_BUILD_COMMIT = (git rev-parse --verify '${{ inputs.release_tag }}^{commit}').Trim()
+          ./scripts/build.ps1 -SkipNpmInstall
+      - name: Assemble auditable unsigned Alpha candidate
         shell: pwsh
         run: |
-          $files = Get-ChildItem build/cargo/release/bundle -Recurse -File |
-            Where-Object { $_.Extension -eq '.msi' -or $_.Name -like '*setup.exe' }
-          if (-not $files) { throw 'No installer artifacts were produced.' }
-          $files | Get-FileHash -Algorithm SHA256 |
-            ForEach-Object { "$($_.Hash)  $([IO.Path]::GetFileName($_.Path))" } |
-            Set-Content -Encoding utf8NoBOM build/cargo/release/bundle/SHA256SUMS.txt
-      - name: Upload private-test candidate
+          ./scripts/package-windows-alpha.ps1 `
+            -DesktopExecutable build/cargo/release/resubwinny-studio.exe `
+            -WorkerExecutable build/cargo/release/arib-caption-worker.exe `
+            -InstallerDirectory build/cargo/release/bundle `
+            -SourceDirectory build/source `
+            -LibmpvCandidateDirectory build/libmpv-candidate `
+            -Tag '${{ inputs.release_tag }}' `
+            -Revision '${{ inputs.release_tag }}'
+      - name: Upload unsigned Windows Alpha candidate
         uses: actions/upload-artifact@v7
         with:
-          name: resubwinny-windows-alpha-private-test
+          name: resubwinny-unsigned-windows-alpha-${{ inputs.release_tag }}
           if-no-files-found: error
-          retention-days: 14
-          path: |
-            build/cargo/release/resubwinny-studio.exe
-            build/cargo/release/arib-caption-worker.exe
-            build/cargo/release/bundle/**/*.msi
-            build/cargo/release/bundle/**/*setup.exe
-            build/cargo/release/bundle/SHA256SUMS.txt
-            build/source/resubwinny-*-source.zip
-            build/source/SOURCE-SHA256SUMS.txt
+          retention-days: 30
+          path: build/release/windows-alpha
 
 # This workflow intentionally does not create a GitHub Release. Public binary
-# distribution remains blocked until the exact bundled LGPL libmpv DLL and its
-# complete corresponding-source archive are published together and signing is
-# configured.
+# publication remains a reviewed step after packaged Windows acceptance. The
+# uploaded candidate already contains the exact LGPL DLL, corresponding source,
+# receipt, notices, release provenance, and hashes. Signing is required only
+# when promoting a build to Signed Stable.
