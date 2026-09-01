@@ -4,7 +4,7 @@ use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,
     process::Child,
-    sync::{Mutex, atomic::AtomicBool},
+    sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
 pub struct AppState {
@@ -28,6 +28,7 @@ pub struct PreviewOverlaySyncState {
     pub archive: String,
     pub fingerprint: Option<u64>,
     pub overlay_visible: bool,
+    pub revision: u64,
 }
 
 #[derive(Clone)]
@@ -131,7 +132,7 @@ impl NativePlayer {
 
     pub fn set_caption_overlay(
         &self,
-        pixels: Vec<u8>,
+        pixels: Arc<[u8]>,
         width: i32,
         height: i32,
         x: i32,

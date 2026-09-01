@@ -1,6 +1,8 @@
 # アーキテクチャ基準（日本語訳）
 
-> 本文書は `architecture.zh-CN.md` の訳文です。表現に相違または曖昧さがある場合は、中国語版を正とします。
+[简体中文（唯一权威）](architecture.zh-CN.md) | [English](architecture.en.md) | [日本語](architecture.ja.md) | [繁體中文（台灣）](architecture.zh-TW.md)
+
+> 本文書は `architecture.zh-CN.md` の訳文です。簡体字中国語版のみが唯一の権威あるアーキテクチャ仕様であり、英語版、日本語版、繁体字中国語（台湾）版は翻訳にすぎません。曖昧さまたは矛盾がある場合は、簡体字中国語版のみを基準とします。
 
 > 第三段階の core 実装は完了しています。現在の Alpha で native preview
 > の release 対象となる platform は Windows です。macOS/Linux の native
@@ -8,6 +10,19 @@
 > 残る renderer 作業は、標準 B62 stroke、resource の完全描画、独立した
 > 2K/8K・DPI・screenshot difference gate の品質収束です。zero-copy の
 > WGL/D3D interop は現在の製品保証ではありません。
+
+## 収束期の境界（2026-08-29）
+
+この段階ではフロントエンドの技術スタックと Rust crate の構成を固定する。
+Svelte、Tauri、既存の `arib-caption-worker` は変更しない。中央状態の整理は
+feature session を優先する。Worker は入力、probe/demux、decode、Caption IR、
+export、archive、evidence を担当し、Tauri は task history、queue、settings、
+window lifecycle、native preview を担当する。`resubwinny-core` crate の分割は、
+Caption IR、time model、transport API が安定し複数の consumer が現れた後に再評価する。
+
+同じ収束期では、BD/DVD bitmap subtitle OCR、plugin system、AI translation、
+macOS/Linux native preview を明示的に延期する。DRCS は local hash → Unicode
+mapping の改善に限定し、汎用 OCR system へ拡張しない。
 
 ## 対象と非対象
 

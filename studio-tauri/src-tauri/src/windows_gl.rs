@@ -24,7 +24,6 @@ const GL_RGBA: i32 = 0x1908;
 const GL_RGBA_FORMAT: u32 = 0x1908;
 #[cfg(test)]
 const GL_FRONT: u32 = 0x0404;
-const GL_BGRA: u32 = 0x80e1;
 const GL_SRC_ALPHA: u32 = 0x0302;
 const GL_TEXTURE_2D: u32 = 0x0de1;
 const GL_TEXTURE_MAG_FILTER: u32 = 0x2800;
@@ -357,7 +356,7 @@ impl CaptionTexture {
                 width,
                 height,
                 0,
-                GL_BGRA,
+                GL_RGBA as u32,
                 GL_UNSIGNED_BYTE,
                 pixels.as_ptr().cast(),
             );

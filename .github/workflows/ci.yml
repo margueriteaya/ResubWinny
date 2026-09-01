@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Verify repository hygiene
         shell: pwsh
         run: ./scripts/verify-repository.ps1
@@ -22,10 +22,11 @@ jobs:
         with:
           toolchain: 1.97.1
           components: rustfmt, clippy
+          targets: x86_64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2
       - name: Install Linux desktop dependencies
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - uses: actions/setup-node@v4
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf llvm
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -40,7 +41,7 @@ jobs:
       - name: Lint Worker
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Lint desktop service
-        run: cargo clippy --manifest-path studio-tauri/src-tauri/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --manifest-path studio-tauri/src-tauri/Cargo.toml --all-targets --target x86_64-pc-windows-msvc -- -D warnings
       - name: Build and check desktop frontend
         run: npm run build --prefix studio-tauri
       - name: Verify pinned sources and generated licenses
@@ -58,7 +59,11 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - name: Install pinned Windows libmpv runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/setup-libmpv.ps1
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.97.1
@@ -76,11 +81,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
-      - uses: taiki-e/install-action@cargo-fuzz
+      - name: Install native fuzz build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libfreetype6-dev
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - name: Select nightly toolchain for cargo-fuzz
+        shell: bash
+        run: mv rust-toolchain.toml rust-toolchain.toml.ci-backup
       - name: Build every declared fuzz target
         shell: bash
+        env:
+          RUSTUP_TOOLCHAIN: nightly
         run: |
           set -euo pipefail
           mapfile -t targets < <(
@@ -90,7 +104,7 @@ jobs:
           test "${#targets[@]}" -gt 0
           for target in "${targets[@]}"; do
             echo "Building fuzz target: $target"
-            cargo fuzz build "$target"
+            cargo fuzz build --target x86_64-unknown-linux-gnu "$target"
           done
 
   dependency-audit:
@@ -98,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.97.1
@@ -109,10 +123,27 @@ jobs:
           cargo audit --file Cargo.lock
           cargo audit --file studio-tauri/src-tauri/Cargo.lock
           cargo audit --file fuzz/Cargo.lock
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: studio-tauri/package-lock.json
       - name: Audit frontend dependencies
         run: npm audit --prefix studio-tauri --audit-level=high
+
+  dependency-policy:
+    name: Dependency policy (cargo-deny)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: Check Worker dependency policy
+        run: cargo deny --config deny.toml --manifest-path Cargo.toml check
+      - name: Check desktop dependency policy
+        run: cargo deny --config deny.toml --manifest-path studio-tauri/src-tauri/Cargo.toml check

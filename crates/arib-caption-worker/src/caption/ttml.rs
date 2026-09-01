@@ -904,6 +904,7 @@ pub(crate) fn flush_b24_pes(
         return None;
     };
     if let Some(pts) = pts {
+        let pts = pts.to_millis();
         let origin = *timeline_origin_ms.get_or_insert(pts);
         *last_pts = normalise_pts(pts, origin);
     }

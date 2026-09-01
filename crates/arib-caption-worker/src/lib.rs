@@ -26,6 +26,8 @@ mod native_b24;
 mod preview;
 mod protocol;
 mod resource;
+pub mod synthetic;
+mod time;
 mod timeline;
 mod transport;
 
@@ -40,6 +42,7 @@ pub(crate) use models::*;
 pub(crate) use preview::*;
 pub(crate) use protocol::*;
 pub(crate) use resource::*;
+pub(crate) use time::*;
 pub(crate) use timeline::*;
 pub(crate) use transport::*;
 

@@ -130,7 +130,22 @@ type BatchQueueHooks = {
 
 /** Coordinates queue API calls while App.svelte only projects the resulting state. */
 export class BatchQueueController {
+  private editingPath: string | null = null;
+
   constructor(private readonly hooks: BatchQueueHooks) {}
+
+  beginEditing(item: BatchItem) { this.editingPath = item.inspection.path; }
+  endEditing() { this.editingPath = null; }
+
+  selectEditingTrack(selectedTrackKey: string) {
+    if (!this.editingPath) return;
+    const editingPath = this.editingPath;
+    this.hooks.updateItems(this.hooks.items().map((item) =>
+      item.inspection.path === editingPath
+        ? { ...item, selectedTrackKey }
+        : item
+    ));
+  }
 
   async addFiles() {
     if (!this.hooks.desktopRuntime) return;
@@ -246,5 +261,13 @@ export class BatchQueueController {
     } catch (reason) {
       this.hooks.fail(reason);
     }
+  }
+
+  clearAll() {
+    return this.hooks.running() ? Promise.resolve() : this.remove(() => true);
+  }
+
+  clearCompleted() {
+    return this.remove((item) => item.status === "Completed");
   }
 }

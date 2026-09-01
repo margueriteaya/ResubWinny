@@ -1,5 +1,8 @@
 use super::{
-    archive::{encode_scene_image, interval_bounds, render_at, scene_bounds},
+    archive::{
+        encode_scene_image, interval_bounds, preview_cache_metrics, render_at, render_overlay_at,
+        scene_bounds,
+    },
     overlay::{
         OverlayAction, decide_overlay_action, playback_file_offset, seconds_to_milliseconds,
     },
@@ -7,6 +10,17 @@ use super::{
 };
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use serde_json::json;
+
+// The preview archive cache intentionally mirrors the single active archive
+// used by the desktop player.  Keep tests that exercise it serialized so a
+// parallel test cannot swap the global cache source between metric snapshots.
+static PREVIEW_ARCHIVE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn preview_archive_test_guard() -> std::sync::MutexGuard<'static, ()> {
+    PREVIEW_ARCHIVE_TEST_LOCK
+        .lock()
+        .expect("preview archive test lock")
+}
 
 #[test]
 fn overlay_sync_only_updates_when_the_caption_plane_changes() {
@@ -19,6 +33,7 @@ fn overlay_sync_only_updates_when_the_caption_plane_changes() {
         archive: "archive.jsonl".into(),
         fingerprint: Some(7),
         overlay_visible: true,
+        revision: 0,
     };
     assert_eq!(
         decide_overlay_action(&current, "archive.jsonl", Some(7)),
@@ -154,6 +169,7 @@ fn builds_documented_mpv_overlay_add_arguments() {
 
 #[test]
 fn reads_worker_jsonl_envelopes_for_active_scenes() {
+    let _cache_guard = preview_archive_test_guard();
     let path =
         std::env::temp_dir().join(format!("resubwinny-render-at-{}.jsonl", std::process::id()));
     std::fs::write(
@@ -168,6 +184,7 @@ fn reads_worker_jsonl_envelopes_for_active_scenes() {
 
 #[test]
 fn renders_only_the_latest_b24_scene_snapshot() {
+    let _cache_guard = preview_archive_test_guard();
     let path = std::env::temp_dir().join(format!(
         "resubwinny-scene-replacement-{}.jsonl",
         std::process::id()
@@ -192,6 +209,7 @@ fn renders_only_the_latest_b24_scene_snapshot() {
 
 #[test]
 fn render_at_has_a_stable_native_ttml_ruby_visual_golden() {
+    let _cache_guard = preview_archive_test_guard();
     let path = std::env::temp_dir().join(format!(
         "resubwinny-ttml-ruby-golden-{}.jsonl",
         std::process::id()
@@ -216,6 +234,7 @@ fn render_at_has_a_stable_native_ttml_ruby_visual_golden() {
 
 #[test]
 fn render_at_has_a_stable_arib_receiver_baseline_stroke_golden() {
+    let _cache_guard = preview_archive_test_guard();
     let path = std::env::temp_dir().join(format!(
         "resubwinny-ttml-receiver-stroke-golden-{}.jsonl",
         std::process::id()
@@ -236,6 +255,7 @@ fn render_at_has_a_stable_arib_receiver_baseline_stroke_golden() {
 
 #[test]
 fn render_at_has_a_stable_native_vertical_ruby_visual_golden() {
+    let _cache_guard = preview_archive_test_guard();
     let path = std::env::temp_dir().join(format!(
         "resubwinny-ttml-vertical-ruby-golden-{}.jsonl",
         std::process::id()
@@ -260,6 +280,7 @@ fn render_at_has_a_stable_native_vertical_ruby_visual_golden() {
 
 #[test]
 fn render_at_has_a_stable_wrapped_vertical_ruby_visual_golden() {
+    let _cache_guard = preview_archive_test_guard();
     let path = std::env::temp_dir().join(format!(
         "resubwinny-ttml-wrapped-vertical-ruby-golden-{}.jsonl",
         std::process::id()
@@ -284,6 +305,7 @@ fn render_at_has_a_stable_wrapped_vertical_ruby_visual_golden() {
 
 #[test]
 fn render_at_has_a_stable_vertical_text_combine_visual_golden() {
+    let _cache_guard = preview_archive_test_guard();
     let path = std::env::temp_dir().join(format!(
         "resubwinny-ttml-vertical-text-combine-golden-{}.jsonl",
         std::process::id()
@@ -305,6 +327,7 @@ fn render_at_has_a_stable_vertical_text_combine_visual_golden() {
 
 #[test]
 fn render_at_has_a_stable_vertical_punctuation_visual_golden() {
+    let _cache_guard = preview_archive_test_guard();
     let path = std::env::temp_dir().join(format!(
         "resubwinny-ttml-vertical-punctuation-golden-{}.jsonl",
         std::process::id()
@@ -326,6 +349,7 @@ fn render_at_has_a_stable_vertical_punctuation_visual_golden() {
 
 #[test]
 fn render_at_has_a_stable_multiline_alignment_visual_golden() {
+    let _cache_guard = preview_archive_test_guard();
     let path = std::env::temp_dir().join(format!(
         "resubwinny-ttml-multiline-alignment-golden-{}.jsonl",
         std::process::id()
@@ -346,6 +370,7 @@ fn render_at_has_a_stable_multiline_alignment_visual_golden() {
 
 #[test]
 fn render_at_has_a_stable_b24_composition_visual_golden() {
+    let _cache_guard = preview_archive_test_guard();
     let path = std::env::temp_dir().join(format!(
         "resubwinny-b24-composition-golden-{}.jsonl",
         std::process::id()
@@ -372,7 +397,57 @@ fn render_at_has_a_stable_b24_composition_visual_golden() {
 }
 
 #[test]
+fn playback_cache_keeps_raw_rgba_without_eager_png_encoding() {
+    let _cache_guard = preview_archive_test_guard();
+    let path = std::env::temp_dir().join(format!(
+        "resubwinny-b24-direct-rgba-{}.jsonl",
+        std::process::id()
+    ));
+    let rgba = BASE64.encode([255_u8, 0, 0, 255, 0, 0, 255, 255]);
+    std::fs::write(
+        &path,
+        format!(
+            r#"{{"type":"scene","value":{{"pts_ms":1000,"wait_duration_ms":500,"rendered_image":{{"width":2,"height":1,"stride":8,"rgba_base64":"{rgba}","dst_x":0,"dst_y":0}}}}}}"#
+        ),
+    )
+    .expect("archive fixture");
+
+    let render =
+        render_overlay_at(path.to_string_lossy().into_owned(), 1_200).expect("cached RGBA render");
+    assert!(render.snapshot.composed_png_base64.is_none());
+    let overlay = render.overlay.as_ref().expect("native RGBA overlay");
+    assert_eq!(&*overlay.pixels, &[255, 0, 0, 255, 0, 0, 255, 255]);
+    std::fs::remove_file(path).expect("remove fixture");
+}
+
+#[test]
+#[ignore = "requires RESUBWINNY_PREVIEW_PERF_ARCHIVE"]
+fn real_archive_overlay_meets_the_interactive_performance_gate() {
+    let _cache_guard = preview_archive_test_guard();
+    let archive = std::env::var("RESUBWINNY_PREVIEW_PERF_ARCHIVE")
+        .expect("set RESUBWINNY_PREVIEW_PERF_ARCHIVE");
+    let target_ms = std::env::var("RESUBWINNY_PREVIEW_PERF_TIME_MS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(10_000_000_i64);
+    let started = std::time::Instant::now();
+    let render = render_overlay_at(archive, target_ms).expect("large preview overlay");
+    let elapsed = started.elapsed();
+    let (_, parsed_lines, compositions, resets, checkpoints) = preview_cache_metrics();
+    eprintln!(
+        "large preview overlay: {} layers, {parsed_lines} parsed lines, {compositions} compositions, {resets} resets, {checkpoints} checkpoints in {:.2} ms",
+        render.snapshot.active_layer_count,
+        elapsed.as_secs_f64() * 1_000.0
+    );
+    assert!(
+        elapsed < std::time::Duration::from_secs(5),
+        "large preview overlay took {elapsed:?}"
+    );
+}
+
+#[test]
 fn advances_preview_cursor_without_reloading_earlier_records() {
+    let _cache_guard = preview_archive_test_guard();
     let path = std::env::temp_dir().join(format!(
         "resubwinny-render-cache-{}.jsonl",
         std::process::id()
@@ -413,6 +488,7 @@ fn advances_preview_cursor_without_reloading_earlier_records() {
 
 #[test]
 fn attaches_same_mpu_resource_previews_to_active_ttml_captions() {
+    let _cache_guard = preview_archive_test_guard();
     let path = std::env::temp_dir().join(format!(
         "resubwinny-resource-preview-{}.jsonl",
         std::process::id()
@@ -429,4 +505,87 @@ fn attaches_same_mpu_resource_previews_to_active_ttml_captions() {
         "stpp-resource:packet:1113:mpu:7:subsample:4"
     );
     std::fs::remove_file(path).expect("remove fixture");
+}
+
+#[test]
+fn growing_preview_archive_keeps_cursor_and_reuses_caption_plane() {
+    let _cache_guard = preview_archive_test_guard();
+    use std::io::Write as _;
+
+    let path = std::env::temp_dir().join(format!(
+        "resubwinny-growing-preview-cache-{}.jsonl",
+        std::process::id()
+    ));
+    let mut fixture = String::new();
+    for index in 0..=120 {
+        fixture.push_str(&format!(
+            "{{\"type\":\"scene\",\"value\":{{\"pts_ms\":{},\"wait_duration_ms\":1000,\"text\":\"event-{index}\"}}}}\n",
+            index * 1_000
+        ));
+    }
+    std::fs::write(&path, fixture).expect("growing archive fixture");
+
+    render_at(path.to_string_lossy().into_owned(), 90_200).expect("initial render");
+    let before = preview_cache_metrics();
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .expect("append growing archive");
+    writeln!(
+        file,
+        "{{\"type\":\"scene\",\"value\":{{\"pts_ms\":121000,\"wait_duration_ms\":1000,\"text\":\"appended\"}}}}"
+    )
+    .expect("append preview event");
+    drop(file);
+
+    render_at(path.to_string_lossy().into_owned(), 90_250).expect("render after append");
+    let after = preview_cache_metrics();
+    assert_eq!(after.3, before.3, "archive growth must not reset the cache");
+    assert_eq!(
+        after.2, before.2,
+        "an unchanged caption plane must not be recomposed"
+    );
+    assert!(
+        after.1.saturating_sub(before.1) <= 2,
+        "archive growth reparsed too many lines: before={}, after={}",
+        before.1,
+        after.1
+    );
+    std::fs::remove_file(path).expect("remove growing archive fixture");
+}
+
+#[test]
+fn rewind_uses_sparse_preview_checkpoint_instead_of_file_start() {
+    let _cache_guard = preview_archive_test_guard();
+    let path = std::env::temp_dir().join(format!(
+        "resubwinny-preview-checkpoints-{}.jsonl",
+        std::process::id()
+    ));
+    let mut fixture = String::new();
+    for index in 0..=180 {
+        fixture.push_str(&format!(
+            "{{\"type\":\"scene\",\"value\":{{\"pts_ms\":{},\"wait_duration_ms\":1000,\"text\":\"event-{index}\"}}}}\n",
+            index * 1_000
+        ));
+    }
+    std::fs::write(&path, fixture).expect("checkpoint archive fixture");
+
+    for time_ms in [100, 30_100, 60_100, 90_100] {
+        render_at(path.to_string_lossy().into_owned(), time_ms).expect("forward checkpoint render");
+    }
+    let before = preview_cache_metrics();
+    assert!(before.4 >= 4, "expected sparse preview checkpoints");
+    render_at(path.to_string_lossy().into_owned(), 60_100).expect("checkpoint rewind render");
+    let after = preview_cache_metrics();
+    assert!(
+        after.0 < before.0,
+        "rewind should restore an earlier byte cursor"
+    );
+    assert!(
+        after.1.saturating_sub(before.1) <= 2,
+        "checkpoint rewind reparsed too many lines: before={}, after={}",
+        before.1,
+        after.1
+    );
+    std::fs::remove_file(path).expect("remove checkpoint archive fixture");
 }

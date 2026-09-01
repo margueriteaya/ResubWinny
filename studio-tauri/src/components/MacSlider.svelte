@@ -11,16 +11,42 @@
   export let className = "";
   export let onInput: (value: number) => void = () => {};
   export let onChange: (value: number) => void = () => {};
+  export let onCancel: (value: number) => void = () => {};
+  let interacting = false;
+  let committedValue = value;
+  let suppressNextChange = false;
 
   function input(event: Event, commit = false) {
     value = Number((event.currentTarget as HTMLInputElement).value);
-    (commit ? onChange : onInput)(value);
+    if (commit) {
+      if (suppressNextChange) {
+        suppressNextChange = false;
+        committedValue = value;
+        return;
+      }
+      committedValue = value;
+      interacting = false;
+      onChange(value);
+    } else {
+      suppressNextChange = false;
+      interacting = true;
+      onInput(value);
+    }
   }
+
+  function cancel() {
+    if (!interacting || value === committedValue) return;
+    interacting = false;
+    committedValue = value;
+    suppressNextChange = true;
+    onCancel(value);
+  }
+  $: if (!interacting) committedValue = value;
   $: progress = max === min ? 0 : Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
 </script>
 
 <span class={`mac-slider ${className}`} class:disabled style={`--slider-progress:${progress}%;--slider-thumb-offset:${progress * 0.16}px`}>
-  <input type="range" {min} {max} {step} {value} {disabled} {role} aria-label={ariaLabel} aria-controls={ariaControls || undefined} aria-orientation={ariaOrientation} aria-valuemin={min} aria-valuemax={max} aria-valuenow={value} oninput={(event) => input(event)} onchange={(event) => input(event, true)} />
+  <input type="range" {min} {max} {step} {value} {disabled} {role} aria-label={ariaLabel} aria-controls={ariaControls || undefined} aria-orientation={ariaOrientation} aria-valuemin={min} aria-valuemax={max} aria-valuenow={value} oninput={(event) => input(event)} onchange={(event) => input(event, true)} onpointercancel={cancel} onblur={cancel} />
   <span class="slider-thumb liquid-control" aria-hidden="true"></span>
 </span>
 

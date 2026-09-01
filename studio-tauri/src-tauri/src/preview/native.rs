@@ -227,7 +227,7 @@ pub fn recover_preview(
     if let Some(seconds) = time_seconds.filter(|value| value.is_finite() && *value >= 0.0) {
         player
             .player
-            .command(&["seek", &seconds.to_string(), "absolute"])?;
+            .command(&["seek", &seconds.to_string(), "absolute+exact"])?;
     }
     player
         .player
@@ -280,8 +280,30 @@ pub fn preview_command(state: State<'_, Arc<AppState>>, command: String) -> Resu
             owned = [
                 "seek".to_owned(),
                 seconds.to_string(),
-                "absolute".to_owned(),
+                "absolute+exact".to_owned(),
             ];
+            &[owned[0].as_str(), owned[1].as_str(), owned[2].as_str()]
+        }
+        value if value.starts_with("seek-preview:") => {
+            let seconds = value["seek-preview:".len()..]
+                .parse::<f64>()
+                .ok()
+                .filter(|value| value.is_finite() && *value >= 0.0)
+                .ok_or("Invalid preview seek position.")?;
+            owned = [
+                "seek".to_owned(),
+                seconds.to_string(),
+                "absolute+keyframes".to_owned(),
+            ];
+            &[owned[0].as_str(), owned[1].as_str(), owned[2].as_str()]
+        }
+        value if value.starts_with("set-pause:") => {
+            let paused = match &value["set-pause:".len()..] {
+                "yes" => "yes",
+                "no" => "no",
+                _ => return Err("Invalid preview pause state.".into()),
+            };
+            owned = ["set".to_owned(), "pause".to_owned(), paused.to_owned()];
             &[owned[0].as_str(), owned[1].as_str(), owned[2].as_str()]
         }
         value if value.starts_with("set-volume:") => {
@@ -306,7 +328,7 @@ pub fn preview_command(state: State<'_, Arc<AppState>>, command: String) -> Resu
 }
 pub fn caption_overlay(
     state: State<'_, Arc<AppState>>,
-    pixels: Vec<u8>,
+    pixels: Arc<[u8]>,
     width: i32,
     height: i32,
     x: i32,
@@ -343,7 +365,7 @@ pub fn caption_overlay(
             let offset_x = x.saturating_add((target_width - scaled_width) / 2);
             let offset_y = y.saturating_add((target_height - scaled_height) / 2);
             (
-                scale_bgra_nearest(&pixels, width, height, scaled_width, scaled_height),
+                scale_rgba_nearest(&pixels, width, height, scaled_width, scaled_height).into(),
                 scaled_width,
                 scaled_height,
                 offset_x,
@@ -352,7 +374,8 @@ pub fn caption_overlay(
         }
         _ => (pixels, width, height, x, y),
     };
-    fs::write(&player.overlay_path, pixels)
+    let bgra = rgba_to_bgra(&pixels);
+    fs::write(&player.overlay_path, bgra)
         .map_err(|e| format!("Could not prepare caption overlay pixels: {e}"))?;
     let path = player.overlay_path.to_string_lossy().into_owned();
     player.player.command(&[
@@ -369,7 +392,7 @@ pub fn caption_overlay(
     ])
 }
 
-fn scale_bgra_nearest(
+fn scale_rgba_nearest(
     source: &[u8],
     source_width: i32,
     source_height: i32,
@@ -386,6 +409,14 @@ fn scale_bgra_nearest(
             target[target_offset..target_offset + 4]
                 .copy_from_slice(&source[source_offset..source_offset + 4]);
         }
+    }
+    target
+}
+
+fn rgba_to_bgra(source: &[u8]) -> Vec<u8> {
+    let mut target = Vec::with_capacity(source.len());
+    for pixel in source.chunks_exact(4) {
+        target.extend_from_slice(&[pixel[2], pixel[1], pixel[0], pixel[3]]);
     }
     target
 }

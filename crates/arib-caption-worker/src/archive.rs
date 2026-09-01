@@ -14,6 +14,7 @@ pub(crate) fn render_archive_at(path: &Path, time_ms: i64) -> io::Result<Archive
     let mut active: Vec<(i64, serde_json::Value)> = Vec::new();
     let mut active_scene: Option<serde_json::Value> = None;
     let mut line = String::new();
+    let mut first_line = true;
     while reader.read_line(&mut line)? > 0 {
         let envelope = match serde_json::from_str::<serde_json::Value>(&line) {
             Ok(value) => value,
@@ -22,6 +23,10 @@ pub(crate) fn render_archive_at(path: &Path, time_ms: i64) -> io::Result<Archive
                 continue;
             }
         };
+        if first_line {
+            first_line = false;
+            validate_archive_header(&envelope)?;
+        }
         let kind = envelope
             .get("kind")
             .and_then(serde_json::Value::as_str)
@@ -63,6 +68,38 @@ pub(crate) fn render_archive_at(path: &Path, time_ms: i64) -> io::Result<Archive
             .map(|scene| vec![scene])
             .unwrap_or_else(|| active.into_iter().map(|(_, value)| value).collect()),
     })
+}
+
+fn validate_archive_header(envelope: &serde_json::Value) -> io::Result<()> {
+    let is_header = envelope.get("type").and_then(serde_json::Value::as_str)
+        == Some("arib_caption_studio_archive");
+    if !is_header {
+        return Ok(());
+    }
+    let explicit = envelope
+        .get("schemaVersion")
+        .or_else(|| envelope.get("schema_version"));
+    if let (Some(explicit), Some(legacy)) = (explicit, envelope.get("version"))
+        && explicit != legacy
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Caption archive schema version fields disagree",
+        ));
+    }
+    let schema = explicit.or_else(|| envelope.get("version"));
+    // Header-only legacy fixtures predate the explicit field; retain their
+    // established version-1 reader behaviour until they are rewritten.
+    let Some(schema) = schema.and_then(serde_json::Value::as_u64) else {
+        return Ok(());
+    };
+    if schema != CAPTION_ARCHIVE_SCHEMA_VERSION as u64 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Unsupported caption archive schema version {schema}"),
+        ));
+    }
+    Ok(())
 }
 
 fn interval_bounds(value: &serde_json::Value) -> Option<(i64, i64)> {
@@ -117,6 +154,38 @@ mod tests {
         assert_eq!(preview.intervals.len(), 2);
         assert_eq!(preview.intervals[0]["text"], "A");
         assert_eq!(preview.intervals[1]["text"], "B");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_an_unsupported_archive_schema() {
+        let path = std::env::temp_dir().join(format!(
+            "arib-caption-archive-schema-{}.jsonl",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            "{\"type\":\"arib_caption_studio_archive\",\"schemaVersion\":99}\n",
+        )
+        .expect("archive fixture");
+        let error = render_archive_at(&path, 0).expect_err("unsupported schema");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_conflicting_archive_schema_aliases() {
+        let path = std::env::temp_dir().join(format!(
+            "arib-caption-archive-schema-conflict-{}.jsonl",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            "{\"type\":\"arib_caption_studio_archive\",\"schemaVersion\":1,\"version\":2}\n",
+        )
+        .expect("archive fixture");
+        let error = render_archive_at(&path, 0).expect_err("conflicting schema aliases");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         let _ = std::fs::remove_file(path);
     }
 

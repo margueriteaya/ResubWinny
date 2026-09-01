@@ -1,7 +1,7 @@
 use super::*;
 pub fn caption_overlay(
     _: State<'_, Arc<AppState>>,
-    _: Vec<u8>,
+    _: Arc<[u8]>,
     _: i32,
     _: i32,
     _: i32,
@@ -30,7 +30,6 @@ pub fn preview_broadcast_metadata(
 ) -> Result<crate::models::BroadcastMetadata, String> {
     Err("mpv broadcast metadata is not implemented for this platform yet.".into())
 }
-#[tauri::command]
 pub fn start_preview(
     _: AppHandle,
     _: State<'_, Arc<AppState>>,
@@ -50,13 +49,10 @@ pub fn recover_preview(
 ) -> Result<(), String> {
     Err("Native mpv recovery is not implemented for this platform yet.".into())
 }
-#[tauri::command]
 pub fn resize_preview(_: State<'_, Arc<AppState>>, _: PreviewRect) -> Result<(), String> {
     Ok(())
 }
-#[tauri::command]
 pub fn stop_preview(_: State<'_, Arc<AppState>>) {}
-#[tauri::command]
 pub fn preview_command(_: State<'_, Arc<AppState>>, _: String) -> Result<(), String> {
     Err("Native mpv preview controls are not implemented for this platform yet.".into())
 }

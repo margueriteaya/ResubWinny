@@ -27,12 +27,6 @@ fn normalize(mut settings: AppSettings) -> AppSettings {
     ) {
         settings.default_format = "ASS".into();
     }
-    if !matches!(
-        settings.default_timeline.as_str(),
-        "Auto (Gap Merge + Overlap Resolve)" | "Strict original timestamps"
-    ) {
-        settings.default_timeline = "Auto (Gap Merge + Overlap Resolve)".into();
-    }
     if !matches!(settings.theme.as_str(), "system" | "light" | "dark") {
         settings.theme = "system".into();
     }
@@ -182,15 +176,14 @@ mod tests {
             ui_font: "cjk".into(),
             caption_font: "system".into(),
             default_format: "TTML".into(),
-            default_timeline: "Strict original timestamps".into(),
             locale: "ja".into(),
             theme: "dark".into(),
             workspace_layout: Default::default(),
+            onboarding_version: 1,
         });
         assert_eq!(settings.ui_font, "cjk");
         assert_eq!(settings.caption_font, "system");
         assert_eq!(settings.default_format, "TTML");
-        assert_eq!(settings.default_timeline, "Strict original timestamps");
         assert_eq!(settings.locale, "ja");
         assert_eq!(settings.theme, "dark");
     }
@@ -201,7 +194,6 @@ mod tests {
             ui_font: "not-a-font-profile".into(),
             caption_font: "untrusted-font".into(),
             default_format: "SRT".into(),
-            default_timeline: "make it up".into(),
             locale: "".into(),
             theme: "neon".into(),
             workspace_layout: crate::models::WorkspaceLayoutSettings {
@@ -210,18 +202,34 @@ mod tests {
                 source_collapsed: true,
                 output_collapsed: false,
             },
+            onboarding_version: 0,
         });
         assert_eq!(settings.ui_font, "system");
         assert_eq!(settings.caption_font, "arib");
         assert_eq!(settings.default_format, "ASS");
-        assert_eq!(
-            settings.default_timeline,
-            "Auto (Gap Merge + Overlap Resolve)"
-        );
         assert_eq!(settings.locale, "system");
         assert_eq!(settings.theme, "system");
         assert_eq!(settings.workspace_layout.source_width, 220);
         assert_eq!(settings.workspace_layout.output_width, 380);
         assert!(settings.workspace_layout.source_collapsed);
+    }
+
+    #[test]
+    fn old_settings_without_onboarding_version_require_the_guide_once() {
+        let settings: AppSettings = serde_json::from_value(serde_json::json!({
+            "uiFont": "system",
+            "captionFont": "arib",
+            "defaultFormat": "ASS",
+            "locale": "system",
+            "theme": "system",
+            "workspaceLayout": {
+                "sourceWidth": 240,
+                "outputWidth": 300,
+                "sourceCollapsed": false,
+                "outputCollapsed": false
+            }
+        }))
+        .expect("legacy settings");
+        assert_eq!(settings.onboarding_version, 0);
     }
 }

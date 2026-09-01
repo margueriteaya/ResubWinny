@@ -1,5 +1,7 @@
 use super::*;
 
+pub(crate) const CAPTION_ARCHIVE_SCHEMA_VERSION: u32 = 1;
+
 pub(crate) fn write_archive_header(
     writer: &mut BufWriter<File>,
     path: &Path,
@@ -10,7 +12,11 @@ pub(crate) fn write_archive_header(
         "{}",
         serde_json::json!({
             "type": "arib_caption_studio_archive",
-            "version": 1,
+            // `version` was the original field. Keep it as a compatibility
+            // alias while giving the long-lived archive schema an explicit,
+            // unambiguous name.
+            "schemaVersion": CAPTION_ARCHIVE_SCHEMA_VERSION,
+            "version": CAPTION_ARCHIVE_SCHEMA_VERSION,
             "source": path,
             "route": kind,
             "format": "jsonl",
@@ -33,6 +39,28 @@ pub(crate) fn write_archive_record<T: Serialize>(
     // running. Caption records are sparse compared with transport packets, so
     // publishing each complete line is a worthwhile correctness trade-off.
     writer.flush()
+}
+
+pub(crate) fn write_caption_archive_record(
+    writer: &mut BufWriter<File>,
+    cue: CaptionCueRef<'_>,
+) -> io::Result<()> {
+    let timing = cue.timing();
+    let region = cue.region();
+    debug_assert!(timing.end_ms >= timing.begin_ms);
+    debug_assert!(region.width.is_none_or(|width| width >= 0));
+    debug_assert!(region.height.is_none_or(|height| height >= 0));
+    let expected_route = cue.route();
+    match cue {
+        CaptionCueRef::B24(interval) => {
+            debug_assert_eq!(expected_route, CaptionRoute::B24);
+            write_archive_record(writer, "region_interval", interval)
+        }
+        CaptionCueRef::AribTtml(caption) => {
+            debug_assert_eq!(expected_route, CaptionRoute::AribTtml);
+            write_archive_record(writer, "caption", caption)
+        }
+    }
 }
 
 pub(crate) fn write_raw_header(
@@ -76,7 +104,7 @@ pub(crate) fn write_raw_pes_record(
             "type": "pes",
             "pid": pid,
             "packet_offset": packet_offset,
-            "pts_ms": pes_pts_from_header(pes),
+            "pts_ms": pes_pts_from_header(pes).map(Pts90k::to_millis),
             "pes_hex": hex_encode(pes),
         }),
     )?;

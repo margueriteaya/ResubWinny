@@ -8,13 +8,14 @@ pub struct AppSettings {
     pub ui_font: String,
     pub caption_font: String,
     pub default_format: String,
-    pub default_timeline: String,
     #[serde(default = "default_locale")]
     pub locale: String,
     #[serde(default = "default_theme")]
     pub theme: String,
     #[serde(default)]
     pub workspace_layout: WorkspaceLayoutSettings,
+    #[serde(default)]
+    pub onboarding_version: u32,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -50,10 +51,10 @@ impl Default for AppSettings {
             ui_font: "system".into(),
             caption_font: "arib".into(),
             default_format: "ASS".into(),
-            default_timeline: "Auto (Gap Merge + Overlap Resolve)".into(),
             locale: default_locale(),
             theme: default_theme(),
             workspace_layout: WorkspaceLayoutSettings::default(),
+            onboarding_version: 0,
         }
     }
 }
@@ -366,6 +367,16 @@ pub struct PlaybackTimeMapping {
     pub rate_denominator: i32,
 }
 
+/// Domain-labelled millisecond values used inside the mapping arithmetic.
+/// They intentionally do not implement serde: Tauri's wire contract remains
+/// plain signed millisecond integers while internal call sites gain a clear
+/// distinction between media and project clocks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MediaTimeMs(pub i64);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProjectTimeMs(pub i64);
+
 impl Default for PlaybackTimeMapping {
     fn default() -> Self {
         Self {
@@ -380,21 +391,50 @@ impl Default for PlaybackTimeMapping {
 
 impl PlaybackTimeMapping {
     pub fn project_time_ms(&self, media_time_ms: i64) -> Result<i64, String> {
+        self.project_time(MediaTimeMs(media_time_ms))
+            .map(|value| value.0)
+    }
+
+    pub fn project_time(&self, media_time: MediaTimeMs) -> Result<ProjectTimeMs, String> {
         if self.rate_numerator <= 0 || self.rate_denominator <= 0 {
             return Err("Playback time mapping rate must be positive.".into());
         }
-        let delta = media_time_ms.saturating_sub(self.media_anchor_ms) as i128;
+        // Convert to a wide signed type before subtracting.  Saturating the
+        // `i64` values first would clamp timestamps before the anchor to zero,
+        // making the desktop mapping disagree with the WebView's signed math.
+        let delta = (media_time.0 as i128) - (self.media_anchor_ms as i128);
         let scaled =
             delta.saturating_mul(self.rate_numerator as i128) / self.rate_denominator as i128;
-        Ok((self.project_anchor_ms as i128)
-            .saturating_add(scaled)
-            .clamp(i64::MIN as i128, i64::MAX as i128) as i64)
+        Ok(ProjectTimeMs(
+            (self.project_anchor_ms as i128)
+                .saturating_add(scaled)
+                .clamp(i64::MIN as i128, i64::MAX as i128) as i64,
+        ))
+    }
+
+    pub fn media_time_ms(&self, project_time_ms: i64) -> Result<i64, String> {
+        self.media_time(ProjectTimeMs(project_time_ms))
+            .map(|value| value.0)
+    }
+
+    pub fn media_time(&self, project_time: ProjectTimeMs) -> Result<MediaTimeMs, String> {
+        if self.rate_numerator <= 0 || self.rate_denominator <= 0 {
+            return Err("Playback time mapping rate must be positive.".into());
+        }
+        let delta = (project_time.0 as i128) - (self.project_anchor_ms as i128);
+        let scaled =
+            delta.saturating_mul(self.rate_denominator as i128) / self.rate_numerator as i128;
+        Ok(MediaTimeMs(
+            (self.media_anchor_ms as i128)
+                .saturating_add(scaled)
+                .clamp(i64::MIN as i128, i64::MAX as i128) as i64,
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{BroadcastMetadata, PlaybackTimeMapping};
+    use super::{BroadcastMetadata, MediaTimeMs, PlaybackTimeMapping, ProjectTimeMs};
 
     #[test]
     fn maps_media_time_through_a_segment_offset_and_rate() {
@@ -406,6 +446,37 @@ mod tests {
             rate_denominator: 1000,
         };
         assert_eq!(mapping.project_time_ms(11_000).unwrap(), 26_001);
+        assert_eq!(mapping.media_time_ms(26_001).unwrap(), 11_000);
+    }
+
+    #[test]
+    fn preserves_signed_offsets_before_each_anchor() {
+        let mapping = PlaybackTimeMapping {
+            segment_id: "offset-segment".into(),
+            media_anchor_ms: 10_000,
+            project_anchor_ms: 25_000,
+            rate_numerator: 2,
+            rate_denominator: 1,
+        };
+
+        // A timestamp before the media anchor must map before the project
+        // anchor instead of being clamped to the anchor itself.
+        assert_eq!(mapping.project_time_ms(9_500).unwrap(), 24_000);
+        assert_eq!(mapping.media_time_ms(24_000).unwrap(), 9_500);
+    }
+
+    #[test]
+    fn maps_both_directions_with_non_default_rate_and_anchors() {
+        let mapping = PlaybackTimeMapping {
+            segment_id: "programme-3".into(),
+            media_anchor_ms: 123_456,
+            project_anchor_ms: -20_000,
+            rate_numerator: 3,
+            rate_denominator: 2,
+        };
+
+        assert_eq!(mapping.project_time_ms(124_456).unwrap(), -18_500);
+        assert_eq!(mapping.media_time_ms(-18_500).unwrap(), 124_456);
     }
 
     #[test]
@@ -415,6 +486,39 @@ mod tests {
             ..Default::default()
         };
         assert!(mapping.project_time_ms(0).is_err());
+    }
+
+    #[test]
+    fn typed_mapping_clamps_only_at_the_wire_boundary() {
+        let mapping = PlaybackTimeMapping {
+            media_anchor_ms: i64::MIN,
+            project_anchor_ms: i64::MAX,
+            rate_numerator: i32::MAX,
+            rate_denominator: 1,
+            ..Default::default()
+        };
+        let project = mapping.project_time(MediaTimeMs(i64::MAX)).unwrap();
+        assert_eq!(project, ProjectTimeMs(i64::MAX));
+        assert_eq!(mapping.project_time_ms(i64::MAX).unwrap(), i64::MAX);
+    }
+
+    #[test]
+    fn typed_mapping_preserves_negative_pre_anchor_values() {
+        let mapping = PlaybackTimeMapping {
+            media_anchor_ms: 5_000,
+            project_anchor_ms: -2_000,
+            rate_numerator: 1,
+            rate_denominator: 1,
+            ..Default::default()
+        };
+        assert_eq!(
+            mapping.project_time(MediaTimeMs(4_000)).unwrap(),
+            ProjectTimeMs(-3_000)
+        );
+        assert_eq!(
+            mapping.media_time(ProjectTimeMs(-3_000)).unwrap(),
+            MediaTimeMs(4_000)
+        );
     }
 
     #[test]

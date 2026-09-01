@@ -1,0 +1,41 @@
+name: Weekly fuzz validation
+
+on:
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Run fuzz targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install native fuzz build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libfreetype6-dev
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - name: Select nightly toolchain for cargo-fuzz
+        shell: bash
+        run: mv rust-toolchain.toml rust-toolchain.toml.ci-backup
+      - name: Run every declared target
+        shell: bash
+        env:
+          RUSTUP_TOOLCHAIN: nightly
+        run: |
+          set -euo pipefail
+          mapfile -t targets < <(
+            cargo metadata --manifest-path fuzz/Cargo.toml --no-deps --format-version 1 |
+              python3 -c 'import json,sys; data=json.load(sys.stdin); print("\n".join(t["name"] for t in data["packages"][0]["targets"] if "bin" in t["kind"]))'
+          )
+          test "${#targets[@]}" -gt 0
+          for target in "${targets[@]}"; do
+            echo "Fuzzing target: $target"
+            cargo fuzz run --manifest-path fuzz/Cargo.toml --target x86_64-unknown-linux-gnu "$target" -- -max_total_time=30 -timeout=10
+          done

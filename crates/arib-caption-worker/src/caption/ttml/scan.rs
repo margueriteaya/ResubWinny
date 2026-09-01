@@ -127,6 +127,7 @@ where
             let pts = if framing.packet_size == 192 {
                 transport_time
             } else if let Some(value) = pes_pts_from_header(buffer) {
+                let value = value.to_millis();
                 let origin = *timeline_origin_ms.get_or_insert(value);
                 normalise_pts(value, origin)
             } else {
@@ -181,6 +182,7 @@ where
         let pts = if framing.packet_size == 192 {
             transport_time
         } else if let Some(value) = pes_pts_from_header(&buffer) {
+            let value = value.to_millis();
             let origin = *timeline_origin_ms.get_or_insert(value);
             normalise_pts(value, origin)
         } else {

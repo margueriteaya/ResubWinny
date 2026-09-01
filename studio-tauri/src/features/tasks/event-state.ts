@@ -13,6 +13,25 @@ export type TaskEventState = {
   warnings: number;
 };
 
+export function emptyTaskEventState(): TaskEventState {
+  return {
+    archivePath: "",
+    bytesRead: 0,
+    captions: 0,
+    isExporting: false,
+    isPaused: false,
+    lastLoggedProgressBucket: -1,
+    logs: [],
+    previewIndexing: false,
+    progress: 0,
+    warnings: 0,
+  };
+}
+
+export function resetTaskEventState(overrides: Partial<TaskEventState> = {}): TaskEventState {
+  return { ...emptyTaskEventState(), ...overrides };
+}
+
 export type TaskEventEffects = {
   addHistory: "Completed" | "Warning" | null;
   archiveCompleted: boolean;
