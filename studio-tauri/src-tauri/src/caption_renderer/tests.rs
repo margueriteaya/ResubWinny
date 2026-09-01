@@ -43,11 +43,8 @@ const ONBOARDING_ASSET_NAMES: [&str; 5] = [
     "04-drcs.png",
 ];
 
-const ONBOARDING_MOTION_ASSET_NAMES: [&str; 3] = [
-    "00-main-cell.png",
-    "00-ruby-cell.png",
-    "05-drcs.png",
-];
+const ONBOARDING_MOTION_ASSET_NAMES: [&str; 3] =
+    ["00-main-cell.png", "00-ruby-cell.png", "05-drcs.png"];
 
 const ONBOARDING_TITLE_ELEMENT_ASSETS: [(&str, usize, usize, usize, usize); 7] = [
     ("06-title-subtitle.png", 495, 690, 741, 842),
@@ -146,7 +143,9 @@ fn add_synthetic_file_drcs(mut pixels: Vec<u8>) -> Vec<u8> {
     let origin_y = 728_i32;
     for (row, source) in DRCS.iter().enumerate() {
         for (column, value) in source.bytes().enumerate() {
-            if value != b'1' { continue; }
+            if value != b'1' {
+                continue;
+            }
             super::fill_rect(
                 &mut pixels,
                 origin_x + column as i32 * scale,
@@ -198,7 +197,10 @@ fn onboarding_title_light_mask(element: &[u8]) -> Vec<u8> {
 #[test]
 #[ignore = "explicitly regenerates checked-in onboarding overlay assets"]
 fn generate_onboarding_overlay_assets() {
-    assert_eq!(std::env::var("RESUBWINNY_UPDATE_ONBOARDING_ASSETS").as_deref(), Ok("1"));
+    assert_eq!(
+        std::env::var("RESUBWINNY_UPDATE_ONBOARDING_ASSETS").as_deref(),
+        Ok("1")
+    );
     let directory = onboarding_asset_directory();
     std::fs::create_dir_all(&directory).expect("onboarding asset directory");
     let main_background = onboarding_main_background();
@@ -206,12 +208,20 @@ fn generate_onboarding_overlay_assets() {
     let blank = onboarding_background();
     let white = onboarding_frame("字幕を、形にする");
     let yellow = onboarding_frame("<span tts:color='#FFFF00FF'>字幕</span>を、形にする");
-    let ruby = onboarding_frame("<span tts:color='#FFFF00FF'>字幕</span>を、<ruby><span tts:ruby='base'>形</span><rt><span tts:ruby='text' tts:fontSize='44px'>ファイル</span></rt></ruby>にする");
+    let ruby = onboarding_frame(
+        "<span tts:color='#FFFF00FF'>字幕</span>を、<ruby><span tts:ruby='base'>形</span><rt><span tts:ruby='text' tts:fontSize='44px'>ファイル</span></rt></ruby>にする",
+    );
     let white_pixels = white.pixels.to_vec();
     let yellow_pixels = yellow.pixels.to_vec();
     let ruby_pixels = ruby.pixels.to_vec();
     let final_pixels = add_synthetic_file_drcs(ruby_pixels.clone());
-    let frames: [&[u8]; 5] = [&blank, &white_pixels, &yellow_pixels, &ruby_pixels, &final_pixels];
+    let frames: [&[u8]; 5] = [
+        &blank,
+        &white_pixels,
+        &yellow_pixels,
+        &ruby_pixels,
+        &final_pixels,
+    ];
     for (name, pixels) in ONBOARDING_ASSET_NAMES.iter().zip(frames) {
         let bytes = super::encode_png(1920, 1080, pixels).expect("encoded onboarding PNG");
         std::fs::write(directory.join(name), bytes).expect("written onboarding PNG");
@@ -236,13 +246,17 @@ fn generate_onboarding_overlay_assets() {
         let light_mask = onboarding_title_light_mask(&pixels);
         let bytes = super::encode_png((right - left) as u32, (bottom - top) as u32, &light_mask)
             .expect("encoded onboarding title light mask PNG");
-        std::fs::write(directory.join(light_name), bytes).expect("written onboarding title light mask PNG");
+        std::fs::write(directory.join(light_name), bytes)
+            .expect("written onboarding title light mask PNG");
     }
     let unified_light_mask = onboarding_title_light_mask(&final_pixels);
     let bytes = super::encode_png(1920, 1080, &unified_light_mask)
         .expect("encoded unified onboarding title light mask PNG");
-    std::fs::write(directory.join(ONBOARDING_UNIFIED_TITLE_LIGHT_ASSET_NAME), bytes)
-        .expect("written unified onboarding title light mask PNG");
+    std::fs::write(
+        directory.join(ONBOARDING_UNIFIED_TITLE_LIGHT_ASSET_NAME),
+        bytes,
+    )
+    .expect("written unified onboarding title light mask PNG");
 }
 
 #[test]
@@ -253,11 +267,16 @@ fn checked_in_onboarding_overlay_assets_are_transparent_native_planes() {
         let bytes = std::fs::read(directory.join(name)).expect("checked-in onboarding asset");
         let (pixels, width, height) = super::decode_png(&bytes).expect("valid onboarding PNG");
         assert_eq!((width, height), (1920, 1080));
-        assert_eq!(&pixels[0..4], &[0, 0, 0, 0], "outside the caption region remains transparent");
+        assert_eq!(
+            &pixels[0..4],
+            &[0, 0, 0, 0],
+            "outside the caption region remains transparent"
+        );
         decoded.push(pixels);
     }
     for name in ONBOARDING_MOTION_ASSET_NAMES {
-        let bytes = std::fs::read(directory.join(name)).expect("checked-in onboarding motion asset");
+        let bytes =
+            std::fs::read(directory.join(name)).expect("checked-in onboarding motion asset");
         let (_, width, height) = super::decode_png(&bytes).expect("valid onboarding motion PNG");
         assert_eq!((width, height), (1920, 1080));
     }
@@ -265,21 +284,51 @@ fn checked_in_onboarding_overlay_assets_are_transparent_native_planes() {
         .into_iter()
         .zip(ONBOARDING_TITLE_LIGHT_ASSET_NAMES)
     {
-        let bytes = std::fs::read(directory.join(name)).expect("checked-in onboarding title element");
-        let (pixels, width, height) = super::decode_png(&bytes).expect("valid onboarding title element PNG");
-        assert_eq!((width, height), ((right - left) as u32, (bottom - top) as u32));
-        assert!(pixels.chunks_exact(4).any(|pixel| pixel[3] > 0), "{name} contains visible ink");
-        assert!(left < right && top < bottom, "{name} has a non-empty local element boundary");
-        let bytes = std::fs::read(directory.join(light_name)).expect("checked-in onboarding title light mask");
+        let bytes =
+            std::fs::read(directory.join(name)).expect("checked-in onboarding title element");
+        let (pixels, width, height) =
+            super::decode_png(&bytes).expect("valid onboarding title element PNG");
+        assert_eq!(
+            (width, height),
+            ((right - left) as u32, (bottom - top) as u32)
+        );
+        assert!(
+            pixels.chunks_exact(4).any(|pixel| pixel[3] > 0),
+            "{name} contains visible ink"
+        );
+        assert!(
+            left < right && top < bottom,
+            "{name} has a non-empty local element boundary"
+        );
+        let bytes = std::fs::read(directory.join(light_name))
+            .expect("checked-in onboarding title light mask");
         let (light_pixels, light_width, light_height) =
             super::decode_png(&bytes).expect("valid onboarding title light mask PNG");
         assert_eq!((light_width, light_height), (width, height));
-        assert!(light_pixels.chunks_exact(4).any(|pixel| pixel[3] > 0), "{light_name} contains a luminous stroke mask");
-        assert!(light_pixels.chunks_exact(4).all(|pixel| pixel[3] == 0 || pixel[0..3] == [255, 255, 255]), "{light_name} is a neutral alpha mask");
+        assert!(
+            light_pixels.chunks_exact(4).any(|pixel| pixel[3] > 0),
+            "{light_name} contains a luminous stroke mask"
+        );
+        assert!(
+            light_pixels
+                .chunks_exact(4)
+                .all(|pixel| pixel[3] == 0 || pixel[0..3] == [255, 255, 255]),
+            "{light_name} is a neutral alpha mask"
+        );
         if light_name == "09-title-shape-ruby-light.png" {
             let ruby_band_end = width as usize * 80 * 4;
-            assert!(light_pixels[..ruby_band_end].chunks_exact(4).any(|pixel| pixel[3] > 0), "ファイル participates in the luminous stroke mask");
-            assert!(light_pixels[ruby_band_end..].chunks_exact(4).any(|pixel| pixel[3] > 0), "形 remains in the same luminous element");
+            assert!(
+                light_pixels[..ruby_band_end]
+                    .chunks_exact(4)
+                    .any(|pixel| pixel[3] > 0),
+                "ファイル participates in the luminous stroke mask"
+            );
+            assert!(
+                light_pixels[ruby_band_end..]
+                    .chunks_exact(4)
+                    .any(|pixel| pixel[3] > 0),
+                "形 remains in the same luminous element"
+            );
         }
     }
     let bytes = std::fs::read(directory.join(ONBOARDING_UNIFIED_TITLE_LIGHT_ASSET_NAME))
@@ -287,9 +336,18 @@ fn checked_in_onboarding_overlay_assets_are_transparent_native_planes() {
     let (unified_light, width, height) =
         super::decode_png(&bytes).expect("valid unified onboarding title light mask PNG");
     assert_eq!((width, height), (1920, 1080));
-    assert!((650..705).any(|y| (940..1128).any(|x| onboarding_pixel(&unified_light, x, y)[3] > 0)), "unified light includes ファイル");
-    assert!((710..830).any(|y| (495..1440).any(|x| onboarding_pixel(&unified_light, x, y)[3] > 0)), "unified light includes the main title line");
-    assert!((728..799).any(|y| (1454..1525).any(|x| onboarding_pixel(&unified_light, x, y)[3] > 0)), "unified light includes DRCS");
+    assert!(
+        (650..705).any(|y| (940..1128).any(|x| onboarding_pixel(&unified_light, x, y)[3] > 0)),
+        "unified light includes ファイル"
+    );
+    assert!(
+        (710..830).any(|y| (495..1440).any(|x| onboarding_pixel(&unified_light, x, y)[3] > 0)),
+        "unified light includes the main title line"
+    );
+    assert!(
+        (728..799).any(|y| (1454..1525).any(|x| onboarding_pixel(&unified_light, x, y)[3] > 0)),
+        "unified light includes DRCS"
+    );
     for (label, left, right) in [
         ("字", 495, 618),
         ("幕", 618, 741),
@@ -300,38 +358,97 @@ fn checked_in_onboarding_overlay_assets_are_transparent_native_planes() {
         ("す", 1204, 1322),
         ("る", 1322, 1441),
     ] {
-        assert!((690..842).any(|y| (left..right).any(|x| onboarding_pixel(&unified_light, x, y)[3] > 0)), "{label} has luminous source strokes");
+        assert!(
+            (690..842)
+                .any(|y| (left..right).any(|x| onboarding_pixel(&unified_light, x, y)[3] > 0)),
+            "{label} has luminous source strokes"
+        );
     }
-    assert!(decoded[0].chunks_exact(4).any(|pixel| pixel == [0, 0, 0, 153]));
-    assert!(decoded[0].chunks_exact(4).all(|pixel| pixel[3] == 0 || pixel[3] == 153), "background is one uniform-alpha union without stacked shadows");
-    assert_eq!(onboarding_pixel(&decoded[0], 500, 705), &[0, 0, 0, 153], "main-line cell background");
-    assert_eq!(onboarding_pixel(&decoded[0], 910, 660), &[0, 0, 0, 153], "raised ruby cell background");
-    assert_eq!(onboarding_pixel(&decoded[0], 800, 660), &[0, 0, 0, 0], "ruby background does not span the line");
-    assert_eq!(onboarding_pixel(&decoded[0], 500, 835), &[0, 0, 0, 0], "main-line background stays optically tight");
+    assert!(
+        decoded[0]
+            .chunks_exact(4)
+            .any(|pixel| pixel == [0, 0, 0, 153])
+    );
+    assert!(
+        decoded[0]
+            .chunks_exact(4)
+            .all(|pixel| pixel[3] == 0 || pixel[3] == 153),
+        "background is one uniform-alpha union without stacked shadows"
+    );
+    assert_eq!(
+        onboarding_pixel(&decoded[0], 500, 705),
+        &[0, 0, 0, 153],
+        "main-line cell background"
+    );
+    assert_eq!(
+        onboarding_pixel(&decoded[0], 910, 660),
+        &[0, 0, 0, 153],
+        "raised ruby cell background"
+    );
+    assert_eq!(
+        onboarding_pixel(&decoded[0], 800, 660),
+        &[0, 0, 0, 0],
+        "ruby background does not span the line"
+    );
+    assert_eq!(
+        onboarding_pixel(&decoded[0], 500, 835),
+        &[0, 0, 0, 0],
+        "main-line background stays optically tight"
+    );
     let mut main_bounds = (usize::MAX, usize::MAX, 0_usize, 0_usize);
     for y in 700..830 {
         for x in 495..1450 {
-            if onboarding_pixel(&decoded[3], x, y)[3] <= 180 { continue; }
-            main_bounds = (main_bounds.0.min(x), main_bounds.1.min(y), main_bounds.2.max(x), main_bounds.3.max(y));
+            if onboarding_pixel(&decoded[3], x, y)[3] <= 180 {
+                continue;
+            }
+            main_bounds = (
+                main_bounds.0.min(x),
+                main_bounds.1.min(y),
+                main_bounds.2.max(x),
+                main_bounds.3.max(y),
+            );
         }
     }
     let mut drcs_bounds = (usize::MAX, usize::MAX, 0_usize, 0_usize);
     for y in 700..830 {
         for x in 1400..1550 {
-            if onboarding_pixel(&decoded[3], x, y) == onboarding_pixel(&decoded[4], x, y) { continue; }
-            drcs_bounds = (drcs_bounds.0.min(x), drcs_bounds.1.min(y), drcs_bounds.2.max(x), drcs_bounds.3.max(y));
+            if onboarding_pixel(&decoded[3], x, y) == onboarding_pixel(&decoded[4], x, y) {
+                continue;
+            }
+            drcs_bounds = (
+                drcs_bounds.0.min(x),
+                drcs_bounds.1.min(y),
+                drcs_bounds.2.max(x),
+                drcs_bounds.3.max(y),
+            );
         }
     }
     let main_center_y = (main_bounds.1 + main_bounds.3) as isize;
     let drcs_center_y = (drcs_bounds.1 + drcs_bounds.3) as isize;
-    assert!((main_center_y - drcs_center_y).abs() <= 1, "DRCS and main-line ink share an optical vertical centre");
+    assert!(
+        (main_center_y - drcs_center_y).abs() <= 1,
+        "DRCS and main-line ink share an optical vertical centre"
+    );
     let preceding_gap = drcs_bounds.0 - main_bounds.2 - 1;
     let trailing_gap = 1549 - drcs_bounds.2;
-    assert!((preceding_gap as isize - trailing_gap as isize).abs() <= 1, "DRCS is optically balanced in the final cell");
-    assert_ne!(decoded[1], decoded[2], "yellow caption state differs from white copy");
+    assert!(
+        (preceding_gap as isize - trailing_gap as isize).abs() <= 1,
+        "DRCS is optically balanced in the final cell"
+    );
+    assert_ne!(
+        decoded[1], decoded[2],
+        "yellow caption state differs from white copy"
+    );
     assert_ne!(decoded[2], decoded[3], "ruby adds a distinct native layer");
-    assert_ne!(decoded[3], decoded[4], "synthetic DRCS adds a distinct bitmap cell");
-    assert!(decoded[2].chunks_exact(4).any(|pixel| pixel[0] > 220 && pixel[1] > 210 && pixel[2] < 80 && pixel[3] > 0));
+    assert_ne!(
+        decoded[3], decoded[4],
+        "synthetic DRCS adds a distinct bitmap cell"
+    );
+    assert!(
+        decoded[2]
+            .chunks_exact(4)
+            .any(|pixel| pixel[0] > 220 && pixel[1] > 210 && pixel[2] < 80 && pixel[3] > 0)
+    );
 }
 
 #[test]
