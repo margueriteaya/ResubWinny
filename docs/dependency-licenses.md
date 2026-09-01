@@ -4,7 +4,7 @@ This file is generated from the committed Cargo and npm lock data by
 `scripts/generate-license-report.ps1`. It records package metadata for review;
 the dependency source distributions remain the authoritative license texts.
 
-Generated inventory: 466 Cargo packages and 112 npm packages.
+Generated inventory: 466 Cargo packages and 89 npm packages.
 
 ## Cargo
 
@@ -481,68 +481,33 @@ Generated inventory: 466 Cargo packages and 112 npm packages.
 
 | Package | Version | License expression |
 | --- | --- | --- |
-| `@esbuild/aix-ppc64` | `0.28.2` | MIT |
-| `@esbuild/android-arm` | `0.28.2` | MIT |
-| `@esbuild/android-arm64` | `0.28.2` | MIT |
-| `@esbuild/android-x64` | `0.28.2` | MIT |
-| `@esbuild/darwin-arm64` | `0.28.2` | MIT |
-| `@esbuild/darwin-x64` | `0.28.2` | MIT |
-| `@esbuild/freebsd-arm64` | `0.28.2` | MIT |
-| `@esbuild/freebsd-x64` | `0.28.2` | MIT |
-| `@esbuild/linux-arm` | `0.28.2` | MIT |
-| `@esbuild/linux-arm64` | `0.28.2` | MIT |
-| `@esbuild/linux-ia32` | `0.28.2` | MIT |
-| `@esbuild/linux-loong64` | `0.28.2` | MIT |
-| `@esbuild/linux-mips64el` | `0.28.2` | MIT |
-| `@esbuild/linux-ppc64` | `0.28.2` | MIT |
-| `@esbuild/linux-riscv64` | `0.28.2` | MIT |
-| `@esbuild/linux-s390x` | `0.28.2` | MIT |
-| `@esbuild/linux-x64` | `0.28.2` | MIT |
-| `@esbuild/netbsd-arm64` | `0.28.2` | MIT |
-| `@esbuild/netbsd-x64` | `0.28.2` | MIT |
-| `@esbuild/openbsd-arm64` | `0.28.2` | MIT |
-| `@esbuild/openbsd-x64` | `0.28.2` | MIT |
-| `@esbuild/openharmony-arm64` | `0.28.2` | MIT |
-| `@esbuild/sunos-x64` | `0.28.2` | MIT |
-| `@esbuild/win32-arm64` | `0.28.2` | MIT |
-| `@esbuild/win32-ia32` | `0.28.2` | MIT |
-| `@esbuild/win32-x64` | `0.28.2` | MIT |
 | `@jridgewell/gen-mapping` | `0.3.13` | MIT |
 | `@jridgewell/remapping` | `2.3.5` | MIT |
 | `@jridgewell/resolve-uri` | `3.1.2` | MIT |
 | `@jridgewell/sourcemap-codec` | `1.5.5` | MIT |
 | `@jridgewell/trace-mapping` | `0.3.31` | MIT |
 | `@lucide/svelte` | `1.37.0` | ISC |
-| `@napi-rs/lzma-linux-x64-gnu` | `1.5.1` | MIT |
-| `@rollup/rollup-android-arm-eabi` | `4.63.1` | MIT |
-| `@rollup/rollup-android-arm64` | `4.63.1` | MIT |
-| `@rollup/rollup-darwin-arm64` | `4.63.1` | MIT |
-| `@rollup/rollup-darwin-x64` | `4.63.1` | MIT |
-| `@rollup/rollup-freebsd-arm64` | `4.63.1` | MIT |
-| `@rollup/rollup-freebsd-x64` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-arm-gnueabihf` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-arm-musleabihf` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-arm64-gnu` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-arm64-musl` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-loong64-gnu` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-loong64-musl` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-ppc64-gnu` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-ppc64-musl` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-riscv64-gnu` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-riscv64-musl` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-s390x-gnu` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-x64-gnu` | `4.63.1` | MIT |
-| `@rollup/rollup-linux-x64-musl` | `4.63.1` | MIT |
-| `@rollup/rollup-openbsd-x64` | `4.63.1` | MIT |
-| `@rollup/rollup-openharmony-arm64` | `4.63.1` | MIT |
-| `@rollup/rollup-win32-arm64-msvc` | `4.63.1` | MIT |
-| `@rollup/rollup-win32-ia32-msvc` | `4.63.1` | MIT |
-| `@rollup/rollup-win32-x64-gnu` | `4.63.1` | MIT |
-| `@rollup/rollup-win32-x64-msvc` | `4.63.1` | MIT |
+| `@oxc-project/types` | `0.147.0` | MIT |
+| `@rolldown/binding-android-arm-eabi` | `1.2.6` | MIT |
+| `@rolldown/binding-android-arm64` | `1.2.6` | MIT |
+| `@rolldown/binding-darwin-arm64` | `1.2.6` | MIT |
+| `@rolldown/binding-darwin-x64` | `1.2.6` | MIT |
+| `@rolldown/binding-freebsd-x64` | `1.2.6` | MIT |
+| `@rolldown/binding-linux-arm-gnueabihf` | `1.2.6` | MIT |
+| `@rolldown/binding-linux-arm64-gnu` | `1.2.6` | MIT |
+| `@rolldown/binding-linux-arm64-musl` | `1.2.6` | MIT |
+| `@rolldown/binding-linux-ppc64-gnu` | `1.2.6` | MIT |
+| `@rolldown/binding-linux-s390x-gnu` | `1.2.6` | MIT |
+| `@rolldown/binding-linux-x64-gnu` | `1.2.6` | MIT |
+| `@rolldown/binding-linux-x64-musl` | `1.2.6` | MIT |
+| `@rolldown/binding-openharmony-arm64` | `1.2.6` | MIT |
+| `@rolldown/binding-win32-arm64-msvc` | `1.2.6` | MIT |
+| `@rolldown/binding-win32-x64-msvc` | `1.2.6` | MIT |
+| `@rolldown/pluginutils` | `1.0.1` | MIT |
 | `@sveltejs/acorn-typescript` | `1.0.11` | MIT |
 | `@sveltejs/load-config` | `0.2.3` | MIT |
-| `@sveltejs/vite-plugin-svelte` | `6.2.4` | MIT |
-| `@sveltejs/vite-plugin-svelte-inspector` | `5.0.2` | MIT |
+| `@sveltejs/vite-plugin-svelte` | `7.3.0` | MIT |
+| `@sveltejs/vite-plugin-svelte/node_modules/magic-string` | `1.2.3` | MIT |
 | `@tauri-apps/api` | `2.11.1` | Apache-2.0 OR MIT |
 | `@tauri-apps/cli` | `2.11.4` | Apache-2.0 OR MIT |
 | `@tauri-apps/cli-darwin-arm64` | `2.11.4` | Apache-2.0 OR MIT |
@@ -565,13 +530,25 @@ Generated inventory: 466 Cargo packages and 112 npm packages.
 | `chokidar` | `4.0.3` | MIT |
 | `clsx` | `2.1.1` | MIT |
 | `deepmerge` | `4.3.1` | MIT |
+| `detect-libc` | `2.1.2` | Apache-2.0 |
 | `devalue` | `5.8.2` | MIT |
-| `esbuild` | `0.28.2` | MIT |
 | `esm-env` | `1.2.2` | MIT |
 | `esrap` | `2.3.0` | MIT |
 | `fdir` | `6.5.0` | MIT |
 | `fsevents` | `2.3.3` | MIT |
 | `is-reference` | `3.0.3` | MIT |
+| `lightningcss` | `1.33.0` | MPL-2.0 |
+| `lightningcss-android-arm64` | `1.33.0` | MPL-2.0 |
+| `lightningcss-darwin-arm64` | `1.33.0` | MPL-2.0 |
+| `lightningcss-darwin-x64` | `1.33.0` | MPL-2.0 |
+| `lightningcss-freebsd-x64` | `1.33.0` | MPL-2.0 |
+| `lightningcss-linux-arm-gnueabihf` | `1.33.0` | MPL-2.0 |
+| `lightningcss-linux-arm64-gnu` | `1.33.0` | MPL-2.0 |
+| `lightningcss-linux-arm64-musl` | `1.33.0` | MPL-2.0 |
+| `lightningcss-linux-x64-gnu` | `1.33.0` | MPL-2.0 |
+| `lightningcss-linux-x64-musl` | `1.33.0` | MPL-2.0 |
+| `lightningcss-win32-arm64-msvc` | `1.33.0` | MPL-2.0 |
+| `lightningcss-win32-x64-msvc` | `1.33.0` | MPL-2.0 |
 | `locate-character` | `3.0.0` | MIT |
 | `macos-traffic-lights` | `1.1.0` | MIT |
 | `magic-string` | `0.30.21` | MIT |
@@ -582,7 +559,7 @@ Generated inventory: 466 Cargo packages and 112 npm packages.
 | `picomatch` | `4.0.5` | MIT |
 | `postcss` | `8.5.26` | MIT |
 | `readdirp` | `4.1.2` | MIT |
-| `rollup` | `4.63.1` | MIT |
+| `rolldown` | `1.2.6` | MIT |
 | `sade` | `1.8.1` | MIT |
 | `source-map-js` | `1.2.1` | BSD-3-Clause |
 | `svelte` | `5.57.0` | MIT |
@@ -590,7 +567,7 @@ Generated inventory: 466 Cargo packages and 112 npm packages.
 | `tinyglobby` | `0.2.17` | MIT |
 | `tslib` | `2.8.1` | 0BSD |
 | `typescript` | `5.9.3` | Apache-2.0 |
-| `vite` | `7.3.6` | MIT |
+| `vite` | `8.2.2` | MIT |
 | `vitefu` | `1.1.3` | MIT |
 | `zimmerframe` | `1.1.4` | MIT |
 
