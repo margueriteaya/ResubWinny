@@ -4,7 +4,7 @@ This file is generated from the committed Cargo and npm lock data by
 `scripts/generate-license-report.ps1`. It records package metadata for review;
 the dependency source distributions remain the authoritative license texts.
 
-Generated inventory: 465 Cargo packages and 89 npm packages.
+Generated inventory: 466 Cargo packages and 89 npm packages.
 
 ## Cargo
 
@@ -23,7 +23,8 @@ Generated inventory: 465 Cargo packages and 89 npm packages.
 | `atomic-waker` | `1.1.2` | Apache-2.0 OR MIT | Desktop service |
 | `autocfg` | `1.5.1` | Apache-2.0 OR MIT | Desktop service, Worker |
 | `base64` | `0.21.7` | MIT OR Apache-2.0 | Desktop service |
-| `base64` | `0.22.1` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
+| `base64` | `0.22.1` | MIT OR Apache-2.0 | Desktop service |
+| `base64` | `0.23.1` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `bit-set` | `0.8.0` | Apache-2.0 OR MIT | Desktop service |
 | `bit-vec` | `0.8.0` | Apache-2.0 OR MIT | Desktop service |
 | `bitflags` | `1.3.2` | MIT/Apache-2.0 | Desktop service |
@@ -195,7 +196,7 @@ Generated inventory: 465 Cargo packages and 89 npm packages.
 | `libdbus-sys` | `0.2.7` | Apache-2.0/MIT | Desktop service |
 | `libfuzzer-sys` | `0.4.13` | (MIT OR Apache-2.0) AND NCSA | Fuzz targets |
 | `libloading` | `0.7.4` | ISC | Desktop service |
-| `libloading` | `0.8.9` | ISC | Desktop service |
+| `libloading` | `0.9.0` | ISC | Desktop service |
 | `libm` | `0.2.16` | MIT | Desktop service |
 | `libredox` | `0.1.21` | MIT | Desktop service |
 | `litemap` | `0.8.3` | Unicode-3.0 | Desktop service |
@@ -277,7 +278,7 @@ Generated inventory: 465 Cargo packages and 89 npm packages.
 | `regex-syntax` | `0.8.11` | MIT OR Apache-2.0 | Desktop service |
 | `reqwest` | `0.13.4` | MIT OR Apache-2.0 | Desktop service |
 | `rfd` | `0.16.0` | MIT | Desktop service |
-| `roxmltree` | `0.20.0` | MIT OR Apache-2.0 | Fuzz targets, Worker |
+| `roxmltree` | `0.21.1` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `rustc_version` | `0.4.1` | MIT OR Apache-2.0 | Desktop service |
 | `rustc-hash` | `2.1.3` | Apache-2.0 OR MIT | Desktop service |
 | `rustversion` | `1.0.23` | MIT OR Apache-2.0 | Desktop service |
