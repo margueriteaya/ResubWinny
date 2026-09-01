@@ -4,6 +4,11 @@
 
 # Backend contract
 
+> Implementation note (2026-09-02): the logical 1920×1080 plane in this document is a bounded intermediate texture, not the
+> target resolution that defines correctness. The Worker preserves the source plane, region, style, and inline lengths in optional
+> `source_layout`; the native renderer derives the intermediate texture from it and maps the complete texture to libmpv's
+> video-content viewport. Correctness is the ratio relative to video content after excluding black bars.
+
 The Tauri/Svelte UI is a client of the Rust backend. It does not parse TS/TLV data, decode ARIB, render high-resolution video, or decide conversion semantics.
 
 The durable `.caption.jsonl` format is specified separately in

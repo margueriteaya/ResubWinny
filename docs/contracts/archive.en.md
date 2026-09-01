@@ -47,3 +47,10 @@ route's faithful payload. Style, glyph pixels, and TTML resource evidence stay
 route-specific. Schema v1 therefore continues to publish B24 as
 `region_interval` and ARIB-TTML as `caption`; the shared internal boundary does
 not relabel or duplicate records.
+
+An ARIB-TTML `caption.value` may include optional `source_layout`. It preserves the source display-plane dimensions and basis
+(`declared`, `inferred`, or `legacy_logical2k`), source region geometry, unscaled style, and safe inline TTML. Existing `x`,
+`y`, `width`, `height`, `style`, and `rich_body` fields remain as the logical 1920×1080 compatibility view. New readers prefer
+`source_layout` when mapping to the actual video-content viewport; archives without it are interpreted as
+`LegacyLogical1920x1080`. Schema-v1 readers must ignore this optional field, so old files require no migration. An archive that
+was incorrectly scaled without preserving source semantics cannot be reversed reliably and must be re-extracted from its lawful source recording.

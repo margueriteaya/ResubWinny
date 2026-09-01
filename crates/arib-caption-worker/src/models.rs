@@ -107,7 +107,30 @@ pub(crate) struct TtmlCaption {
     pub(crate) rich_body: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) ruby_bindings: Vec<TtmlRubyBinding>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) source_layout: Option<TtmlSourceLayout>,
     pub(crate) source: Option<TtmlCaptionSource>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum TtmlSourcePlaneBasis {
+    Declared,
+    Inferred,
+    LegacyLogical2k,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub(crate) struct TtmlSourceLayout {
+    pub(crate) plane_width: i32,
+    pub(crate) plane_height: i32,
+    pub(crate) plane_basis: TtmlSourcePlaneBasis,
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) width: Option<i32>,
+    pub(crate) height: Option<i32>,
+    pub(crate) style: TtmlCaptionStyle,
+    pub(crate) rich_body: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]

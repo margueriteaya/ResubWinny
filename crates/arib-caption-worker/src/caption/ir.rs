@@ -164,6 +164,7 @@ mod tests {
             style: TtmlCaptionStyle::default(),
             rich_body: None,
             ruby_bindings: Vec::new(),
+            source_layout: None,
             source: None,
         };
         let b24 = CaptionCueRef::B24(&interval);

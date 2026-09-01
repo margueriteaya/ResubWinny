@@ -36,7 +36,7 @@ $env:ARIB_FIXTURE_DIR = 'C:\tvrecords_testfile'
 | 本地 20.12 GiB BS 录像（不再分发） | 188 字节 MPEG-TS / PMT 版本及字幕 PID 转换 | **动态 PMT 回归。** 初始 PMT 仅公开叠加字幕 PID `0x1C12`（`component_tag 0x38`）；后续当前 PMT 添加字幕 PID `0x1201`（`component_tag 0x30`）。检查必须仅报告 `0x1201`。完整转换读取 21,609,477,452 字节，并产生 18,722 个选中 PES、3,825 个场景、6,679 个区域、70,853 个字符、7 个 DRCS 字形及 0 个解码器错误。原始证据必须仅包含 PID `0x1201`。 |
 | 构造的 PMT 版本转换 TS | MPEG-TS / B24 字幕与叠加字幕 | 固定大小发现窗口必须在初始仅叠加字幕的 PMT 之后找到较晚的字幕组件；顺序解码必须仅路由选中的逻辑 `service_id + component_tag`，并拒绝叠加字幕 PES。 |
 | 构造的 188 字节私有 PES TS | MPEG-TS / PMT 私有 PID / 严格 ARIB-TTML | B24 发现保持为空；私有 PID 被发现；转换、ASS、TTML、归档、原始 PES 证据及有界预览均产生一条经过验证的 TTML 字幕。 |
-| `testdata/golden/b62-layout.xml` | 构造的 ARIB-TTML 语义样本 | 稳定 JSON 摘要验证嵌套计时、百分比区域、横排 Ruby 证据、竖排书写模式、字号及颜色，而不再分发广播材料。单元回归还验证：等效声明的 1920×1080、3840×2160 和 7680×4320 像素布局会归一化为相同的逻辑查看器几何形状和文本长度。 |
+| `testdata/golden/b62-layout.xml` | 构造的 ARIB-TTML 语义样本 | 稳定 JSON 摘要验证嵌套计时、百分比区域、横排 Ruby 证据、竖排书写模式、字号及颜色，而不再分发广播材料。单元回归还验证：等效声明的 1920×1080、3840×2160 和 7680×4320 像素布局会保留各自源平面与源值，并在映射到视频内容 viewport 后保持相同的观看者相对几何和文本长度。 |
 | 构造的 TLV/MMTP `stpp` 样本 | ISDB-S3 TLV → MMTP → MPT/MPU | **仅限实验。** 验证边界、片段丢失、来源及证据优先的 `stpp` 路由；它不能将 TLV/MMTP 提升为具有发布门禁的路由。 |
 
 解析器模糊测试保存在发布工作区之外的 `fuzz/` 中。初始目标覆盖基于内容的 TS/TLV 探测、严格 TTML 信封解码、有界 ARIB SI 服务名称文本解码、188/192 字节 TS PSI/PES 元数据解析及 MMTP/TLV 有效载荷信封。`cargo check --manifest-path fuzz/Cargo.toml` 提供稳定工具链编译检查；CI 还会在 Linux nightly 上使用 `cargo-fuzz` 构建所有目标。PSI/PES/B24 状态机以及更深层的信令/MPU 语义模糊测试目标仍是未来的语料库工作；每周工作流会在有界时间间隔内运行每个已声明目标。

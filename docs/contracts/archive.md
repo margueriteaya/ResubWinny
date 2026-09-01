@@ -36,3 +36,10 @@
 它统一时间、区域、路线标识、纯文本、ruby 数量和 DRCS 存在性，同时保留每条路线的忠实 payload。
 样式、字形像素与 TTML 资源证据仍为路线专属。因此 schema v1 继续把 B24 发布为
 `region_interval`、把 ARIB-TTML 发布为 `caption`；共享的内部边界不会重命名或复制记录。
+
+ARIB-TTML `caption.value` 可带可选的 `source_layout`。它保留源显示平面的宽高与判定依据
+（`declared`、`inferred` 或 `legacy_logical2k`）、源 region 几何、未缩放样式和安全的行内 TTML；
+既有的 `x`、`y`、`width`、`height`、`style` 与 `rich_body` 继续保留为逻辑 1920×1080 兼容视图。
+新读取器优先使用 `source_layout` 映射到实际视频内容 viewport；没有该字段的旧 archive 按
+`LegacyLogical1920x1080` 解释。schema v1 读取器必须忽略这个可选字段，因此不要求迁移旧文件；
+曾被错误缩放且未保存源语义的 archive 无法可靠反推，只能从合法源录制重新提取。

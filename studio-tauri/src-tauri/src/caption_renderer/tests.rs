@@ -35,6 +35,40 @@ fn visible_alpha_bounds(frame: &super::CaptionPlaneFrame) -> Option<(u32, u32, u
     bounds
 }
 
+#[test]
+fn source_layout_is_transformed_to_the_intermediate_plane() {
+    let source = compose(&[json!({
+        "text": "字幕",
+        "x": 0,
+        "y": 0,
+        "width": 1,
+        "height": 1,
+        "style": { "font_size": "1px", "color": "#FFFFFFFF" },
+        "source_layout": {
+            "plane_width": 3840,
+            "plane_height": 2160,
+            "plane_basis": "declared",
+            "x": 680,
+            "y": 1080,
+            "width": 2480,
+            "height": 1920,
+            "style": { "font_size": "144px", "color": "#FFFFFFFF" },
+            "rich_body": null
+        }
+    })])
+    .expect("source-layout frame");
+    let logical = compose(&[json!({
+        "text": "字幕",
+        "x": 340,
+        "y": 540,
+        "width": 1240,
+        "height": 960,
+        "style": { "font_size": "72px", "color": "#FFFFFFFF" }
+    })])
+    .expect("logical frame");
+    assert_eq!(visible_alpha_bounds(&source), visible_alpha_bounds(&logical));
+}
+
 const ONBOARDING_ASSET_NAMES: [&str; 5] = [
     "00-positioning.png",
     "01-white-copy.png",

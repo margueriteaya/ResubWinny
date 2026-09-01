@@ -189,6 +189,7 @@ const LOGICAL_DISPLAY_HEIGHT: i32 = 1080;
 pub(crate) struct TtmlDisplayPlane {
     source_width: i32,
     source_height: i32,
+    basis: TtmlSourcePlaneBasis,
 }
 
 impl TtmlDisplayPlane {
@@ -196,6 +197,7 @@ impl TtmlDisplayPlane {
         Self {
             source_width: LOGICAL_DISPLAY_WIDTH,
             source_height: LOGICAL_DISPLAY_HEIGHT,
+            basis: TtmlSourcePlaneBasis::LegacyLogical2k,
         }
     }
 
@@ -242,6 +244,7 @@ fn ttml_display_plane_with_root(xml: &str, root: Option<&str>) -> TtmlDisplayPla
             (Some(width), Some(height)) if width > 0 && height > 0 => TtmlDisplayPlane {
                 source_width: width,
                 source_height: height,
+                basis: TtmlSourcePlaneBasis::Declared,
             },
             _ => TtmlDisplayPlane::logical(),
         };
@@ -302,6 +305,7 @@ fn inferred_ttml_display_plane(xml: &str) -> Option<TtmlDisplayPlane> {
         .map(|(source_width, source_height)| TtmlDisplayPlane {
             source_width,
             source_height,
+            basis: TtmlSourcePlaneBasis::Inferred,
         })
 }
 
@@ -366,6 +370,39 @@ pub(crate) fn ttml_region_geometry(
     let height = extent
         .next()
         .and_then(|value| ttml_coordinate(value, plane.source_height, plane.vertical_scale()));
+    (x, y, width, height)
+}
+
+fn ttml_source_region_geometry(
+    region_tag: Option<&str>,
+    plane: TtmlDisplayPlane,
+) -> (i32, i32, Option<i32>, Option<i32>) {
+    let Some(tag) = region_tag else {
+        return (
+            plane.source_width / 2,
+            (f64::from(plane.source_height) * 920.0 / 1080.0).round() as i32,
+            None,
+            None,
+        );
+    };
+    let origin_value = attribute(tag, "tts:origin").unwrap_or_default();
+    let mut origin = origin_value.split_whitespace();
+    let x = origin
+        .next()
+        .and_then(|value| ttml_coordinate(value, plane.source_width, 1.0))
+        .unwrap_or(plane.source_width / 2);
+    let y = origin
+        .next()
+        .and_then(|value| ttml_coordinate(value, plane.source_height, 1.0))
+        .unwrap_or_else(|| (f64::from(plane.source_height) * 920.0 / 1080.0).round() as i32);
+    let extent_value = attribute(tag, "tts:extent").unwrap_or_default();
+    let mut extent = extent_value.split_whitespace();
+    let width = extent
+        .next()
+        .and_then(|value| ttml_coordinate(value, plane.source_width, 1.0));
+    let height = extent
+        .next()
+        .and_then(|value| ttml_coordinate(value, plane.source_height, 1.0));
     (x, y, width, height)
 }
 
@@ -817,13 +854,15 @@ pub(crate) fn parse_ttml_captions_until(
                     TtmlBackgroundScope::Inline,
                 );
             }
+            let source_style = style.clone();
+            let source_rich_body = safe_ttml_inline_body(body)
+                .map(|safe| expand_ttml_inline_style_references(&safe, &style_definitions));
+            let (source_x, source_y, source_width, source_height) =
+                ttml_source_region_geometry(region_tag, display_plane);
             normalise_ttml_style_lengths(&mut style, display_plane);
-            let rich_body = safe_ttml_inline_body(body).map(|safe| {
-                normalise_ttml_inline_length_attributes(
-                    expand_ttml_inline_style_references(&safe, &style_definitions),
-                    display_plane,
-                )
-            });
+            let rich_body = source_rich_body
+                .clone()
+                .map(|body| normalise_ttml_inline_length_attributes(body, display_plane));
             let ruby_writing_mode = match style.writing_mode.as_deref() {
                 Some("vertical-lr" | "tblr") => RubyWritingMode::VerticalLr,
                 Some("vertical-rl" | "tbrl") => RubyWritingMode::VerticalRl,
@@ -846,6 +885,17 @@ pub(crate) fn parse_ttml_captions_until(
                 style,
                 rich_body,
                 ruby_bindings,
+                source_layout: Some(TtmlSourceLayout {
+                    plane_width: display_plane.source_width,
+                    plane_height: display_plane.source_height,
+                    plane_basis: display_plane.basis,
+                    x: source_x,
+                    y: source_y,
+                    width: source_width,
+                    height: source_height,
+                    style: source_style,
+                    rich_body: source_rich_body,
+                }),
                 source: None,
             });
         }
@@ -911,13 +961,15 @@ fn parse_ttml_captions_legacy(
                     TtmlBackgroundScope::Inline,
                 );
             }
+            let source_style = style.clone();
+            let source_rich_body = safe_ttml_inline_body(body)
+                .map(|safe| expand_ttml_inline_style_references(&safe, &style_definitions));
+            let (source_x, source_y, source_width, source_height) =
+                ttml_source_region_geometry(region_tag, display_plane);
             normalise_ttml_style_lengths(&mut style, display_plane);
-            let rich_body = safe_ttml_inline_body(body).map(|safe| {
-                normalise_ttml_inline_length_attributes(
-                    expand_ttml_inline_style_references(&safe, &style_definitions),
-                    display_plane,
-                )
-            });
+            let rich_body = source_rich_body
+                .clone()
+                .map(|body| normalise_ttml_inline_length_attributes(body, display_plane));
             let ruby_writing_mode = match style.writing_mode.as_deref() {
                 Some("vertical-lr" | "tblr") => RubyWritingMode::VerticalLr,
                 Some("vertical-rl" | "tbrl") => RubyWritingMode::VerticalRl,
@@ -940,6 +992,17 @@ fn parse_ttml_captions_legacy(
                 style,
                 rich_body,
                 ruby_bindings,
+                source_layout: Some(TtmlSourceLayout {
+                    plane_width: display_plane.source_width,
+                    plane_height: display_plane.source_height,
+                    plane_basis: display_plane.basis,
+                    x: source_x,
+                    y: source_y,
+                    width: source_width,
+                    height: source_height,
+                    style: source_style,
+                    rich_body: source_rich_body,
+                }),
                 source: None,
             });
         }

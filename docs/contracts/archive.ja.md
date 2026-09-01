@@ -40,3 +40,10 @@ Worker 内では両ルートとも、archive に公開する前に閉じた zero
 ruby count、DRCS presence を標準化します。Style、glyph pixel、TTML resource evidence はルート固有のままです。
 したがって schema v1 は引き続き B24 を `region_interval`、ARIB-TTML を `caption` として公開し、
 共有内部境界によって record のラベル変更や複製は行いません。
+
+ARIB-TTML の `caption.value` には optional `source_layout` を含めることができます。source display plane の寸法と根拠
+（`declared`、`inferred`、`legacy_logical2k`）、source region geometry、未 scale の style、安全な inline TTML を保持します。
+既存の `x`、`y`、`width`、`height`、`style`、`rich_body` は logical 1920×1080 compatibility view として維持されます。
+新しい reader は実際の video-content viewport への mapping で `source_layout` を優先し、これが無い旧 archive は
+`LegacyLogical1920x1080` として扱います。schema-v1 reader はこの optional field を無視できるため、旧 file の migration は不要です。
+source semantics を保存せず誤って scale された archive は確実に逆算できず、適法な source recording から再抽出する必要があります。

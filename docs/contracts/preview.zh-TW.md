@@ -11,3 +11,7 @@
 專案時間。後端從 archive 合成字幕平面、回報所選 overlay 路線與能力中繼資料，
 並以宣告方式保留不支援的 B62 功能，而不以 CSS 近似。
 詳細算繪設定與路線限制見 [`backend-contract.md`](../backend-contract.md)。
+
+對於帶 `source_layout` 的 ARIB-TTML，後端先按來源顯示平面比例產生有界的中間字幕紋理，再把整張紋理映射至
+libmpv 回報的實際視訊內容 viewport。letterbox/pillarbox、視窗大小、DPI 與全螢幕只改變最終變換，不改變字幕
+相對於視訊內容的位置和面積。舊 archive 沒有 `source_layout` 時繼續按邏輯 1920×1080 相容路徑播放。

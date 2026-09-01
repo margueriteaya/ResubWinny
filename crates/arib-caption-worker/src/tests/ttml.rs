@@ -705,6 +705,16 @@ fn b62_region_capacity_does_not_promote_a_4k_document_to_an_8k_plane() {
     assert_eq!(caption.style.font_size.as_deref(), Some("72px 72px"));
     assert_eq!(caption.style.line_height.as_deref(), Some("120px"));
     assert_eq!(caption.style.letter_spacing.as_deref(), Some("8px"));
+    let source = caption.source_layout.as_ref().expect("source layout");
+    assert_eq!((source.plane_width, source.plane_height), (3840, 2160));
+    assert_eq!(source.plane_basis, TtmlSourcePlaneBasis::Inferred);
+    assert_eq!(
+        (source.x, source.y, source.width, source.height),
+        (680, 1080, Some(2480), Some(1920))
+    );
+    assert_eq!(source.style.font_size.as_deref(), Some("144px 144px"));
+    assert_eq!(source.style.line_height.as_deref(), Some("240px"));
+    assert_eq!(source.style.letter_spacing.as_deref(), Some("16px"));
 }
 
 #[test]

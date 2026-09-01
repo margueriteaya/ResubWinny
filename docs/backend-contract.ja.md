@@ -4,6 +4,11 @@
 
 # バックエンドコントラクト
 
+> 実装注記（2026-09-02）：本文の logical 1920×1080 plane は有界の中間 texture であり、正しさを定義する目標解像度ではありません。
+> Worker は optional `source_layout` に source plane、region、style、inline length を保持します。native renderer はそこから
+> 中間 texture を導出し、texture 全体を libmpv の video-content viewport へ mapping します。正しさは黒帯を除いた
+> video content に対する比率で評価します。
+
 Tauri/Svelte UI は Rust バックエンドのクライアントです。 TS/TLV データの解析、ARIB のデコード、高解像度ビデオのレンダリング、変換セマンティクスの決定は行いません。
 
 耐久性のある `.caption.jsonl` 形式は、

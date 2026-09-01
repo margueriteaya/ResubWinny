@@ -1,7 +1,7 @@
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use fontdue::{Font, FontSettings};
 use serde_json::Value;
-use std::{collections::BTreeSet, sync::Arc};
+use std::{borrow::Cow, collections::BTreeSet, sync::Arc};
 
 const MAX_LAYERS: usize = 128;
 const MAX_PIXELS: u64 = 33_177_600;
@@ -175,6 +175,8 @@ fn compose_ttml_horizontal(intervals: &[Value]) -> Option<CaptionPlaneFrame> {
     let mut rendered_ruby_count = 0;
     let mut rendered_region_backgrounds = BTreeSet::new();
     for interval in intervals.iter().take(MAX_LAYERS) {
+        let interval = logical_ttml_interval(interval);
+        let interval = interval.as_ref();
         let Some(text) = caption_text(interval) else {
             continue;
         };
@@ -313,6 +315,145 @@ fn compose_ttml_horizontal(intervals: &[Value]) -> Option<CaptionPlaneFrame> {
         missing_glyph_count,
         rendered_ruby_count,
     })
+}
+
+/// Converts preserved ARIB-TTML source geometry to the renderer's bounded
+/// intermediate texture. Archives written before `source_layout` continue to
+/// use their legacy logical 1920x1080 fields unchanged.
+fn logical_ttml_interval(interval: &Value) -> Cow<'_, Value> {
+    let Some(source) = interval
+        .get("source_layout")
+        .or_else(|| interval.get("sourceLayout"))
+        .and_then(Value::as_object)
+    else {
+        return Cow::Borrowed(interval);
+    };
+    let Some(plane_width) = source.get("plane_width").and_then(Value::as_i64)
+        .or_else(|| source.get("planeWidth").and_then(Value::as_i64))
+        .filter(|value| *value > 0)
+    else {
+        return Cow::Borrowed(interval);
+    };
+    let Some(plane_height) = source.get("plane_height").and_then(Value::as_i64)
+        .or_else(|| source.get("planeHeight").and_then(Value::as_i64))
+        .filter(|value| *value > 0)
+    else {
+        return Cow::Borrowed(interval);
+    };
+    let scale_x = f64::from(TTML_PLANE_WIDTH) / plane_width as f64;
+    let scale_y = f64::from(TTML_PLANE_HEIGHT) / plane_height as f64;
+    let text_scale = scale_x.min(scale_y);
+    let mut logical = interval.clone();
+    let Some(logical_object) = logical.as_object_mut() else {
+        return Cow::Borrowed(interval);
+    };
+    for (name, scale) in [
+        ("x", scale_x),
+        ("y", scale_y),
+        ("width", scale_x),
+        ("height", scale_y),
+    ] {
+        if let Some(value) = source.get(name).and_then(Value::as_i64) {
+            logical_object.insert(name.to_owned(), Value::from(scale_coordinate(value, scale)));
+        }
+    }
+    if let Some(style) = source.get("style") {
+        let mut style = style.clone();
+        scale_style_lengths(&mut style, text_scale);
+        logical_object.insert("style".into(), style);
+    }
+    if let Some(body) = source
+        .get("rich_body")
+        .or_else(|| source.get("richBody"))
+        .and_then(Value::as_str)
+    {
+        logical_object.insert(
+            "rich_body".into(),
+            Value::from(scale_inline_lengths(body, text_scale)),
+        );
+    }
+    Cow::Owned(logical)
+}
+
+fn scale_coordinate(value: i64, scale: f64) -> i64 {
+    (value as f64 * scale)
+        .round()
+        .clamp(i32::MIN as f64, i32::MAX as f64) as i64
+}
+
+fn format_scaled_px(value: f64) -> String {
+    if (value - value.round()).abs() < 0.001 {
+        format!("{}px", value.round() as i64)
+    } else {
+        format!("{value:.3}px")
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_owned()
+    }
+}
+
+fn scale_px_tokens(value: &str, scale: f64) -> String {
+    value
+        .split_whitespace()
+        .map(|token| {
+            token
+                .strip_suffix("px")
+                .and_then(|number| number.parse::<f64>().ok())
+                .filter(|number| number.is_finite())
+                .map(|number| format_scaled_px(number * scale))
+                .unwrap_or_else(|| token.to_owned())
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn scale_style_lengths(style: &mut Value, scale: f64) {
+    let Some(style) = style.as_object_mut() else {
+        return;
+    };
+    for name in [
+        "font_size",
+        "fontSize",
+        "line_height",
+        "lineHeight",
+        "letter_spacing",
+        "letterSpacing",
+        "text_outline",
+        "textOutline",
+    ] {
+        if let Some(value) = style.get_mut(name)
+            && let Some(length) = value.as_str()
+        {
+            *value = Value::from(scale_px_tokens(length, scale));
+        }
+    }
+}
+
+fn scale_inline_lengths(body: &str, scale: f64) -> String {
+    let mut output = body.to_owned();
+    for name in [
+        "tts:fontSize",
+        "tts:lineHeight",
+        "tts:letterSpacing",
+        "arib-tt:letter-spacing",
+        "tts:textOutline",
+    ] {
+        for quote in ['\"', '\''] {
+            let marker = format!("{name}={quote}");
+            let mut cursor = 0;
+            while let Some(found) = output[cursor..].find(&marker) {
+                let value_start = cursor + found + marker.len();
+                let Some(value_length) = output[value_start..].find(quote) else {
+                    break;
+                };
+                let value_end = value_start + value_length;
+                let scaled = scale_px_tokens(&output[value_start..value_end], scale);
+                output.replace_range(value_start..value_end, &scaled);
+                cursor = value_start + scaled.len() + 1;
+            }
+        }
+    }
+    output
 }
 
 fn decode_rendered_image(image: &Value) -> Option<(Vec<u8>, u32, u32)> {
