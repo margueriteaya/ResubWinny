@@ -1,0 +1,29 @@
+From 5bdab4a0548a43d4ce6c0af35ed9a30b9d9043ec Mon Sep 17 00:00:00 2001
+From: ResubWinny Build <build@resubwinny.invalid>
+Date: Mon, 1 Sep 2026 00:30:00 +0000
+Subject: [PATCH] subrandr: provision Rust before cross compilation
+
+subrandr builds a static library for the gnullvm target. The toolchain's
+rustup external project installs that target, but subrandr did not declare it
+as a dependency. CMake could therefore invoke Cargo with an auto-installed
+host toolchain before rustup provisioned the target. Make the dependency
+explicit so the configured Rust toolchain and Windows target are ready first.
+---
+ packages/subrandr.cmake | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/packages/subrandr.cmake b/packages/subrandr.cmake
+--- a/packages/subrandr.cmake
++++ b/packages/subrandr.cmake
+@@ -1,7 +1,8 @@
+ ExternalProject_Add(subrandr
+     DEPENDS
+         freetype2
+         harfbuzz
+         fontconfig
++        rustup
+     GIT_REPOSITORY https://github.com/afishhh/subrandr.git
+     SOURCE_DIR ${SOURCE_LOCATION}
+     GIT_CLONE_FLAGS "--filter=tree:0"
+-- 
+2.51.0
