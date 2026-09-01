@@ -67,8 +67,26 @@ jobs:
           git -C build/libmpv/toolchain config user.name "ResubWinny Build"
           git -C build/libmpv/toolchain config user.email "build@resubwinny.invalid"
 
-      - name: Restore reusable libmpv build state
-        id: libmpv-cache
+      - name: Restore reusable libmpv sources and toolchain
+        id: libmpv-source-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            build/libmpv/toolchain/src_packages
+            build/libmpv/toolchain/clang_root
+            build/libmpv/toolchain/install_rustup
+          key: ${{ runner.os }}-libmpv-sources-v1-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}
+
+      - name: Restore exact reusable libmpv build state
+        id: libmpv-build-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: build/libmpv/toolchain/build64
+          key: ${{ runner.os }}-libmpv-build-v1-${{ hashFiles('.github/workflows/libmpv-lgpl.yml', 'third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}
+
+      - name: Restore legacy libmpv state for one-time cache migration
+        id: libmpv-legacy-cache
+        if: ${{ steps.libmpv-source-cache.outputs.cache-hit != 'true' && steps.libmpv-build-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/restore@v5
         with:
           path: |
@@ -76,10 +94,35 @@ jobs:
             build/libmpv/toolchain/src_packages
             build/libmpv/toolchain/clang_root
             build/libmpv/toolchain/install_rustup
-          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}-${{ github.run_id }}
+          key: ${{ runner.os }}-libmpv-legacy-migration-${{ github.run_id }}
           restore-keys: |
-            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}-
-            ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}
+            ${{ runner.os }}-libmpv-
+
+      - name: Summarize libmpv cache restoration
+        shell: bash
+        env:
+          SOURCE_CACHE_HIT: ${{ steps.libmpv-source-cache.outputs.cache-hit }}
+          SOURCE_MATCHED_KEY: ${{ steps.libmpv-source-cache.outputs.cache-matched-key }}
+          BUILD_CACHE_HIT: ${{ steps.libmpv-build-cache.outputs.cache-hit }}
+          BUILD_MATCHED_KEY: ${{ steps.libmpv-build-cache.outputs.cache-matched-key }}
+          LEGACY_CACHE_HIT: ${{ steps.libmpv-legacy-cache.outputs.cache-hit }}
+          LEGACY_MATCHED_KEY: ${{ steps.libmpv-legacy-cache.outputs.cache-matched-key }}
+        run: |
+          set -euo pipefail
+          cache_status() {
+            case "$1" in
+              true) printf 'exact hit' ;;
+              false) printf 'prefix hit' ;;
+              *) printf 'miss' ;;
+            esac
+          }
+          {
+            echo '### libmpv cache'
+            echo
+            echo "- Source/toolchain: $(cache_status "$SOURCE_CACHE_HIT") ${SOURCE_MATCHED_KEY:+(key: $SOURCE_MATCHED_KEY)}"
+            echo "- Build state: $(cache_status "$BUILD_CACHE_HIT") ${BUILD_MATCHED_KEY:+(key: $BUILD_MATCHED_KEY)}"
+            echo "- Legacy migration: $(cache_status "$LEGACY_CACHE_HIT") ${LEGACY_MATCHED_KEY:+(key: $LEGACY_MATCHED_KEY)}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Sanitize restored source repositories
         shell: bash
@@ -162,17 +205,24 @@ jobs:
             build/libmpv/toolchain/build*/**/*.log
             build/libmpv/toolchain/build*/**/CMakeCache.txt
 
-      - name: Save reusable libmpv build state
-        if: ${{ always() }}
+      - name: Save reusable libmpv sources and toolchain
+        if: ${{ always() && steps.libmpv-source-cache.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
           path: |
-            build/libmpv/toolchain/build64
             build/libmpv/toolchain/src_packages
             build/libmpv/toolchain/clang_root
             build/libmpv/toolchain/install_rustup
-          key: ${{ runner.os }}-libmpv-${{ hashFiles('third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}-${{ github.run_id }}
+          key: ${{ runner.os }}-libmpv-sources-v1-${{ steps.pins.outputs.toolchain_commit }}-${{ steps.pins.outputs.build_recipe_commit }}-${{ steps.pins.outputs.mpv_commit }}-${{ steps.pins.outputs.ffmpeg_commit }}
+
+      - name: Save exact reusable libmpv build state
+        if: ${{ always() && steps.libmpv-build-cache.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: build/libmpv/toolchain/build64
+          key: ${{ runner.os }}-libmpv-build-v1-${{ hashFiles('.github/workflows/libmpv-lgpl.yml', 'third_party/versions.json', 'third_party/libmpv/build-requirements.txt', 'third_party/libmpv/patches/*.patch') }}
 
       - name: Locate and extract binary artifact
         shell: bash
