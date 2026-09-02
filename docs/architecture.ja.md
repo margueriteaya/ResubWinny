@@ -46,7 +46,7 @@ GUI/CLI 共通の Rust conversion core
 libaribcaption
 ```
 
-GUI は唯一の入口ではなく、UI thread が録画バイトの読取り、パケット単位の受信、全時間軸の保持、demux、最終組版を行いません。conversion core は CLI からも呼び出せます。現在の GUI は同じ core を background thread で実行し、協調的な取消、進捗、atomic output を提供します。cross-process の crash isolation が必要になった時だけ sidecar を追加し、single-EXE delivery をそのために犠牲にしません。巨大なローカルファイルは Rust のブロッキング buffered I/O を既定とし、188 バイトの TS packet ごとに async task や channel message を作りません。
+GUI は唯一の入口ではありません。conversion core は CLI からも呼び出せます。UI thread は録画バイトの読取り、パケット単位の受信、全時間軸の保持、demux、最終組版を担いません。現在の GUI は同じ core を background thread で実行し、協調的な取消、進捗、atomic output を提供します。cross-process の crash isolation が必要になった時だけ sidecar を追加します。single-EXE delivery をそのために犠牲にはしません。巨大なローカルファイルは Rust のブロッキング buffered I/O を既定とし、188 バイトの TS packet ごとに async task や channel message を作りません。
 
 ## ストリーミングと復旧の不変条件
 
@@ -167,11 +167,11 @@ local corpus の訂正（2026-07-23）：18.58 GB の地上波と 11.52 GB の B
 
 DRCS report の実装（2026-07-23）：任意の `--drcs-report` は従来 B24 conversion で glyph が見つかった場合だけ `<name>.drcs.json` を出力します。code、dimension、colour に依存しない glyph metadata、alternative、保存済み `.drcs` asset への path を index 化しますが、raw pixel byte は report に複製しません。native UI も同じ option を提供し、project archive は別の完全 caption timeline のままです。
 
-TTML 継承の修正（2026-07-23）：限定 M2TS/TLV TTML parser は caption ごとに、単に直近の文字列上の `<div>` を取るのではなく、その時点で開いているすべての `div` を走査します。入れ子の `begin`/`end`/`dur` は正しい親 time base から累積され、継承された `style` と `region` は document order で適用されます。閉じた sibling が後続 caption の timing、writing mode、colour、placement に漏れることはありません。これは shared TTML/archive model と faithful TTML output を改善します。ASS の writing mode と ruby は引き続き近似表現です。
+TTML 継承の修正（2026-07-23）：限定 M2TS/TLV TTML parser は caption ごとに、その時点で開いているすべての `div` を走査します。直近の文字列上の `<div>` だけを取得する方式ではありません。入れ子の `begin`/`end`/`dur` は正しい親 time base から累積され、継承された `style` と `region` は document order で適用されます。閉じた sibling が後続 caption の timing、writing mode、colour、placement に漏れることはありません。これにより、shared TTML/archive model と faithful TTML output が改善されます。ASS の writing mode と ruby は引き続き近似表現です。
 
 TTML style delivery（2026-07-23）：共有 caption style は、継承した foreground/background colour、family、size、weight、style、writing mode、text/display alignment、outline、line height、letter spacing、opacity を archive と TTML interchange の両方で保持します。ASS は font、bold/italic、spacing、foreground colour の定義済み対応だけを適用し、対応しない TTML layout や background semantics を再現したとは主張しません。
 
-ARIB-TTML span-style の修正（2026-07-23）：放送 payload では有効な style が `p` ではなく `span style="…"` に置かれることが多いため、parser はその reference を解決します。二軸 font size、`arib-tt:letter-spacing`、TTML 八桁 RGBA colour も対象です。interchange output は safe な span reference を自己完結した inline TTML attribute に展開し、source 専用 style identifier への reference を出力しません。実 BS4K sample では archive/TTML の `丸ゴシック`、`144px 144px`、foreground/background colour、16px spacing と、定義済み ASS approximation を確認しています。
+ARIB-TTML span-style の修正（2026-07-23）：放送 payload では有効な style が `span style="…"` に置かれることが多く、`p` に置かれるとは限りません。parser はその reference を解決します。二軸 font size、`arib-tt:letter-spacing`、TTML 八桁 RGBA colour も対象です。interchange output は safe な span reference を自己完結した inline TTML attribute に展開し、source 専用 style identifier への reference を出力しません。実 BS4K sample では archive/TTML の `丸ゴシック`、`144px 144px`、foreground/background colour、16px spacing と、定義済み ASS approximation を確認しています。
 
 文字 encoding 修正（2026-07-23）：ARIB STD-B24 の character-coded caption は UTF-8 と仮定せず、引き続き libaribcaption で decode します。ARIB-TTML route は PES/MMTP envelope から XML を分離した後、BOM/XML declaration を尊重して UTF-8、UTF-16LE/BE、Shift_JIS、EUC-JP、ISO-2022-JP を strict decode します。malformed/unsupported XML は raw evidence に残して report し、replacement character で修復せず、invalid framing byte により後続の valid document を失わせません。
 
@@ -245,7 +245,7 @@ ASS の既定 font は同梱の `Rounded M+ 1m for ARIB` とし、broadcast の 
 
 ## Ruby binding と export 専用 box layout（2026-07-30）
 
-Ruby の対応付けは ASS exporter の一時 heuristic ではなく caption model の処理になりました。B24 の `RubyBinding` は exporter に到達する前に、base region/index range、base text と cell box、source ruby box、placement、writing mode、provenance を保持します。ARIB-TTML も base caption/run/grapheme range を保持し、独立 B62 ruby region は同じ timing の有界 group が揃った時点で archive、TTML、ASS の書き出し前に対応付けます。実 M2TS corpus では `ささ` → `捧` を含む 31 件の構造化 binding を得ました。曖昧または未対応の region は推測せず unbound のまま残します。
+Ruby の対応付けは caption model で行います。ASS exporter の一時 heuristic には依存しません。B24 の `RubyBinding` は exporter に到達する前に、base region/index range、base text と cell box、source ruby box、placement、writing mode、provenance を保持します。ARIB-TTML も base caption/run/grapheme range を保持し、独立 B62 ruby region は同じ timing の有界 group が揃った時点で archive、TTML、ASS の書き出し前に対応付けます。実 M2TS corpus では `ささ` → `捧` を含む 31 件の構造化 binding を得ました。曖昧または未対応の region は推測せず unbound のまま残します。
 
 ASS だけが export 専用 box layout を使います。交換可能な glyph-metrics interface の現在の実装は同梱 Rounded M+ font を測定し、base の rendered ink range を総幅が一致する slot に分配します。glyph ink が重なる場合は整数 pixel 単位で font size を fallback し、最後に visible ruby ink 全体へ一回だけ有界な整数 pixel の中心補正を行います。base 本文は一つの shaped Dialogue event のままで、個別配置できるのは ruby glyph だけです。明示的な `rubyPosition` の上置・下置を保持し、縦書きは実 corpus 検証まで同じ algorithm の axis transpose として扱います。libmpv 内部の libass は glyph metrics API を公開しないため、FFmpeg/libass pixel test を runtime compatibility gate とします。この処理は native preview chain（`libaribcaption -> native RGBA -> libmpv surface`）へ入り込まず、変更もしません。
 

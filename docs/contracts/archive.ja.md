@@ -41,7 +41,7 @@ ruby count、DRCS presence を標準化します。Style、glyph pixel、TTML re
 したがって schema v1 は引き続き B24 を `region_interval`、ARIB-TTML を `caption` として公開し、
 共有内部境界によって record のラベル変更や複製は行いません。
 
-ARIB-TTML の `caption.value` には optional `source_layout` を含めることができます。source display plane の寸法と根拠
+ARIB-TTML の `caption.value` は optional `source_layout` を含められます。source display plane の寸法と根拠
 （`declared`、`inferred`、`legacy_logical2k`）、source region geometry、未 scale の style、安全な inline TTML を保持します。
 既存の `x`、`y`、`width`、`height`、`style`、`rich_body` は logical 1920×1080 compatibility view として維持されます。
 新しい reader は実際の video-content viewport への mapping で `source_layout` を優先し、これが無い旧 archive は
