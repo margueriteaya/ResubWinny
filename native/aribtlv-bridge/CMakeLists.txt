@@ -1,11 +1,21 @@
 cmake_minimum_required(VERSION 3.24)
 project(resub_aribtlv_bridge LANGUAGES C CXX)
 
+set(RESUB_ZLIB_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/zlib)
+set(RESUB_ZLIB_CONFIG_HEADER ${RESUB_ZLIB_SOURCE_DIR}/zconf.h)
+if(NOT EXISTS ${RESUB_ZLIB_CONFIG_HEADER})
+    configure_file(
+        ${RESUB_ZLIB_SOURCE_DIR}/zconf.h.in
+        ${RESUB_ZLIB_CONFIG_HEADER}
+        COPYONLY
+    )
+endif()
+
 set(ZLIB_BUILD_SHARED OFF CACHE BOOL "Build only the pinned static Zlib" FORCE)
 set(ZLIB_BUILD_STATIC ON CACHE BOOL "Build the pinned static Zlib" FORCE)
 set(ZLIB_BUILD_TESTING OFF CACHE BOOL "Do not build Zlib examples" FORCE)
 set(ZLIB_INSTALL OFF CACHE BOOL "Install Zlib through the bridge" FORCE)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/zlib zlib EXCLUDE_FROM_ALL)
+add_subdirectory(${RESUB_ZLIB_SOURCE_DIR} zlib EXCLUDE_FROM_ALL)
 set_target_properties(zlibstatic PROPERTIES
     OUTPUT_NAME resub_zlib
     POSITION_INDEPENDENT_CODE ON
