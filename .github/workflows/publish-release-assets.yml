@@ -54,20 +54,44 @@ jobs:
               throw "Candidate manifest mismatch: $($artifact.path)"
             }
           }
-          $assets = @(Get-ChildItem -LiteralPath candidate -Recurse -File)
+          $assets = @(
+            Get-ChildItem -LiteralPath candidate/application/installers -File |
+              Where-Object { $_.Extension -ceq '.msi' -or $_.Name -clike '*-setup.exe' }
+          )
           $duplicates = @($assets | Group-Object Name | Where-Object Count -gt 1)
           if ($duplicates) {
             throw "Release assets must have unique filenames: $($duplicates.Name -join ', ')"
           }
-          if ($assets.Count -ne ($manifest.artifacts.Count + 2)) {
-            throw "Unexpected release asset count: $($assets.Count)"
+          if ($assets.Count -ne 2) {
+            throw "Expected exactly one setup executable and one MSI: $($assets.Count)"
+          }
+          if (@($assets | Where-Object Name -cmatch '_[a-z]{2}-[A-Z]{2}(?:-setup)?\.(?:exe|msi)$').Count -ne 0) {
+            throw "Installer filenames must not contain a locale suffix: $($assets.Name -join ', ')"
           }
       - name: Upload assets and publish prerelease
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $assets = @(Get-ChildItem -LiteralPath candidate -Recurse -File | Sort-Object Name)
+          $assets = @(
+            Get-ChildItem -LiteralPath candidate/application/installers -File |
+              Where-Object { $_.Extension -ceq '.msi' -or $_.Name -clike '*-setup.exe' } |
+              Sort-Object Name
+          )
+          $release = gh release view '${{ inputs.release_tag }}' `
+            --repo $env:GITHUB_REPOSITORY `
+            --json assets | ConvertFrom-Json
+          $wantedNames = @($assets.Name)
+          foreach ($publishedAsset in @($release.assets)) {
+            if ($publishedAsset.name -notin $wantedNames) {
+              gh release delete-asset '${{ inputs.release_tag }}' $publishedAsset.name `
+                --repo $env:GITHUB_REPOSITORY `
+                --yes
+              if ($LASTEXITCODE -ne 0) {
+                throw "Removing unexpected release asset failed: $($publishedAsset.name)"
+              }
+            }
+          }
           $arguments = @('release', 'upload', '${{ inputs.release_tag }}')
           $arguments += @($assets | ForEach-Object FullName)
           $arguments += @('--repo', $env:GITHUB_REPOSITORY, '--clobber')
@@ -78,7 +102,7 @@ jobs:
           $release = gh release view '${{ inputs.release_tag }}' `
             --repo $env:GITHUB_REPOSITORY `
             --json assets | ConvertFrom-Json
-          if (@($release.assets).Count -ne $assets.Count) {
+          if (@($release.assets).Count -ne 2) {
             throw "Published asset count mismatch: $(@($release.assets).Count) / $($assets.Count)"
           }
           gh release edit '${{ inputs.release_tag }}' `

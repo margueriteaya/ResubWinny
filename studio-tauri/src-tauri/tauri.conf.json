@@ -44,6 +44,9 @@
       "../../third_party/rounded-mplus-1m-arib/rounded-mplus-1m-arib.ttf": "fonts/rounded-mplus-1m-arib.ttf",
       "../../third_party/rounded-mplus-1m-arib/LICENSE.txt": "fonts/LICENSE.rounded-mplus-1m-arib.txt"
     },
-    "windows": { "wix": { "language": "en-US" } }
+    "windows": {
+      "wix": { "language": "en-US" },
+      "nsis": { "installMode": "perMachine" }
+    }
   }
 }

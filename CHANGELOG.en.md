@@ -26,7 +26,8 @@ This project remains in early Alpha. Releases may contain breaking changes.
 
 ### Windows Alpha release
 
-- This is the first release to include installable, unsigned Windows x86_64 Alpha binaries, complete corresponding source, license materials, build receipts, and SHA-256 checksums.
+- This is the first installable, unsigned Windows x86_64 Alpha release. Its release assets are limited to locale-neutral NSIS setup and MSI installers.
+- The setup installer uses per-machine mode and requests administrator privileges when installation starts; the MSI also installs per machine.
 - Windows may display an “unknown publisher” warning. This is expected for an unsigned Alpha and does not imply code-signing verification.
 
 ### Known limitations
