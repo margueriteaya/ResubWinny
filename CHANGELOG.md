@@ -4,6 +4,37 @@
 
 本项目仍处于早期 Alpha 阶段，版本可能包含破坏性变更。
 
+## [0.2.3-alpha.1] - 2026-09-03
+
+### 工作台与首次引导
+
+- 重新编排主工作台：录制入口、预览和常用控制优先呈现，首页主流程在常见窗口高度内保持可见；同时微调桌面工作流文字基线。
+- 新增设置页的 About、构建来源信息和离线许可证浏览器；分段控件补齐键盘操作，偏好设置会自动持续保存，并移除了未使用的时间线偏好项。
+- 新增 ARIB 风格的首次引导体验，以字幕叠加、Ruby、DRCS 与 XMB 波面介绍工作流；降低动画开销，并修正 16:9 XMB 场景在不同窗口比例下的显示比例。
+
+### B62 / TLV 字幕处理
+
+- 集成原生 B62 TLV 后端，供 ARIB‑TTML 字幕工作流直接使用。
+- 保留 B62 源布局语义：region 与行内背景分别处理，字幕以与分辨率无关的方式映射到视频内容 viewport，避免将 region 容量误作显示平面边界。
+
+### 工程、文档与发布
+
+- 新增简体中文、繁体中文、日语和英语开发者文档，并明确简体中文为唯一权威来源。
+- 更新 Rust 依赖、Vite 与 Svelte Vite 插件；刷新前端依赖许可证信息。
+- 加固 libmpv 构建与缓存流程，修正稳定 Cargo 构建和相关图形依赖配置；升级 Actions 的 artifact 与 cache 操作。
+
+### Windows Alpha 发布
+
+- 首次附带可安装的未签名 Windows x86_64 Alpha 二进制、完整对应源码、许可证材料、构建回执和 SHA-256 校验和。
+- Windows 可能显示“未知发布者”提示；该提示是未签名 Alpha 的预期行为，并不表示程序已获得代码签名验证。
+
+### 已知限制
+
+- 当前仍为预览版；Windows 是原生视频预览的主要验收平台。
+- macOS 与 Linux 尚未提供原生视频预览。
+- 原始 TLV/MMTP 支持仍为实验性，不应视为通用 BS4K/8K 支持；B62 的真实广播兼容性验证仅在不可再分发的私有素材上执行。
+- 本版 Windows 包未签名。私有真实广播素材、从中导出的字幕和截图均不会随发布分发。
+
 ## [0.2.2-alpha.1] - 2026-08-30
 
 ### Windows Alpha 发布
@@ -42,3 +73,4 @@
 
 [0.2.2-alpha.1]: https://github.com/margueriteaya/ResubWinny/releases/tag/v0.2.2-alpha.1
 [0.2.1-alpha.1]: https://github.com/margueriteaya/ResubWinny/releases/tag/v0.2.1-alpha.1
+[0.2.3-alpha.1]: https://github.com/margueriteaya/ResubWinny/releases/tag/v0.2.3-alpha.1

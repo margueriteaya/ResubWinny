@@ -4,6 +4,37 @@
 
 This project remains in early Alpha. Releases may contain breaking changes.
 
+## [0.2.3-alpha.1] - 2026-09-03
+
+### Workspace and onboarding
+
+- Reworked the main workspace so recording entry, preview, and common controls take priority. The primary home-page workflow remains visible at common window heights, and desktop-workflow text alignment was refined.
+- Added Settings pages for About, build provenance, and offline license browsing. Segmented controls now have complete keyboard support, preferences save automatically, and the unused timeline preference was removed.
+- Added an ARIB-inspired onboarding experience that introduces the workflow through caption overlays, ruby text, DRCS, and XMB waves. It uses less animation work and preserves the 16:9 XMB scene's aspect ratio at different window sizes.
+
+### B62 / TLV caption handling
+
+- Integrated a native B62 TLV backend for direct use by the ARIB-TTML caption workflow.
+- Preserved B62 source-layout semantics: regions and inline backgrounds are handled separately, and captions map to the video-content viewport independently of resolution. This avoids treating a region's capacity as the display-plane boundary.
+
+### Engineering, documentation, and release
+
+- Added developer documentation in Simplified Chinese, Traditional Chinese, Japanese, and English, with Simplified Chinese explicitly designated as the sole authoritative source.
+- Updated Rust dependencies, Vite, and the Svelte Vite plugin, and refreshed the frontend dependency-license inventory.
+- Hardened the libmpv build and cache paths, fixed the stable-Cargo build and graphics-dependency setup, and upgraded the Actions artifact and cache actions.
+
+### Windows Alpha release
+
+- This is the first release to include installable, unsigned Windows x86_64 Alpha binaries, complete corresponding source, license materials, build receipts, and SHA-256 checksums.
+- Windows may display an “unknown publisher” warning. This is expected for an unsigned Alpha and does not imply code-signing verification.
+
+### Known limitations
+
+- This remains a preview release; Windows is the primary acceptance platform for native video preview.
+- Native video preview is not yet available on macOS or Linux.
+- Raw TLV/MMTP support remains experimental and must not be considered general BS4K/8K support. Real-broadcast compatibility of B62 is validated only with private, non-redistributable material.
+- The Windows package is unsigned. Private broadcast recordings, captions derived from them, and screenshots are not distributed with this release.
+
 ## [0.2.2-alpha.1] - 2026-08-30
 
 ### Windows Alpha release
@@ -42,3 +73,4 @@ This project remains in early Alpha. Releases may contain breaking changes.
 
 [0.2.2-alpha.1]: https://github.com/margueriteaya/ResubWinny/releases/tag/v0.2.2-alpha.1
 [0.2.1-alpha.1]: https://github.com/margueriteaya/ResubWinny/releases/tag/v0.2.1-alpha.1
+[0.2.3-alpha.1]: https://github.com/margueriteaya/ResubWinny/releases/tag/v0.2.3-alpha.1

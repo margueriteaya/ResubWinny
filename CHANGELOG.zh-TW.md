@@ -4,6 +4,37 @@
 
 本專案仍處於早期 Alpha 階段，版本可能包含破壞性變更。
 
+## [0.2.3-alpha.1] - 2026-09-03
+
+### 工作區與首次引導
+
+- 重新編排主工作區：優先呈現錄製入口、預覽和常用控制項；首頁主流程在一般視窗高度內保持可見，並微調桌面工作流程的文字基線。
+- 新增 Settings 中的 About、建置來源資訊和離線授權瀏覽器；分段控制項補齊鍵盤操作，偏好設定會自動持續儲存，並移除了未使用的時間軸偏好項目。
+- 新增 ARIB 風格的首次引導，透過字幕疊加、Ruby、DRCS 與 XMB 波面介紹工作流程；降低動畫開銷，並修正 16:9 XMB 場景在不同視窗比例下的顯示比例。
+
+### B62 / TLV 字幕處理
+
+- 整合原生 B62 TLV 後端，可由 ARIB-TTML 字幕工作流程直接使用。
+- 保留 B62 原始版面語意：region 與行內背景分別處理，字幕以與解析度無關的方式映射到視訊內容 viewport，避免將 region 容量當作顯示平面的邊界。
+
+### 工程、文件與發行
+
+- 新增簡體中文、繁體中文、日語和英語開發者文件，並明確指定簡體中文為唯一權威來源。
+- 更新 Rust 相依套件、Vite 與 Svelte Vite 外掛，並刷新前端相依套件授權清單。
+- 強化 libmpv 建置與快取流程，修正 stable Cargo 建置和圖形相依設定，並升級 Actions 的 artifact 與 cache 操作。
+
+### Windows Alpha 發行
+
+- 首次附帶可安裝的未簽署 Windows x86_64 Alpha 二進位檔、完整對應原始碼、授權材料、建置收據和 SHA-256 校驗和。
+- Windows 可能顯示「未知發行者」警告。這是未簽署 Alpha 的預期行為，並不代表已通過程式碼簽署驗證。
+
+### 已知限制
+
+- 目前仍為預覽版；Windows 是原生視訊預覽的主要驗收平臺。
+- macOS 與 Linux 尚未提供原生視訊預覽。
+- 原始 TLV/MMTP 支援仍為實驗性，不應視為通用 BS4K/8K 支援；B62 的真實廣播相容性僅以不可再散佈的私有素材驗證。
+- Windows 套件未簽署。私有廣播錄製檔、從中產生的字幕和螢幕截圖不會隨本版散佈。
+
 ## [0.2.2-alpha.1] - 2026-08-30
 
 ### Windows Alpha 發行
@@ -42,3 +73,4 @@
 
 [0.2.2-alpha.1]: https://github.com/margueriteaya/ResubWinny/releases/tag/v0.2.2-alpha.1
 [0.2.1-alpha.1]: https://github.com/margueriteaya/ResubWinny/releases/tag/v0.2.1-alpha.1
+[0.2.3-alpha.1]: https://github.com/margueriteaya/ResubWinny/releases/tag/v0.2.3-alpha.1

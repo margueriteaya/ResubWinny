@@ -247,14 +247,7 @@ fn compose_ttml_horizontal(intervals: &[Value]) -> Option<CaptionPlaneFrame> {
             && background_scope == Some("region")
             && rendered_region_backgrounds.insert((x, y, width, height, background))
         {
-            fill_rect(
-                &mut canvas,
-                x,
-                y,
-                width,
-                height,
-                background,
-            );
+            fill_rect(&mut canvas, x, y, width, height, background);
         }
         let drawn = if vertical {
             has_vertical = true;
@@ -328,13 +321,17 @@ fn logical_ttml_interval(interval: &Value) -> Cow<'_, Value> {
     else {
         return Cow::Borrowed(interval);
     };
-    let Some(plane_width) = source.get("plane_width").and_then(Value::as_i64)
+    let Some(plane_width) = source
+        .get("plane_width")
+        .and_then(Value::as_i64)
         .or_else(|| source.get("planeWidth").and_then(Value::as_i64))
         .filter(|value| *value > 0)
     else {
         return Cow::Borrowed(interval);
     };
-    let Some(plane_height) = source.get("plane_height").and_then(Value::as_i64)
+    let Some(plane_height) = source
+        .get("plane_height")
+        .and_then(Value::as_i64)
         .or_else(|| source.get("planeHeight").and_then(Value::as_i64))
         .filter(|value| *value > 0)
     else {

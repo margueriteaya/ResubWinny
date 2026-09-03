@@ -112,8 +112,8 @@ mod tests {
         assert_eq!(optional_build_value(Some("  ")), None);
         assert_eq!(optional_build_value(None), None);
         assert_eq!(
-            optional_build_value(Some(" v0.2.2-alpha.1 ")).as_deref(),
-            Some("v0.2.2-alpha.1")
+            optional_build_value(Some(" v0.2.3-alpha.1 ")).as_deref(),
+            Some("v0.2.3-alpha.1")
         );
     }
 
