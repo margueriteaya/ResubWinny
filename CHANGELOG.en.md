@@ -22,6 +22,7 @@ This project remains in early Alpha. Releases may contain breaking changes.
 - Added developer documentation in Simplified Chinese, Traditional Chinese, Japanese, and English, with Simplified Chinese explicitly designated as the sole authoritative source.
 - Updated Rust dependencies, Vite, and the Svelte Vite plugin, and refreshed the frontend dependency-license inventory.
 - Hardened the libmpv build and cache paths, fixed the stable-Cargo build and graphics-dependency setup, and upgraded the Actions artifact and cache actions.
+- Fixed the source used to generate Zlib's configuration header in clean checkouts, so the native Windows TLV build no longer depends on an untracked file.
 
 ### Windows Alpha release
 

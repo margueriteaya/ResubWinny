@@ -22,6 +22,7 @@
 - 新增簡體中文、繁體中文、日語和英語開發者文件，並明確指定簡體中文為唯一權威來源。
 - 更新 Rust 相依套件、Vite 與 Svelte Vite 外掛，並刷新前端相依套件授權清單。
 - 強化 libmpv 建置與快取流程，修正 stable Cargo 建置和圖形相依設定，並升級 Actions 的 artifact 與 cache 操作。
+- 修正乾淨 checkout 中 Zlib 設定標頭的生成來源，使 Windows 原生 TLV 建置不再依賴未追蹤檔案。
 
 ### Windows Alpha 發行
 

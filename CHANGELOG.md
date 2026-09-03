@@ -22,6 +22,7 @@
 - 新增简体中文、繁体中文、日语和英语开发者文档，并明确简体中文为唯一权威来源。
 - 更新 Rust 依赖、Vite 与 Svelte Vite 插件；刷新前端依赖许可证信息。
 - 加固 libmpv 构建与缓存流程，修正稳定 Cargo 构建和相关图形依赖配置；升级 Actions 的 artifact 与 cache 操作。
+- 修正干净检出环境中 Zlib 配置头的生成来源，使 Windows 原生 TLV 构建不再依赖未跟踪文件。
 
 ### Windows Alpha 发布
 
