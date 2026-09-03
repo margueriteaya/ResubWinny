@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
 project(resub_aribtlv_bridge LANGUAGES C CXX)
 
-set(RESUB_ZLIB_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/zlib)
+set(RESUB_VENDORED_SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/vendored-source)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/zlib DESTINATION ${RESUB_VENDORED_SOURCE_DIR})
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/libaribtlv DESTINATION ${RESUB_VENDORED_SOURCE_DIR})
+
+set(RESUB_ZLIB_SOURCE_DIR ${RESUB_VENDORED_SOURCE_DIR}/zlib)
 set(RESUB_ZLIB_CONFIG_HEADER ${RESUB_ZLIB_SOURCE_DIR}/zconf.h)
 if(NOT EXISTS ${RESUB_ZLIB_CONFIG_HEADER})
     configure_file(
@@ -26,7 +30,7 @@ list(PREPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build libaribtlv statically" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "Do not build libaribtlv tests" FORCE)
 add_subdirectory(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/libaribtlv
+    ${RESUB_VENDORED_SOURCE_DIR}/libaribtlv
     libaribtlv
     EXCLUDE_FROM_ALL
 )
