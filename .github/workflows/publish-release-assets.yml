@@ -1,0 +1,90 @@
+name: Publish release assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing draft release tag
+        required: true
+        type: string
+      artifact_run_id:
+        description: Successful workflow run containing the release candidate
+        required: true
+        type: string
+      artifact_name:
+        description: Release candidate artifact name
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    name: Verify and publish release assets
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: candidate
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run_id }}
+      - name: Verify candidate manifest
+        shell: pwsh
+        run: |
+          $manifestPath = 'candidate/RELEASE-MANIFEST.json'
+          if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+            throw 'The release candidate does not contain RELEASE-MANIFEST.json.'
+          }
+          $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+          if ($manifest.tag -cne '${{ inputs.release_tag }}') {
+            throw "Candidate tag mismatch: $($manifest.tag)"
+          }
+          foreach ($artifact in $manifest.artifacts) {
+            $path = Join-Path 'candidate' ($artifact.path -replace '/', [IO.Path]::DirectorySeparatorChar)
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Candidate file is missing: $($artifact.path)"
+            }
+            $file = Get-Item -LiteralPath $path
+            $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+            if ($file.Length -ne $artifact.bytes -or $hash -cne $artifact.sha256) {
+              throw "Candidate manifest mismatch: $($artifact.path)"
+            }
+          }
+          $assets = @(Get-ChildItem -LiteralPath candidate -Recurse -File)
+          $duplicates = @($assets | Group-Object Name | Where-Object Count -gt 1)
+          if ($duplicates) {
+            throw "Release assets must have unique filenames: $($duplicates.Name -join ', ')"
+          }
+          if ($assets.Count -ne ($manifest.artifacts.Count + 2)) {
+            throw "Unexpected release asset count: $($assets.Count)"
+          }
+      - name: Upload assets and publish prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = @(Get-ChildItem -LiteralPath candidate -Recurse -File | Sort-Object Name)
+          $arguments = @('release', 'upload', '${{ inputs.release_tag }}')
+          $arguments += @($assets | ForEach-Object FullName)
+          $arguments += @('--repo', $env:GITHUB_REPOSITORY, '--clobber')
+          & gh @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release asset upload failed with exit code $LASTEXITCODE."
+          }
+          $release = gh release view '${{ inputs.release_tag }}' `
+            --repo $env:GITHUB_REPOSITORY `
+            --json assets | ConvertFrom-Json
+          if (@($release.assets).Count -ne $assets.Count) {
+            throw "Published asset count mismatch: $(@($release.assets).Count) / $($assets.Count)"
+          }
+          gh release edit '${{ inputs.release_tag }}' `
+            --repo $env:GITHUB_REPOSITORY `
+            --draft=false `
+            --prerelease
+          if ($LASTEXITCODE -ne 0) {
+            throw "Publishing the prerelease failed with exit code $LASTEXITCODE."
+          }
