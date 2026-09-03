@@ -145,7 +145,8 @@ try {
     Copy-ReleaseFile $desktopPath $applicationOutput
     Copy-ReleaseFile $workerPath $applicationOutput
     foreach ($installer in $installers) {
-        Copy-ReleaseFile $installer.FullName $installerOutput
+        $releaseName = $installer.Name -replace '(?i)_[a-z]{2,3}(?:-[a-z]{2})?(?=\.msi$)', ''
+        Copy-ReleaseFile $installer.FullName $installerOutput $releaseName
     }
 
     $sourceOutput = Join-Path $outputPath 'source'

@@ -67,6 +67,22 @@ try {
         }
     }
 
+    # WiX derives the installed filename from each source basename and ignores
+    # Tauri's resource destination alias. Stage licenses with unique basenames
+    # so multiple upstream LICENSE files cannot collide in the MSI.
+    $bundleLicenseDirectory = Join-Path $root 'build\bundle-resources\licenses'
+    [IO.Directory]::CreateDirectory($bundleLicenseDirectory) | Out-Null
+    $bundleLicenses = [ordered]@{
+        'third_party\libaribcaption\LICENSE' = 'libaribcaption-MIT.txt'
+        'third_party\libaribtlv\LICENSE' = 'libaribtlv-MIT.txt'
+        'third_party\zlib\LICENSE' = 'zlib-License.txt'
+    }
+    foreach ($license in $bundleLicenses.GetEnumerator()) {
+        Copy-Item -LiteralPath (Join-Path $root $license.Key) `
+            -Destination (Join-Path $bundleLicenseDirectory $license.Value) `
+            -Force
+    }
+
     $profile = if ($Libmpv -eq 'Bundled') { 'bundled libmpv' } else { 'external libmpv' }
     Invoke-Checked "Build ResubWinny ($Target, $profile)" {
         npm @tauriArguments
