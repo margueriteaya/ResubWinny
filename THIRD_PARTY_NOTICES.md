@@ -66,7 +66,7 @@ of libaribtlv. Shared/system Zlib discovery is not used by that build route.
 - Local license: `third_party/libmpv/LICENSE.LGPL`
 - Upstream copyright and file exceptions: `third_party/libmpv/COPYRIGHT.mpv`
 - Bundled DLL SHA-256:
-  `92CA673870C425E0A539B854231F75E71BF7FB6E72FE86A6CE315CDF57DC0F16`
+  `9D3F661F510FDF660D80B663241D6C4A2933B083EC26AF3CCFD1FB4164F0708C`
 - Import library SHA-256:
   `BEF1B89F534BC86B33135E1F04FA2D5064B9D48B5DE8BC9866665BBF43DEF793`
 
