@@ -177,9 +177,18 @@
   });
 </script>
 
-<canvas bind:this={canvas} class:ready aria-hidden="true"></canvas>
+<div class="xmb-crop" aria-hidden="true">
+  <div class="xmb-frame">
+    <canvas bind:this={canvas} class:ready></canvas>
+  </div>
+</div>
 
 <style>
+  .xmb-crop{position:absolute;z-index:1;inset:0;overflow:hidden;pointer-events:none;container-type:size}
+  /* The upstream mesh is authored in a 16:9 clip space. Keep that space
+     isotropic and crop it to the hero instead of stretching it with the
+     hero's window-dependent aspect ratio. */
+  .xmb-frame{position:absolute;top:50%;left:50%;width:max(100cqw,calc(100cqh * 16 / 9));height:max(100cqh,calc(100cqw * 9 / 16));transform:translate(-50%,-50%)}
   canvas{position:absolute;z-index:1;inset:0;display:block;width:100%;height:100%;pointer-events:none;visibility:hidden;clip-path:inset(0 0 0 100%);opacity:0}
   canvas.ready{visibility:visible;animation:wave-arrive 1500ms 90ms var(--rw-ease-fluid) forwards}
   @keyframes wave-arrive{0%{clip-path:inset(0 0 0 100%);opacity:0;transform:translateX(7%)}28%{opacity:.92}100%{clip-path:inset(0);opacity:1;transform:none}}
