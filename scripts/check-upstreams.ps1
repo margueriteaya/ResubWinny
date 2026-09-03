@@ -34,6 +34,25 @@ function Get-RemoteHead {
     return ($line -split '\s+')[0]
 }
 
+function Get-TrackedSourceEntries([string]$Repository, [string]$Root) {
+    $relativeRoot = [IO.Path]::GetRelativePath($Repository, $Root).Replace('\', '/')
+    $prefix = "$relativeRoot/"
+    [string[]]$trackedPaths = @(& git -C $Repository -c core.quotePath=false ls-files -- $relativeRoot)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not list tracked vendored source files: $Root"
+    }
+    [string[]]$entries = @($trackedPaths | ForEach-Object {
+        if (-not $_.StartsWith($prefix, [StringComparison]::Ordinal)) {
+            throw "Tracked source path is outside its requested directory: $_"
+        }
+        $_.Substring($prefix.Length)
+    })
+    if ($entries.Count -eq 0) {
+        throw "Source snapshot has no tracked files: $Root"
+    }
+    return $entries
+}
+
 function Get-SourceSnapshotHash([string]$Directory) {
     $root = (Resolve-Path -LiteralPath $Directory).Path
     $repository = (& git -C $root rev-parse --show-toplevel).Trim()
@@ -41,12 +60,8 @@ function Get-SourceSnapshotHash([string]$Directory) {
         throw "Could not locate the repository containing $Directory."
     }
     $relativeRoot = [IO.Path]::GetRelativePath($repository, $root).Replace('\', '/')
-    [string[]]$entries = @(Get-ChildItem -LiteralPath $root -Recurse -File |
-        ForEach-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') })
+    [string[]]$entries = @(Get-TrackedSourceEntries $repository $root)
     [Array]::Sort($entries, [StringComparer]::Ordinal)
-    if ($entries.Count -eq 0) {
-        throw "Source snapshot has no files: $root"
-    }
     $hash = [Security.Cryptography.IncrementalHash]::CreateHash(
         [Security.Cryptography.HashAlgorithmName]::SHA256
     )
@@ -71,18 +86,22 @@ function Get-SourceSnapshotHash([string]$Directory) {
 
 function Get-SourceContentHash([string]$Directory) {
     $root = (Resolve-Path -LiteralPath $Directory).Path
+    $repository = (& git -C $root rev-parse --show-toplevel).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $repository) {
+        throw "Could not locate the repository containing $Directory."
+    }
+    [string[]]$entries = @(Get-TrackedSourceEntries $repository $root | Sort-Object)
     $hash = [Security.Cryptography.IncrementalHash]::CreateHash(
         [Security.Cryptography.HashAlgorithmName]::SHA256
     )
     try {
-        Get-ChildItem -LiteralPath $root -Recurse -File |
-            Sort-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') } |
-            ForEach-Object {
-                $relative = [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/')
+        $entries | ForEach-Object {
+                $relative = $_
+                $fullPath = Join-Path $root $relative
                 $hash.AppendData([Text.Encoding]::UTF8.GetBytes($relative))
                 $hash.AppendData([byte[]]@(0))
-                $hash.AppendData([BitConverter]::GetBytes([Int64]$_.Length))
-                $hash.AppendData([IO.File]::ReadAllBytes($_.FullName))
+                $hash.AppendData([BitConverter]::GetBytes([Int64](Get-Item -LiteralPath $fullPath).Length))
+                $hash.AppendData([IO.File]::ReadAllBytes($fullPath))
             }
         return [Convert]::ToHexString($hash.GetHashAndReset())
     } finally {
