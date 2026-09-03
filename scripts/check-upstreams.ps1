@@ -90,6 +90,7 @@ function Get-SourceContentHash([string]$Directory) {
     if ($LASTEXITCODE -ne 0 -or -not $repository) {
         throw "Could not locate the repository containing $Directory."
     }
+    $relativeRoot = [IO.Path]::GetRelativePath($repository, $root).Replace('\', '/')
     [string[]]$entries = @(Get-TrackedSourceEntries $repository $root | Sort-Object)
     $hash = [Security.Cryptography.IncrementalHash]::CreateHash(
         [Security.Cryptography.HashAlgorithmName]::SHA256
@@ -98,10 +99,19 @@ function Get-SourceContentHash([string]$Directory) {
         $entries | ForEach-Object {
                 $relative = $_
                 $fullPath = Join-Path $root $relative
+                $repositoryRelative = "$relativeRoot/$relative"
+                $object = (& git -C $repository hash-object --filters "--path=$repositoryRelative" -- $fullPath).Trim()
+                if ($LASTEXITCODE -ne 0 -or -not $object) {
+                    throw "Could not hash vendored source file: $fullPath"
+                }
+                $objectSize = (& git -C $repository cat-file -s $object).Trim()
+                if ($LASTEXITCODE -ne 0 -or $objectSize -notmatch '^\d+$') {
+                    throw "Could not read normalized vendored source size: $fullPath"
+                }
                 $hash.AppendData([Text.Encoding]::UTF8.GetBytes($relative))
                 $hash.AppendData([byte[]]@(0))
-                $hash.AppendData([BitConverter]::GetBytes([Int64](Get-Item -LiteralPath $fullPath).Length))
-                $hash.AppendData([IO.File]::ReadAllBytes($fullPath))
+                $hash.AppendData([BitConverter]::GetBytes([Int64]$objectSize))
+                $hash.AppendData([Text.Encoding]::ASCII.GetBytes($object))
             }
         return [Convert]::ToHexString($hash.GetHashAndReset())
     } finally {
