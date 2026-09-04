@@ -71,11 +71,20 @@ export function reduceTaskEvent(
       const incoming = (event.kind === "feature_observed" || event.code === "export_conflict" ? "present" : event.parameters?.state) as FeatureKnowledgeState;
       const nextState = previous?.state === "present" ? "present" : incoming;
       if (nextState === "present" || (nextState === "absent" && event.parameters?.complete === true)) {
+        const conflictDetails = event.code === "export_conflict" ? {
+          conflictFormats: event.parameters?.formats,
+          issueCode: event.parameters?.issueCode,
+          availableActions: event.parameters?.availableActions,
+        } : undefined;
         track[feature] = {
           state: nextState,
           observedCount: Number(event.parameters?.observedCount ?? previous?.observedCount ?? 0),
           complete: event.parameters?.complete === true,
-          details: event.parameters?.details as Record<string, unknown> | undefined,
+          details: {
+            ...previous?.details,
+            ...(event.parameters?.details as Record<string, unknown> | undefined),
+            ...conflictDetails,
+          },
         };
         state.featureKnowledge = { ...state.featureKnowledge, [key]: track };
       }

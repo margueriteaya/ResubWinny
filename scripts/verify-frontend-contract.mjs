@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const frontendRoot = join(root, 'studio-tauri', 'src')
 const handlerSource = await readFile(join(root, 'studio-tauri', 'src-tauri', 'src', 'main.rs'), 'utf8')
+const formatCapabilities = JSON.parse(await readFile(join(root, 'shared', 'format_capabilities.json'), 'utf8'))
 
 async function filesIn(directory) {
   const entries = await readdir(directory, { withFileTypes: true })
@@ -22,6 +23,22 @@ const allowedTauriImports = new Set([
   'shell/desktop.ts',
 ])
 const violations = []
+const exportFormats = ['ASS', 'TTML', 'SRT', 'WebVTT', 'JSON', 'Raw Data']
+const preservationFeatures = ['position', 'color', 'ruby', 'drcs', 'gaiji', 'accessibility']
+const capabilityLevels = new Set(['preserved', 'approximated', 'unsupported', 'conditional'])
+for (const format of exportFormats) {
+  if (!formatCapabilities[format]) {
+    violations.push(`format capability contract is missing ${format}`)
+    continue
+  }
+  for (const feature of preservationFeatures) {
+    const level = formatCapabilities[format][feature]
+    if (!capabilityLevels.has(level)) violations.push(`${format}.${feature} has invalid capability level ${String(level)}`)
+  }
+}
+for (const format of Object.keys(formatCapabilities)) {
+  if (!exportFormats.includes(format)) violations.push(`format capability contract has unknown format ${format}`)
+}
 const localeDirectory = join(frontendRoot, 'locales')
 const localeFiles = (await readdir(localeDirectory)).filter((name) => name.endsWith('.json'))
 const localeDocuments = await Promise.all(localeFiles.map(async (name) => ({

@@ -1,8 +1,8 @@
 {
-  "ASS": {"position":"preserved","color":"preserved","ruby":"approximated","drcs":"conditional"},
-  "TTML": {"position":"preserved","color":"preserved","ruby":"preserved","drcs":"conditional"},
-  "SRT": {"position":"unsupported","color":"unsupported","ruby":"unsupported","drcs":"conditional"},
-  "WebVTT": {"position":"approximated","color":"unsupported","ruby":"unsupported","drcs":"conditional"},
-  "JSON": {"position":"preserved","color":"preserved","ruby":"preserved","drcs":"preserved"},
-  "Raw Data": {"position":"preserved","color":"preserved","ruby":"preserved","drcs":"preserved"}
+  "ASS": {"position":"preserved","color":"preserved","ruby":"approximated","drcs":"conditional","gaiji":"preserved","accessibility":"preserved"},
+  "TTML": {"position":"preserved","color":"preserved","ruby":"preserved","drcs":"conditional","gaiji":"approximated","accessibility":"preserved"},
+  "SRT": {"position":"unsupported","color":"unsupported","ruby":"unsupported","drcs":"conditional","gaiji":"approximated","accessibility":"preserved"},
+  "WebVTT": {"position":"approximated","color":"unsupported","ruby":"unsupported","drcs":"conditional","gaiji":"approximated","accessibility":"preserved"},
+  "JSON": {"position":"preserved","color":"preserved","ruby":"preserved","drcs":"preserved","gaiji":"preserved","accessibility":"preserved"},
+  "Raw Data": {"position":"preserved","color":"preserved","ruby":"preserved","drcs":"preserved","gaiji":"preserved","accessibility":"preserved"}
 }

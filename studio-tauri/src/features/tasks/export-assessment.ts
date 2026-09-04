@@ -4,11 +4,11 @@ import { formatCapabilities, type CapabilityLevel } from "./format-capabilities"
 export type FeatureKnowledgeState = "unknown" | "present" | "absent";
 export type FeatureFact = { state: FeatureKnowledgeState; observedCount?: number; complete: boolean; details?: Record<string, unknown> };
 export type FeatureKnowledge = Partial<Record<keyof ExportPreservation, FeatureFact>>;
-export type AssessmentIssue = { code: string; feature: keyof ExportPreservation; severity: "warning" | "conflict"; parameters: Record<string, string> };
+export type AssessmentIssue = { code: string; feature: keyof ExportPreservation; severity: "warning" | "conflict"; parameters: Record<string, string>; actions?: string[] };
 export type FormatAssessment = { preserved: string[]; approximated: string[]; dropped: string[]; conditional: AssessmentIssue[]; conflicts: AssessmentIssue[]; warnings: AssessmentIssue[] };
 export type ExportAssessment = { formats: Partial<Record<ExportFormat, FormatAssessment>>; hasConflict: boolean };
 
-const featureMap: Record<string, keyof ExportPreservation> = { position: "position", color: "color", ruby: "ruby", drcs: "drcs" };
+const featureMap: Record<string, keyof ExportPreservation> = { position: "position", color: "color", ruby: "ruby", drcs: "drcs", gaiji: "gaiji", accessibility: "accessibility" };
 
 export function assessExports(formats: Iterable<ExportFormat>, preservation: ExportPreservation, knowledge: FeatureKnowledge = {}): ExportAssessment {
   const result: ExportAssessment = { formats: {}, hasConflict: false };
@@ -24,6 +24,24 @@ export function assessExports(formats: Iterable<ExportFormat>, preservation: Exp
       if (state === "absent") continue;
       if (capability.level === "preserved") { if (state === "present") assessment.preserved.push(feature); continue; }
       if (capability.level === "approximated") { if (state === "present") assessment.approximated.push(feature); continue; }
+      if (capability.level === "conditional") {
+        const conflictFormats = knowledge[feature]?.details?.conflictFormats;
+        if (state === "present" && Array.isArray(conflictFormats) && conflictFormats.includes(format)) {
+          const availableActions = knowledge[feature]?.details?.availableActions;
+          const issue: AssessmentIssue = {
+            code: String(knowledge[feature]?.details?.issueCode ?? "format_cannot_preserve_feature"),
+            feature,
+            severity: "conflict",
+            parameters: { format, feature },
+            actions: Array.isArray(availableActions) ? availableActions.map(String) : undefined,
+          };
+          assessment.conflicts.push(issue);
+          result.hasConflict = true;
+        } else {
+          assessment.conditional.push({ code: "format_conditionally_preserves_feature", feature, severity: "warning", parameters: { format, feature } });
+        }
+        continue;
+      }
       const issue: AssessmentIssue = { code: "format_cannot_preserve_feature", feature, severity: state === "present" ? "conflict" : "warning", parameters: { format, feature } };
       if (state === "present") { assessment.conflicts.push(issue); result.hasConflict = true; }
       else assessment.conditional.push(issue);
