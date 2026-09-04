@@ -63,39 +63,6 @@ fn feature_events(
     events
 }
 
-#[cfg(test)]
-mod feature_event_tests {
-    use super::*;
-
-    #[test]
-    fn feature_events_are_first_observation_and_eof_only() {
-        let summary = B24DecodeSummary {
-            features: CaptionFeatureSummary {
-                ruby: true,
-                observed_counts: [("ruby".into(), 3)].into(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let mut seen = CaptionFeatureSummary::default();
-        let first = feature_events(&summary, &mut seen, false);
-        assert_eq!(first.len(), 1);
-        assert_eq!(first[0]["type"], "feature_observed");
-        assert_eq!(first[0]["feature"], "ruby");
-        assert_eq!(first[0]["observedCount"], 3);
-
-        assert!(feature_events(&summary, &mut seen, false).is_empty());
-
-        let final_events = feature_events(&summary, &mut seen, true);
-        assert_eq!(final_events.len(), 6);
-        assert!(final_events.iter().all(|event| event["type"] == "feature_summary"));
-        assert_eq!(
-            final_events.iter().filter(|event| event["feature"] == "ruby").count(),
-            1
-        );
-    }
-}
-
 /// Makes the archive the requested primary artifact after conversion has
 /// completed. The conversion pipeline deliberately writes its ordinary
 /// caption output first; archive-only is a CLI publishing policy layered on
@@ -540,4 +507,44 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
         emit_json(&serde_json::json!({ "type": "completed", "summary": summary }));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod feature_event_tests {
+    use super::*;
+
+    #[test]
+    fn feature_events_are_first_observation_and_eof_only() {
+        let summary = B24DecodeSummary {
+            features: CaptionFeatureSummary {
+                ruby: true,
+                observed_counts: [("ruby".into(), 3)].into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut seen = CaptionFeatureSummary::default();
+        let first = feature_events(&summary, &mut seen, false);
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0]["type"], "feature_observed");
+        assert_eq!(first[0]["feature"], "ruby");
+        assert_eq!(first[0]["observedCount"], 3);
+
+        assert!(feature_events(&summary, &mut seen, false).is_empty());
+
+        let final_events = feature_events(&summary, &mut seen, true);
+        assert_eq!(final_events.len(), 6);
+        assert!(
+            final_events
+                .iter()
+                .all(|event| event["type"] == "feature_summary")
+        );
+        assert_eq!(
+            final_events
+                .iter()
+                .filter(|event| event["feature"] == "ruby")
+                .count(),
+            1
+        );
+    }
 }
