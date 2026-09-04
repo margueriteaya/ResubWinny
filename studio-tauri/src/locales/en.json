@@ -462,6 +462,8 @@
     "feature.accessibility": "Accessibility cues",
     "feature.accessibilityAndGaiji": "ARIB symbols and accessibility cues",
     "assessment.title": "Export assessment",
+    "assessment.needsSettings": "Output settings need to be changed",
+    "export_conflict": "Output settings need to be changed before this task can be exported.",
     "assessment.approximated": "{features} will use a compatible approximation",
     "assessment.conditional": "Some source features are not known yet",
     "assessment.conflict": "Cannot satisfy the request to preserve {feature}",

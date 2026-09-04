@@ -462,6 +462,8 @@
     "feature.accessibility": "アクセシビリティ表記",
     "feature.accessibilityAndGaiji": "ARIB 外字・アクセシビリティ表記",
     "assessment.title": "出力評価",
+    "assessment.needsSettings": "出力設定の変更が必要です",
+    "export_conflict": "現在のタスクを出力するには、出力設定を変更してください。",
     "assessment.approximated": "{features} は互換表現に置き換えられます",
     "assessment.conditional": "未確認の字幕機能があります",
     "assessment.conflict": "{feature} を保持する設定を満たせません",
