@@ -5,6 +5,55 @@ import { assessExports } from '../studio-tauri/src/features/tasks/export-assessm
 
 const preservation = { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true }
 
+test('assessment entries preserve the source-state and user-intent truth table for all formats', () => {
+  const expected = {
+    ASS: ['preserved', 'preserved', 'approximated', 'conditional', 'preserved', 'preserved'],
+    TTML: ['preserved', 'preserved', 'preserved', 'conditional', 'approximated', 'preserved'],
+    SRT: ['unsupported', 'unsupported', 'unsupported', 'conditional', 'approximated', 'preserved'],
+    WebVTT: ['approximated', 'unsupported', 'unsupported', 'conditional', 'approximated', 'preserved'],
+    JSON: Array(6).fill('preserved'),
+    'Raw Data': Array(6).fill('preserved'),
+  }
+  for (const [format, levels] of Object.entries(expected)) {
+    for (const [index, feature] of Object.keys(preservation).entries()) {
+      for (const state of ['unknown', 'present', 'absent']) {
+        for (const enabled of [true, false]) {
+          const knowledge = Object.fromEntries(Object.keys(preservation).map((name) => [name, { state: name === feature ? state : 'absent', complete: state === 'absent' }]))
+          const result = assessExports([format], { ...preservation, [feature]: enabled }, knowledge)
+          const groups = result.formats[format]
+          const entries = Object.values(groups).flat()
+          const level = levels[index]
+          let bucket
+          if (state === 'present') bucket = !enabled ? 'dropped' : level === 'unsupported' ? 'conflicts' : level === 'conditional' ? 'approximated' : level
+          if (state === 'unknown' && enabled && ['unsupported', 'conditional'].includes(level)) bucket = 'conditional'
+          if (state === 'unknown' && !enabled) bucket = 'conditional'
+          assert.equal(entries.length, bucket ? 1 : 0, `${format}/${feature}/${state}/${enabled}`)
+          assert.equal(result.hasConflict, bucket === 'conflicts')
+          if (!bucket) continue
+          const item = groups[bucket][0]
+          assert.equal(item.feature, feature)
+          assert.deepEqual(item.parameters, { format, feature })
+          assert.equal(typeof item.code, 'string')
+          assert.ok(Array.isArray(item.actions))
+          if (bucket === 'dropped') assert.equal(item.severity, undefined)
+          if (state === 'unknown' && !enabled) {
+            assert.equal(item.code, 'feature_will_be_dropped_if_present')
+            assert.equal(item.severity, undefined)
+          }
+        }
+      }
+    }
+  }
+})
+
+test('one source feature yields independent results for simultaneous target formats', () => {
+  const result = assessExports(['ASS', 'SRT', 'TTML'], preservation, { ruby: { state: 'present', complete: false } })
+  assert.equal(result.formats.ASS.approximated[0].code, 'format_approximates_feature')
+  assert.equal(result.formats.SRT.conflicts[0].code, 'format_cannot_preserve_feature')
+  assert.equal(result.formats.TTML.preserved[0].code, 'format_preserves_feature')
+  assert.equal(result.hasConflict, true)
+})
+
 test('unsupported feature conflicts offer explicit remedies without changing selections', () => {
   for (const feature of ['position', 'color', 'ruby']) {
     const formats = new Set(['ASS', 'SRT'])
@@ -92,8 +141,8 @@ test('runtime export conflicts do not contaminate source feature details', () =>
 test('conditional DRCS converges to approximation or a format-specific runtime conflict', () => {
   const knowledge = { drcs: { state: 'present', observedCount: 1, complete: false } }
   const allowed = assessExports(['ASS', 'SRT'], preservation, knowledge)
-  assert.deepEqual(allowed.formats.ASS.approximated, ['drcs'])
-  assert.deepEqual(allowed.formats.SRT.approximated, ['drcs'])
+  assert.deepEqual(allowed.formats.ASS.approximated.map((item) => item.feature), ['drcs'])
+  assert.deepEqual(allowed.formats.SRT.approximated.map((item) => item.feature), ['drcs'])
   assert.equal(allowed.hasConflict, false)
 
   const conflict = assessExports(['ASS', 'SRT'], preservation, knowledge, {
@@ -103,7 +152,7 @@ test('conditional DRCS converges to approximation or a format-specific runtime c
       availableActions: ['open_drcs_mapping'],
     },
   })
-  assert.deepEqual(conflict.formats.ASS.approximated, ['drcs'])
+  assert.deepEqual(conflict.formats.ASS.approximated.map((item) => item.feature), ['drcs'])
   assert.equal(conflict.formats.SRT.conflicts[0].code, 'unresolved_drcs_text_target')
   assert.equal(conflict.hasConflict, true)
 })
