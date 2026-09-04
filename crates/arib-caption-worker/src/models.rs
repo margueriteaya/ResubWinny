@@ -111,18 +111,13 @@ pub struct CaptionFeatureSummary {
     pub complete: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FeatureState {
+    #[default]
     Unknown,
     Present,
     Absent,
-}
-
-impl Default for FeatureState {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 impl CaptionFeatureSummary {
@@ -306,8 +301,10 @@ mod feature_tests {
 
     #[test]
     fn present_feature_does_not_regress_when_stream_completes() {
-        let mut features = CaptionFeatureSummary::default();
-        features.ruby = true;
+        let mut features = CaptionFeatureSummary {
+            ruby: true,
+            ..Default::default()
+        };
         features.observed_counts.insert("ruby".into(), 3);
 
         features.complete = true;

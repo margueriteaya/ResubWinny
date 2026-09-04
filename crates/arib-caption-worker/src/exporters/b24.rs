@@ -87,6 +87,7 @@ where
         &track,
         |source_pid, scene| {
             last_scene_pid = source_pid;
+            assess_b24_scene(&options, &scene)?;
             if let Some(archive_writer) = &mut archive_writer {
                 write_archive_record(archive_writer, "scene", &scene)?;
             }

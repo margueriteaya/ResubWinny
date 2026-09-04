@@ -119,3 +119,12 @@ pub(crate) fn emit_failed(code: &str, message: &str) {
         "parameters": {}
     }));
 }
+
+pub(crate) fn emit_export_conflict(conflict: &crate::ExportConflict) {
+    emit_json(&serde_json::json!({
+        "type": "failed",
+        "code": "export_conflict",
+        "message": conflict.to_string(),
+        "parameters": conflict
+    }));
+}

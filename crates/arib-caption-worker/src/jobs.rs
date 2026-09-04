@@ -166,6 +166,7 @@ where
             path,
             &tracks,
             |caption| {
+                assess_ttml_caption(&options, &caption)?;
                 queue_ass_ttml_caption(
                     &mut writer,
                     &mut pending_ass,
@@ -189,6 +190,7 @@ where
             path,
             &tracks,
             |caption| {
+                assess_ttml_caption(&options, &caption)?;
                 queue_ass_ttml_caption(
                     &mut writer,
                     &mut pending_ass,
@@ -346,6 +348,7 @@ where
     let summary = match scan_tlv_ttml(
         path,
         |caption| {
+            assess_ttml_caption(&options, &caption)?;
             feature_summary.observe_ttml(&caption);
             let mut archive = archive_writer.borrow_mut();
             if let Some(archive_writer) = &mut *archive {
