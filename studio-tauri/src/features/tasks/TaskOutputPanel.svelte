@@ -3,6 +3,7 @@
   import type { ExportFormat, ExportPreservation, Inspection } from "../../backend";
   import MacCheckbox from "../../components/MacCheckbox.svelte";
   import { t } from "../../i18n";
+  import { assessExports } from "./export-assessment";
 
   type Format = { name: ExportFormat; description: string; icon?: any; color?: string };
   type Feature = keyof ExportPreservation;
@@ -24,6 +25,7 @@
   const features: Feature[] = ["position", "color", "ruby", "drcs"];
   const lossyFormats = new Set<ExportFormat>(["SRT", "WebVTT"]);
   $: limitations = [...selectedFormats].filter((format) => lossyFormats.has(format));
+  $: assessment = assessExports(selectedFormats, preservation);
 
   function toggleAccessibilityAndGaiji() {
     const enabled = preservation.gaiji && preservation.accessibility;
@@ -49,7 +51,7 @@
   <div class="output-directory"><span>{t("workspace.outputDirectory")}</span><div class="path-row"><input bind:value={outputDirectory} aria-label={t("workspace.outputDirectory")} /><button class="path-button" data-tooltip={t("workspace.chooseOutputDirectory")} aria-label={t("workspace.chooseOutputDirectory")} onclick={onChooseOutputDirectory}><FolderOpen size={17} /></button></div></div>
   {#if error}<p class="error"><TriangleAlert size={16} />{error}</p>{/if}
   <div class="output-actions">
-    <button class="export-button" onclick={onStartExport} disabled={isExporting || exportPending || !selectedFormats.size}><FileOutput size={17} />{exportPending ? t("task.exportWaitingForPreview") : isExporting ? t("common.exporting") : t("common.startExport")}</button>
+    <button class="export-button" onclick={onStartExport} disabled={isExporting || exportPending || !selectedFormats.size || assessment.hasConflict}><FileOutput size={17} />{exportPending ? t("task.exportWaitingForPreview") : isExporting ? t("common.exporting") : t("common.startExport")}</button>
     {#if canResume}<button class="resume-button" onclick={onResume} disabled={resumeBusy || isExporting}><RotateCcw size={16} /> {resumeBusy ? t("task.resumingCheckpoint") : t("task.resumeCheckpoint")}</button>{/if}
   </div>
 
