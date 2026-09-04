@@ -431,14 +431,23 @@ pub fn start_export_impl(
                             event.get("count").and_then(|value| value.as_u64()),
                             None,
                         ),
-                        Some("feature_observed") | Some("feature_summary") => events.emit(
-                            event.get("type").and_then(|value| value.as_str()).unwrap_or("feature-summary"),
-                            "Caption source feature updated.",
-                            None,
-                            None,
-                            event.get("observedCount").and_then(|value| value.as_u64()),
-                            None,
-                        ),
+                        Some("feature_observed") | Some("feature_summary") => {
+                            let kind = event.get("type").and_then(|value| value.as_str()).unwrap_or("feature_summary");
+                            let parameters = ["logicalTrack", "feature", "state", "observedCount", "complete", "details"]
+                                .into_iter()
+                                .filter_map(|key| event.get(key).cloned().map(|value| (key.to_owned(), value)))
+                                .collect();
+                            events.emit_with_details(
+                                kind,
+                                format!("task.{kind}"),
+                                parameters,
+                                "Caption source feature updated.",
+                                None,
+                                None,
+                                None,
+                                None,
+                            )
+                        }
                         Some("checkpoint-written") => events.emit(
                             "checkpoint-written",
                             "Worker checkpoint updated.",
@@ -503,24 +512,29 @@ pub fn start_export_impl(
                                 .get("code")
                                 .and_then(|value| value.as_str())
                                 .unwrap_or("worker.operation_failed");
+                            let parameters: BTreeMap<String, serde_json::Value> = event
+                                .get("parameters")
+                                .and_then(|value| serde_json::from_value(value.clone()).ok())
+                                .unwrap_or_default();
                             mark_job_state(
                                 &app,
                                 &shared_state,
                                 job_id.as_deref(),
                                 JobState::Failed,
                             );
-                            record_diagnostic(
+                            record_diagnostic_with_parameters(
                                 &app,
                                 &shared_state,
                                 job_id.as_deref(),
                                 "error",
                                 code,
+                                parameters.clone(),
                                 message,
                             );
                             events.emit_with_details(
                                 "failed",
                                 code,
-                                BTreeMap::new(),
+                                parameters,
                                 message,
                                 None,
                                 None,

@@ -3,7 +3,7 @@
   import type { ExportFormat, ExportPreservation, Inspection } from "../../backend";
   import MacCheckbox from "../../components/MacCheckbox.svelte";
   import { t } from "../../i18n";
-  import { assessExports } from "./export-assessment";
+  import { assessExports, type FeatureKnowledge } from "./export-assessment";
 
   type Format = { name: ExportFormat; description: string; icon?: any; color?: string };
   type Feature = keyof ExportPreservation;
@@ -11,6 +11,7 @@
   export let formats: Format[] = [];
   export let selectedFormats = new Set<ExportFormat>(["ASS"]);
   export let preservation: ExportPreservation;
+  export let featureKnowledge: FeatureKnowledge = {};
   export let error = "";
   export let isExporting = false;
   export let exportPending = false;
@@ -25,7 +26,7 @@
   const features: Feature[] = ["position", "color", "ruby", "drcs"];
   const lossyFormats = new Set<ExportFormat>(["SRT", "WebVTT"]);
   $: limitations = [...selectedFormats].filter((format) => lossyFormats.has(format));
-  $: assessment = assessExports(selectedFormats, preservation);
+  $: assessment = assessExports(selectedFormats, preservation, featureKnowledge);
   $: assessmentRows = [...selectedFormats].map((format) => ({ format, result: assessment.formats[format] })).filter((item) => item.result);
 
   function toggleAccessibilityAndGaiji() {

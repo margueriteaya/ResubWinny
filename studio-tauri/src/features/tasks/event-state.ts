@@ -1,4 +1,5 @@
 import type { TaskEvent } from "../../backend";
+import type { FeatureKnowledge, FeatureKnowledgeState } from "./export-assessment";
 
 export type TaskEventState = {
   archivePath: string;
@@ -11,6 +12,7 @@ export type TaskEventState = {
   previewIndexing: boolean;
   progress: number;
   warnings: number;
+  featureKnowledge: Record<string, FeatureKnowledge>;
 };
 
 export function emptyTaskEventState(): TaskEventState {
@@ -25,6 +27,7 @@ export function emptyTaskEventState(): TaskEventState {
     previewIndexing: false,
     progress: 0,
     warnings: 0,
+    featureKnowledge: {},
   };
 }
 
@@ -45,6 +48,7 @@ export function reduceTaskEvent(
   sourceSize: number,
   message: string,
   batchRunning: boolean,
+  sourceIdentity = "",
 ): { state: TaskEventState; effects: TaskEventEffects } {
   const state = { ...current, logs: current.logs };
   const wasPreviewIndexing = current.previewIndexing;
@@ -56,6 +60,27 @@ export function reduceTaskEvent(
     state.warnings = Math.max(0, event.warnings);
   if (sourceSize > 0 && state.bytesRead > 0)
     state.progress = Math.min(100, (state.bytesRead / sourceSize) * 100);
+
+  if (event.kind === "feature_observed" || event.kind === "feature_summary" || event.code === "export_conflict") {
+    const logicalTrack = String(event.parameters?.logicalTrack ?? "");
+    const feature = String(event.parameters?.feature ?? "") as keyof import("../../backend").ExportPreservation;
+    if (logicalTrack && ["position", "color", "ruby", "drcs", "gaiji", "accessibility"].includes(feature)) {
+      const key = `${sourceIdentity}::${logicalTrack}`;
+      const track = { ...(state.featureKnowledge[key] ?? {}) };
+      const previous = track[feature];
+      const incoming = (event.kind === "feature_observed" || event.code === "export_conflict" ? "present" : event.parameters?.state) as FeatureKnowledgeState;
+      const nextState = previous?.state === "present" ? "present" : incoming;
+      if (nextState === "present" || (nextState === "absent" && event.parameters?.complete === true)) {
+        track[feature] = {
+          state: nextState,
+          observedCount: Number(event.parameters?.observedCount ?? previous?.observedCount ?? 0),
+          complete: event.parameters?.complete === true,
+          details: event.parameters?.details as Record<string, unknown> | undefined,
+        };
+        state.featureKnowledge = { ...state.featureKnowledge, [key]: track };
+      }
+    }
+  }
 
   const progressBucket = Math.floor(state.progress / 5);
   if (event.kind !== "progress" || progressBucket > state.lastLoggedProgressBucket) {

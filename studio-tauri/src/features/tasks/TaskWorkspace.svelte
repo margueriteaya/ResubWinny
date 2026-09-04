@@ -7,6 +7,7 @@
   import TaskPreviewPanel from "./TaskPreviewPanel.svelte";
   import TaskSourcePanel from "./TaskSourcePanel.svelte";
   import type { MediaTimeMs, ProjectTimeMs } from "./time-mapping";
+  import type { FeatureKnowledge } from "./export-assessment";
 
   type Format = { name: ExportFormat; description: string };
   type TaskTab = "preview" | "events" | "diagnostics";
@@ -37,6 +38,7 @@
   export let formats: Format[] = [];
   export let selectedFormats = new Set<ExportFormat>(["ASS"]);
   export let preservation: ExportPreservation;
+  export let featureKnowledge: FeatureKnowledge = {};
   export let error = "";
   export let isExporting = false;
   export let exportPending = false;
@@ -166,7 +168,7 @@
     {/if}
     <div class="workspace-pane output-pane">
       <header class="pane-header"><b>{t("workspace.outputSettings")}</b><button class="pane-toggle liquid-control" onclick={toggleOutput} data-tooltip={outputIsCollapsed ? t("workspace.showOutput") : t("workspace.hideOutput")} aria-label={outputIsCollapsed ? t("workspace.showOutput") : t("workspace.hideOutput")}>{#if outputIsCollapsed}<PanelRightOpen size={16} />{:else}<PanelRightClose size={16} />{/if}</button></header>
-      {#if !outputIsCollapsed}<TaskOutputPanel {inspection} {formats} {selectedFormats} {preservation} {error} {isExporting} {exportPending} {canResume} {resumeBusy} {onToggleFormat} {onTogglePreservation} onStartExport={onStartExport} {onResume} bind:outputDirectory {onChooseOutputDirectory} />{/if}
+      {#if !outputIsCollapsed}<TaskOutputPanel {inspection} {formats} {selectedFormats} {preservation} {featureKnowledge} {error} {isExporting} {exportPending} {canResume} {resumeBusy} {onToggleFormat} {onTogglePreservation} onStartExport={onStartExport} {onResume} bind:outputDirectory {onChooseOutputDirectory} />{/if}
     </div>
   </div>
 {:else}

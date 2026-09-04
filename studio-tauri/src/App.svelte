@@ -8,6 +8,7 @@
   import { SourceSession } from "./features/tasks/source-session";
   import { ExportSession } from "./features/tasks/export-session";
   import { TaskEventSession } from "./features/tasks/event-session";
+  import type { FeatureKnowledge } from "./features/tasks/export-assessment";
   import {
     mediaTimeMs as asMediaTimeMs,
     mediaToProjectTime,
@@ -159,8 +160,9 @@
     previewIndexing: () => previewIndexing,
     batchRunning: () => batchRunning,
     sourceSize: () => inspection?.size ?? 0,
-    state: () => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings }),
-    setState: (state) => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings } = state),
+    sourceIdentity: () => inspection?.path ?? "",
+    state: () => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings, featureKnowledge }),
+    setState: (state) => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings, featureKnowledge } = state),
     onEffects: (effects) => {
       if (effects.addHistory) addHistory(effects.addHistory);
       if (effects.refreshResume) void refreshResumeAvailability();
@@ -178,6 +180,7 @@
   let bytesRead = 0;
   let warnings = 0;
   let captions = 0;
+  let featureKnowledge: Record<string, FeatureKnowledge> = {};
   let selectedFormats = new Set<ExportFormat>(["ASS"]);
   let preservation: ExportPreservation = {
     position: true,
@@ -235,7 +238,7 @@
   let mediaTimeMs: MediaTimeMs | null = null;
   let previewDurationMs: MediaTimeMs | null = null;
   const runtimeSession = new TaskRuntimeSession({
-    setEventState: (state) => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings } = state),
+    setEventState: (state) => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings, featureKnowledge } = state),
     setMediaTime: (value) => (mediaTimeMs = value),
     setProjectTime: (value) => (projectCursorMs = value),
     setDuration: (value) => (previewDurationMs = value),
@@ -1034,6 +1037,7 @@
         formats={supportedFormats}
         {selectedFormats}
         {preservation}
+        featureKnowledge={inspection && selectedTracks.size ? featureKnowledge[`${inspection.path}::${[...selectedTracks][0]}`] ?? {} : {}}
         {error}
         {isExporting}
         {exportPending}

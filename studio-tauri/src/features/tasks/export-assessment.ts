@@ -2,7 +2,8 @@ import type { ExportFormat, ExportPreservation } from "../../backend";
 import { formatCapabilities, type CapabilityLevel } from "./format-capabilities";
 
 export type FeatureKnowledgeState = "unknown" | "present" | "absent";
-export type FeatureKnowledge = Partial<Record<keyof ExportPreservation, FeatureKnowledgeState>>;
+export type FeatureFact = { state: FeatureKnowledgeState; observedCount?: number; complete: boolean; details?: Record<string, unknown> };
+export type FeatureKnowledge = Partial<Record<keyof ExportPreservation, FeatureFact>>;
 export type AssessmentIssue = { code: string; feature: keyof ExportPreservation; severity: "warning" | "conflict"; parameters: Record<string, string> };
 export type FormatAssessment = { preserved: string[]; approximated: string[]; dropped: string[]; conditional: AssessmentIssue[]; conflicts: AssessmentIssue[]; warnings: AssessmentIssue[] };
 export type ExportAssessment = { formats: Partial<Record<ExportFormat, FormatAssessment>>; hasConflict: boolean };
@@ -16,10 +17,10 @@ export function assessExports(formats: Iterable<ExportFormat>, preservation: Exp
     for (const capability of formatCapabilities(format)) {
       const feature = featureMap[capability.feature];
       if (!feature || !preservation[feature]) {
-        if (feature && knowledge[feature] === "present") assessment.dropped.push(feature);
+        if (feature && knowledge[feature]?.state === "present") assessment.dropped.push(feature);
         continue;
       }
-      const state = knowledge[feature] ?? "unknown";
+      const state = knowledge[feature]?.state ?? "unknown";
       if (state === "absent") continue;
       if (capability.level === "preserved") { if (state === "present") assessment.preserved.push(feature); continue; }
       if (capability.level === "approximated") { if (state === "present") assessment.approximated.push(feature); continue; }
