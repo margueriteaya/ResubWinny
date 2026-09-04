@@ -145,6 +145,12 @@ impl CaptionFeatureSummary {
             *self.observed_counts.entry(feature.to_string()).or_default() += 1;
         }
     }
+
+    fn mark_count(&mut self, feature: &str, count: usize) {
+        if count > 0 {
+            *self.observed_counts.entry(feature.to_string()).or_default() += count as u64;
+        }
+    }
 }
 
 impl CaptionFeatureSummary {
@@ -182,6 +188,25 @@ impl CaptionFeatureSummary {
             self.drcs = true;
             self.mark("drcs", true);
         }
+        let gaiji_count = scene
+            .characters
+            .iter()
+            .filter(|character| b24_character_is_gaiji_source(character))
+            .count();
+        if gaiji_count > 0 {
+            self.gaiji = true;
+            self.mark_count("gaiji", gaiji_count);
+        }
+        let text = scene
+            .characters
+            .iter()
+            .map(|character| character.utf8.as_str())
+            .collect::<String>();
+        let accessibility_count = crate::caption_features::accessibility_ranges(&text).len();
+        if accessibility_count > 0 {
+            self.accessibility = true;
+            self.mark_count("accessibility", accessibility_count);
+        }
     }
 
     pub(crate) fn observe_ttml(&mut self, caption: &TtmlCaption) {
@@ -203,7 +228,23 @@ impl CaptionFeatureSummary {
             self.color = true;
             self.mark("color", true);
         }
+        let gaiji_count = crate::caption_features::gaiji_ranges(&caption.text).len();
+        if gaiji_count > 0 {
+            self.gaiji = true;
+            self.mark_count("gaiji", gaiji_count);
+        }
+        let accessibility_count =
+            crate::caption_features::accessibility_ranges(&caption.text).len();
+        if accessibility_count > 0 {
+            self.accessibility = true;
+            self.mark_count("accessibility", accessibility_count);
+        }
     }
+}
+
+pub(crate) fn b24_character_is_gaiji_source(character: &native_b24::CaptionCharacter) -> bool {
+    character.pua_codepoint != 0
+        && crate::arib_symbols::is_arib_additional_symbol_codepoint(character.pua_codepoint)
 }
 
 #[cfg(test)]
@@ -311,6 +352,56 @@ mod feature_tests {
 
         assert_eq!(features.state("ruby"), FeatureState::Present);
         assert_eq!(features.observed_counts["ruby"], 3);
+    }
+
+    #[test]
+    fn b24_gaiji_and_accessibility_use_shared_material_classifiers() {
+        let mut character = b24_character();
+        character.pua_codepoint = '➡' as u32;
+        character.utf8 = "♪".into();
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![native_b24::CaptionRegion {
+                x: 0,
+                y: 0,
+                width: 960,
+                height: 540,
+                is_ruby: false,
+                first_character: 0,
+                character_count: 1,
+            }],
+            characters: vec![character],
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert!(features.gaiji);
+        assert!(features.accessibility);
+        assert_eq!(features.observed_counts["gaiji"], 1);
+        assert_eq!(features.observed_counts["accessibility"], 1);
+    }
+
+    #[test]
+    fn ttml_gaiji_and_accessibility_are_source_text_facts() {
+        let caption = crate::parse_ttml_captions(
+            "<tt><body><p begin='0s' end='1s'>➡♪〜本文</p></body></tt>",
+            0,
+        )
+        .remove(0);
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_ttml(&caption);
+
+        assert!(features.gaiji);
+        assert!(features.accessibility);
+        assert_eq!(features.observed_counts["gaiji"], 1);
+        assert_eq!(features.observed_counts["accessibility"], 1);
     }
 }
 

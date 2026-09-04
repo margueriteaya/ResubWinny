@@ -1155,11 +1155,6 @@ fn b24_character_has_ass_text(
             .is_some_and(|text| keep_text(text, options))
 }
 
-pub(crate) fn b24_character_is_gaiji_source(character: &native_b24::CaptionCharacter) -> bool {
-    character.pua_codepoint != 0
-        && crate::arib_symbols::is_arib_additional_symbol_codepoint(character.pua_codepoint)
-}
-
 fn scale_ass_coordinate(value: i32, scale: f32) -> i32 {
     (value as f32 * scale).round() as i32
 }
