@@ -7,6 +7,7 @@ const CAPABILITIES: &str = include_str!("../../../shared/format_capabilities.jso
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ExportConflict {
+    pub(crate) issue_code: String,
     pub(crate) formats: Vec<String>,
     pub(crate) feature: String,
     pub(crate) logical_track: String,
@@ -58,12 +59,12 @@ fn unsupported_formats(options: &ConversionOptions, feature: &str) -> Vec<String
         .collect()
 }
 
-fn conflict(options: &ConversionOptions, feature: &str) -> io::Result<()> {
-    let formats = unsupported_formats(options, feature);
+fn export_conflict(formats: Vec<String>, feature: &str, issue_code: &str) -> io::Result<()> {
     if formats.is_empty() {
         return Ok(());
     }
     Err(io::Error::other(ExportConflict {
+        issue_code: issue_code.into(),
         formats,
         feature: feature.into(),
         logical_track: std::env::var("RESUBWINNY_LOGICAL_TRACK")
@@ -76,13 +77,50 @@ fn conflict(options: &ConversionOptions, feature: &str) -> io::Result<()> {
     }))
 }
 
+fn conflict(options: &ConversionOptions, feature: &str) -> io::Result<()> {
+    let formats = unsupported_formats(options, feature);
+    export_conflict(formats, feature, "format_cannot_preserve_feature")
+}
+
 pub(crate) fn assess_b24_scene(
     options: &ConversionOptions,
     scene: &native_b24::CaptionScene,
 ) -> io::Result<()> {
     let mut facts = CaptionFeatureSummary::default();
     facts.observe_b24_scene(scene);
-    assess_facts(options, &facts)
+    assess_facts(options, &facts)?;
+    if options.preserve_drcs {
+        let unresolved = scene.regions.iter().any(|region| {
+            let start = region.first_character as usize;
+            let end = start.saturating_add(region.character_count as usize);
+            scene.characters.get(start..end).is_some_and(|characters| {
+                characters.iter().any(|character| {
+                    character.kind == 1
+                        && character.drcs_code != 0
+                        && character.utf8.is_empty()
+                        && (options.drcs_mode != crate::DrcsMode::UseUserMapping
+                            || options
+                                .drcs_replacements
+                                .get(&character.drcs_code)
+                                .is_none_or(String::is_empty))
+                        && scene
+                            .drcs_glyphs
+                            .iter()
+                            .find(|glyph| glyph.drcs_code == character.drcs_code)
+                            .is_none_or(|glyph| glyph.alternative_text.is_empty())
+                })
+            })
+        });
+        if unresolved {
+            let formats = selected_formats(options)
+                .into_iter()
+                .filter(|format| matches!(*format, "SRT" | "WebVTT"))
+                .map(str::to_owned)
+                .collect();
+            export_conflict(formats, "drcs", "unresolved_drcs_text_target")?;
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn assess_ttml_caption(
@@ -111,6 +149,46 @@ fn assess_facts(options: &ConversionOptions, facts: &CaptionFeatureSummary) -> i
 mod tests {
     use super::*;
 
+    fn unresolved_drcs_scene() -> native_b24::CaptionScene {
+        native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![native_b24::CaptionRegion {
+                x: 0,
+                y: 0,
+                width: 960,
+                height: 540,
+                is_ruby: false,
+                first_character: 0,
+                character_count: 1,
+            }],
+            characters: vec![native_b24::CaptionCharacter {
+                kind: 1,
+                codepoint: 0,
+                pua_codepoint: 0,
+                drcs_code: 7,
+                x: 0,
+                y: 0,
+                width: 36,
+                height: 36,
+                horizontal_spacing: 0,
+                vertical_spacing: 0,
+                horizontal_scale: 1.0,
+                vertical_scale: 1.0,
+                text_color: 0xffff_ffff,
+                back_color: 0,
+                stroke_color: 0,
+                style: 0,
+                enclosure_style: 0,
+                utf8: String::new(),
+            }],
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        }
+    }
+
     #[test]
     fn srt_ruby_is_a_conflict_but_ass_approximation_is_not() {
         let facts = CaptionFeatureSummary {
@@ -135,5 +213,37 @@ mod tests {
             ..Default::default()
         };
         assert!(assess_facts(&options, &facts).is_ok());
+    }
+
+    #[test]
+    fn unresolved_drcs_conflicts_only_with_selected_text_targets() {
+        let scene = unresolved_drcs_scene();
+        let mut options = ConversionOptions::default();
+        assert!(assess_b24_scene(&options, &scene).is_ok());
+
+        options.srt = true;
+        let error = assess_b24_scene(&options, &scene).unwrap_err();
+        let conflict = error
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<ExportConflict>())
+            .unwrap();
+        assert_eq!(conflict.issue_code, "unresolved_drcs_text_target");
+        assert_eq!(conflict.formats, ["SRT"]);
+    }
+
+    #[test]
+    fn mapped_or_disabled_drcs_is_not_a_text_target_conflict() {
+        let scene = unresolved_drcs_scene();
+        let mut options = ConversionOptions {
+            srt: true,
+            preserve_drcs: false,
+            ..Default::default()
+        };
+        assert!(assess_b24_scene(&options, &scene).is_ok());
+
+        options.preserve_drcs = true;
+        options.drcs_mode = crate::DrcsMode::UseUserMapping;
+        options.drcs_replacements.insert(7, "字".into());
+        assert!(assess_b24_scene(&options, &scene).is_ok());
     }
 }
