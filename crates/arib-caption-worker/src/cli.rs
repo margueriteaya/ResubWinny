@@ -28,19 +28,19 @@ fn emit_feature_events(
             emit_json(&serde_json::json!({
                 "type": "feature_observed",
                 "feature": feature,
-                "observedCount": 1,
+                "observedCount": summary.features.observed_counts.get(feature).copied().unwrap_or(1),
                 "complete": false
             }));
         }
     }
     *seen = summary.features.clone();
     if complete {
-        for (feature, present) in features {
+        for (feature, _) in features {
             emit_json(&serde_json::json!({
                 "type": "feature_summary",
                 "feature": feature,
-                "state": if present { "present" } else { "absent" },
-                "observedCount": if present { 1 } else { 0 },
+                "state": summary.features.state(feature),
+                "observedCount": summary.features.observed_counts.get(feature).copied().unwrap_or(0),
                 "complete": true
             }));
         }

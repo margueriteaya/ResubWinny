@@ -105,6 +105,51 @@ pub struct CaptionFeatureSummary {
     pub color: bool,
     pub gaiji: bool,
     pub accessibility: bool,
+    #[serde(default)]
+    pub observed_counts: std::collections::BTreeMap<String, u64>,
+    #[serde(default)]
+    pub complete: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeatureState {
+    Unknown,
+    Present,
+    Absent,
+}
+
+impl Default for FeatureState {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+impl CaptionFeatureSummary {
+    pub fn state(&self, feature: &str) -> FeatureState {
+        let present = match feature {
+            "ruby" => self.ruby,
+            "drcs" => self.drcs,
+            "position" => self.position,
+            "color" => self.color,
+            "gaiji" => self.gaiji,
+            "accessibility" => self.accessibility,
+            _ => false,
+        };
+        if present {
+            FeatureState::Present
+        } else if self.complete {
+            FeatureState::Absent
+        } else {
+            FeatureState::Unknown
+        }
+    }
+
+    fn mark(&mut self, feature: &str, present: bool) {
+        if present {
+            *self.observed_counts.entry(feature.to_string()).or_default() += 1;
+        }
+    }
 }
 
 impl CaptionFeatureSummary {
@@ -118,6 +163,7 @@ impl CaptionFeatureSummary {
             })
         {
             self.position = true;
+            self.mark("position", true);
         }
         if scene.characters.iter().any(|character| {
             character.text_color & 0x00ff_ffff != 0x00ff_ffff
@@ -125,9 +171,11 @@ impl CaptionFeatureSummary {
                 || character.stroke_color & 0x00ff_ffff != 0
         }) {
             self.color = true;
+            self.mark("color", true);
         }
         if scene.regions.iter().any(|region| region.is_ruby) {
             self.ruby = true;
+            self.mark("ruby", true);
         }
         if scene.regions.iter().any(|region| {
             let start = region.first_character as usize;
@@ -137,12 +185,14 @@ impl CaptionFeatureSummary {
             })
         }) {
             self.drcs = true;
+            self.mark("drcs", true);
         }
     }
 
     pub(crate) fn observe_ttml(&mut self, caption: &TtmlCaption) {
         if !caption.ruby_bindings.is_empty() {
             self.ruby = true;
+            self.mark("ruby", true);
         }
         if caption.x != 0
             || caption.y != 0
@@ -152,9 +202,11 @@ impl CaptionFeatureSummary {
             || caption.style.direction.is_some()
         {
             self.position = true;
+            self.mark("position", true);
         }
         if caption.style.color.is_some() || caption.style.background_color.is_some() {
             self.color = true;
+            self.mark("color", true);
         }
     }
 }
@@ -247,6 +299,21 @@ mod feature_tests {
         assert!(!features.drcs);
         assert!(!features.position);
         assert!(!features.color);
+        assert_eq!(features.state("ruby"), FeatureState::Unknown);
+        features.complete = true;
+        assert_eq!(features.state("ruby"), FeatureState::Absent);
+    }
+
+    #[test]
+    fn present_feature_does_not_regress_when_stream_completes() {
+        let mut features = CaptionFeatureSummary::default();
+        features.ruby = true;
+        features.observed_counts.insert("ruby".into(), 3);
+
+        features.complete = true;
+
+        assert_eq!(features.state("ruby"), FeatureState::Present);
+        assert_eq!(features.observed_counts["ruby"], 3);
     }
 }
 

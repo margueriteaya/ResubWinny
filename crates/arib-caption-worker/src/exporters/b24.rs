@@ -135,7 +135,10 @@ where
             Ok(())
         },
     ) {
-        Ok(summary) => summary,
+        Ok(mut summary) => {
+            summary.features.complete = true;
+            summary
+        }
         Err(error) => {
             let _ = fs::remove_file(&temporary);
             if let Some(path) = &archive_temporary {
