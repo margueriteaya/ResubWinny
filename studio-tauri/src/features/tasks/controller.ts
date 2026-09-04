@@ -16,6 +16,7 @@ export type TaskExportPlan = {
   formats: ExportFormat[];
   preservation: ExportPreservation;
   trackId?: number;
+  logicalTrack?: string;
 };
 
 export type SourceTaskSetup = {
@@ -52,6 +53,7 @@ export function createExportPlan(
     formats: [...formats],
     preservation,
     trackId: taskTrackId(selectedTrack),
+    logicalTrack: selectedTrack?.logicalTrack,
   };
 }
 
@@ -94,6 +96,7 @@ export async function startTaskExport(
     archive: false,
     raw: false,
     trackId: plan.trackId,
+    logicalTrack: plan.logicalTrack,
     drcsReport: false,
     drcsMappings,
     formats: plan.formats,

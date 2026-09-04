@@ -28,6 +28,7 @@ fn start_job_impl(app: AppHandle, state: &Arc<AppState>, job_id: &str) -> Result
         record.drcs_report,
         Some(record.drcs_mappings),
         record.track_id,
+        record.logical_track,
         Some(job_id.to_owned()),
         Some(record.export_selection),
     )?;

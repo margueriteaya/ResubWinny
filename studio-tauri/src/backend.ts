@@ -6,7 +6,7 @@ import { previewApi } from './backend/preview'
 import { settingsApi } from './backend/settings'
 import { timelineApi } from './backend/timeline'
 
-export type Track = { label: string; detail: string; pid?: string; kind?: string; ordinal?: number; serviceId?: number; language?: string; serviceName?: string }
+export type Track = { label: string; detail: string; pid?: string; kind?: string; ordinal?: number; serviceId?: number; language?: string; serviceName?: string; logicalTrack: string }
 export type BroadcastMetadata = { networkName?: string | null; programmeName?: string | null; programmeDescription?: string | null; broadcastTimeUtc?: string | null }
 export type PreviewPlaybackState = { timeSeconds: number | null; durationSeconds: number | null; paused: boolean | null }
 export type Inspection = { path: string; name: string; size: number; container: string; packetSize?: number; routeCode?: string; route?: string; service: string; tracks: Track[]; broadcast: BroadcastMetadata }

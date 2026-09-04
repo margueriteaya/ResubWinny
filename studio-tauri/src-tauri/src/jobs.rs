@@ -58,6 +58,8 @@ pub struct JobRecord {
     #[serde(default)]
     pub track_id: Option<u16>,
     #[serde(default)]
+    pub logical_track: Option<String>,
+    #[serde(default)]
     pub drcs_report: bool,
     #[serde(default)]
     pub drcs_mappings: Vec<DrcsMappingInput>,

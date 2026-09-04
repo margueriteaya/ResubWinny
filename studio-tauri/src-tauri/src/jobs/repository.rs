@@ -651,6 +651,7 @@ pub fn create_job(
     archive: bool,
     raw: bool,
     track_id: Option<u16>,
+    logical_track: Option<String>,
     drcs_report: bool,
     drcs_mappings: Vec<DrcsMappingInput>,
     formats: Option<Vec<String>>,
@@ -669,6 +670,7 @@ pub fn create_job(
         archive,
         raw,
         track_id,
+        logical_track,
         drcs_report,
         drcs_mappings,
         export_selection: ExportSelection {

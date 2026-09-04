@@ -7,6 +7,8 @@ fn emit_feature_events(
     seen: &mut CaptionFeatureSummary,
     complete: bool,
 ) {
+    let logical_track = std::env::var("RESUBWINNY_LOGICAL_TRACK")
+        .unwrap_or_else(|_| "logical-track:default".into());
     let features = [
         ("ruby", summary.features.ruby),
         ("drcs", summary.features.drcs),
@@ -28,6 +30,7 @@ fn emit_feature_events(
             emit_json(&serde_json::json!({
                 "type": "feature_observed",
                 "feature": feature,
+                "logicalTrack": logical_track,
                 "observedCount": summary.features.observed_counts.get(feature).copied().unwrap_or(1),
                 "complete": false
             }));
@@ -39,6 +42,7 @@ fn emit_feature_events(
             emit_json(&serde_json::json!({
                 "type": "feature_summary",
                 "feature": feature,
+                "logicalTrack": logical_track,
                 "state": summary.features.state(feature),
                 "observedCount": summary.features.observed_counts.get(feature).copied().unwrap_or(0),
                 "complete": true

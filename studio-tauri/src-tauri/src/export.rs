@@ -38,6 +38,7 @@ pub fn start_export_impl(
     drcs_report: bool,
     drcs_mappings: Option<Vec<DrcsMappingInput>>,
     track_id: Option<u16>,
+    logical_track: Option<String>,
     job_id: Option<String>,
     export_selection: Option<ExportSelection>,
 ) -> Result<(), String> {
@@ -70,6 +71,9 @@ pub fn start_export_impl(
         .stderr(Stdio::piped());
     if let Some(track_id) = track_id {
         command.arg("--track-id").arg(format!("0x{track_id:04X}"));
+    }
+    if let Some(logical_track) = logical_track.as_deref() {
+        command.env("RESUBWINNY_LOGICAL_TRACK", logical_track);
     }
     if let Some(job_id) = job_id.as_deref().filter(|value| !value.is_empty()) {
         command.env("RESUBWINNY_JOB_ID", job_id);
@@ -616,6 +620,7 @@ pub fn start_export(
         drcs_report,
         drcs_mappings,
         track_id,
+        None,
         job_id,
         formats.map(|formats| ExportSelection {
             formats,
@@ -665,6 +670,7 @@ pub fn start_preview_index(
         false,
         None,
         track_id,
+        None,
         None,
         Some(ExportSelection {
             formats: vec!["JSON".into()],

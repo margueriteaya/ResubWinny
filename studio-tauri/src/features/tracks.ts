@@ -2,7 +2,7 @@ import type { Track } from "../backend";
 import { t } from "../i18n";
 
 export const trackKey = (track: Track) =>
-  `${track.kind ?? "unknown"}:${track.pid ?? `${track.label}:${track.detail}`}`;
+  track.logicalTrack;
 
 export function trackDisplayLabel(track: Track) {
   const ordinal = String(track.ordinal ?? 1);

@@ -179,6 +179,7 @@ pub struct Track {
     pub service_id: Option<u16>,
     pub language: Option<String>,
     pub service_name: Option<String>,
+    pub logical_track: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -581,9 +582,11 @@ pub struct WorkerB24Track {
     pub language: Option<String>,
     #[serde(default)]
     pub service_name: Option<String>,
+    pub component_tag: u8,
 }
 #[derive(Deserialize)]
 pub struct WorkerDataTracks {
+    pub pmt_pid: u16,
     pub pids: Vec<u16>,
     #[serde(default)]
     pub caption_pids: Vec<u16>,

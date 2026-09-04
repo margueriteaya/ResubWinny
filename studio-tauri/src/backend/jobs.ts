@@ -1,7 +1,7 @@
 import type { ArtifactRecord, CheckpointRecord, DiagnosticRecord, DrcsMapping, ExportFormat, ExportPreservation, JobRecord } from '../backend'
 import { call } from './client'
 
-type JobRequest = { source: string; output: string; archive: boolean; raw: boolean; trackId?: number; drcsReport: boolean; drcsMappings: DrcsMapping[]; formats?: ExportFormat[]; preservation?: ExportPreservation }
+type JobRequest = { source: string; output: string; archive: boolean; raw: boolean; trackId?: number; logicalTrack?: string; drcsReport: boolean; drcsMappings: DrcsMapping[]; formats?: ExportFormat[]; preservation?: ExportPreservation }
 
 export const jobsApi = {
   defaultOutputPath: (source: string, outputDirectory?: string) => call<string>('default_output_path', { source, outputDirectory }),
