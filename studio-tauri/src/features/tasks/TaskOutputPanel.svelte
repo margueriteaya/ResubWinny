@@ -3,7 +3,7 @@
   import type { ExportFormat, ExportPreservation, Inspection } from "../../backend";
   import MacCheckbox from "../../components/MacCheckbox.svelte";
   import { formatMessage, t } from "../../i18n";
-  import { assessExports, type FeatureKnowledge } from "./export-assessment";
+  import { assessExports, type FeatureKnowledge, type RuntimeExportConflicts } from "./export-assessment";
   import { featureCountSummary } from "./event-state";
 
   type Format = { name: ExportFormat; description: string; icon?: any; color?: string };
@@ -13,6 +13,7 @@
   export let selectedFormats = new Set<ExportFormat>(["ASS"]);
   export let preservation: ExportPreservation;
   export let featureKnowledge: FeatureKnowledge = {};
+  export let runtimeConflicts: RuntimeExportConflicts = {};
   export let error = "";
   export let isExporting = false;
   export let exportPending = false;
@@ -28,7 +29,7 @@
   const features: Feature[] = ["position", "color", "ruby", "gaiji", "drcs", "accessibility"];
   const lossyFormats = new Set<ExportFormat>(["SRT", "WebVTT"]);
   $: limitations = [...selectedFormats].filter((format) => lossyFormats.has(format));
-  $: assessment = assessExports(selectedFormats, preservation, featureKnowledge);
+  $: assessment = assessExports(selectedFormats, preservation, featureKnowledge, runtimeConflicts);
   $: assessmentRows = [...selectedFormats].map((format) => ({ format, result: assessment.formats[format] })).filter((item) => item.result);
   $: observedFeatures = features.map((feature) => ({ feature, summary: featureCountSummary(featureKnowledge[feature]) })).filter((item) => item.summary);
 

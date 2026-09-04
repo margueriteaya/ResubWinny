@@ -8,7 +8,7 @@
   import { SourceSession } from "./features/tasks/source-session";
   import { ExportSession } from "./features/tasks/export-session";
   import { TaskEventSession } from "./features/tasks/event-session";
-  import type { FeatureKnowledge } from "./features/tasks/export-assessment";
+  import type { FeatureKnowledge, RuntimeExportConflicts } from "./features/tasks/export-assessment";
   import {
     mediaTimeMs as asMediaTimeMs,
     mediaToProjectTime,
@@ -97,6 +97,7 @@
   const exportSession = new ExportSession({
     beginExport: () => {
       isExporting = true;
+      exportConflicts = {};
       previewIndexing = false;
       isPaused = false;
       bytesRead = 0;
@@ -161,8 +162,8 @@
     batchRunning: () => batchRunning,
     sourceSize: () => inspection?.size ?? 0,
     sourceIdentity: () => inspection?.path ?? "",
-    state: () => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings, featureKnowledge }),
-    setState: (state) => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings, featureKnowledge } = state),
+    state: () => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings, featureKnowledge, exportConflicts }),
+    setState: (state) => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings, featureKnowledge, exportConflicts } = state),
     onEffects: (effects) => {
       if (effects.addHistory) addHistory(effects.addHistory);
       if (effects.refreshResume) void refreshResumeAvailability();
@@ -181,6 +182,7 @@
   let warnings = 0;
   let captions = 0;
   let featureKnowledge: Record<string, FeatureKnowledge> = {};
+  let exportConflicts: Record<string, RuntimeExportConflicts> = {};
   let selectedFormats = new Set<ExportFormat>(["ASS"]);
   let preservation: ExportPreservation = {
     position: true,
@@ -238,7 +240,7 @@
   let mediaTimeMs: MediaTimeMs | null = null;
   let previewDurationMs: MediaTimeMs | null = null;
   const runtimeSession = new TaskRuntimeSession({
-    setEventState: (state) => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings, featureKnowledge } = state),
+    setEventState: (state) => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings, featureKnowledge, exportConflicts } = state),
     setMediaTime: (value) => (mediaTimeMs = value),
     setProjectTime: (value) => (projectCursorMs = value),
     setDuration: (value) => (previewDurationMs = value),
@@ -1060,6 +1062,7 @@
         {selectedFormats}
         {preservation}
         featureKnowledge={inspection && selectedTracks.size ? featureKnowledge[`${inspection.path}::${[...selectedTracks][0]}`] ?? {} : {}}
+        runtimeConflicts={inspection && selectedTracks.size ? exportConflicts[`${inspection.path}::${[...selectedTracks][0]}`] ?? {} : {}}
         {error}
         {isExporting}
         {exportPending}

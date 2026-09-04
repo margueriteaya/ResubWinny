@@ -228,6 +228,16 @@ impl CaptionFeatureSummary {
             self.color = true;
             self.mark("color", true);
         }
+        if caption
+            .style
+            .font_resource
+            .as_deref()
+            .and_then(subt_resource_index)
+            .is_some()
+        {
+            self.drcs = true;
+            self.mark("drcs", true);
+        }
         let gaiji_count = crate::caption_features::gaiji_ranges(&caption.text).len();
         if gaiji_count > 0 {
             self.gaiji = true;
@@ -402,6 +412,24 @@ mod feature_tests {
         assert!(features.accessibility);
         assert_eq!(features.observed_counts["gaiji"], 1);
         assert_eq!(features.observed_counts["accessibility"], 1);
+    }
+
+    #[test]
+    fn ttml_drcs_requires_a_caption_font_resource_reference() {
+        let mut referenced = crate::parse_ttml_captions(
+            r#"<tt><body><p begin='0s' end='1s' arib-tt:font-face='subt://9'>字</p></body></tt>"#,
+            0,
+        )
+        .remove(0);
+        let mut features = CaptionFeatureSummary::default();
+        features.observe_ttml(&referenced);
+        assert!(features.drcs);
+        assert_eq!(features.observed_counts["drcs"], 1);
+
+        referenced.style.font_resource = None;
+        let mut without_reference = CaptionFeatureSummary::default();
+        without_reference.observe_ttml(&referenced);
+        assert!(!without_reference.drcs);
     }
 }
 

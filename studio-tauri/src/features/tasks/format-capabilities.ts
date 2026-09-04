@@ -1,5 +1,5 @@
 import type { ExportFormat } from "../../backend";
-import canonical from "../../../../shared/format_capabilities.json";
+import canonical from "../../../../shared/format_capabilities.json" with { type: "json" };
 
 export type CapabilityLevel = "preserved" | "approximated" | "unsupported" | "conditional";
 export type FormatCapability = { feature: string; level: CapabilityLevel; label: string };

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { emptyTaskEventState, featureCountSummary, reduceTaskEvent } from '../studio-tauri/src/features/tasks/event-state.ts'
+import { assessExports } from '../studio-tauri/src/features/tasks/export-assessment.ts'
+
+const preservation = { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true }
 
 const event = (kind, logicalTrack, feature, parameters = {}) => ({
   kind,
@@ -45,4 +48,45 @@ test('count summaries distinguish observations from final totals', () => {
   assert.deepEqual(featureCountSummary({ state: 'present', observedCount: 3, complete: false }), { count: 3, final: false })
   assert.deepEqual(featureCountSummary({ state: 'present', observedCount: 7, complete: true }), { count: 7, final: true })
   assert.equal(featureCountSummary({ state: 'unknown', observedCount: 3, complete: false }), null)
+})
+
+test('runtime export conflicts do not contaminate source feature details', () => {
+  const state = reduce(emptyTaskEventState(), {
+    kind: 'failed',
+    code: 'export_conflict',
+    message: 'fallback text must not drive semantics',
+    parameters: {
+      logicalTrack: 'logical-track',
+      feature: 'drcs',
+      formats: ['SRT'],
+      issueCode: 'unresolved_drcs_text_target',
+      availableActions: ['open_drcs_mapping'],
+    },
+  })
+  const key = 'recording.ts::logical-track'
+  assert.deepEqual(state.featureKnowledge[key].drcs.details, {})
+  assert.deepEqual(state.exportConflicts[key].drcs, {
+    formats: ['SRT'],
+    issueCode: 'unresolved_drcs_text_target',
+    availableActions: ['open_drcs_mapping'],
+  })
+})
+
+test('conditional DRCS converges to approximation or a format-specific runtime conflict', () => {
+  const knowledge = { drcs: { state: 'present', observedCount: 1, complete: false } }
+  const allowed = assessExports(['ASS', 'SRT'], preservation, knowledge)
+  assert.deepEqual(allowed.formats.ASS.approximated, ['drcs'])
+  assert.deepEqual(allowed.formats.SRT.approximated, ['drcs'])
+  assert.equal(allowed.hasConflict, false)
+
+  const conflict = assessExports(['ASS', 'SRT'], preservation, knowledge, {
+    drcs: {
+      formats: ['SRT'],
+      issueCode: 'unresolved_drcs_text_target',
+      availableActions: ['open_drcs_mapping'],
+    },
+  })
+  assert.deepEqual(conflict.formats.ASS.approximated, ['drcs'])
+  assert.equal(conflict.formats.SRT.conflicts[0].code, 'unresolved_drcs_text_target')
+  assert.equal(conflict.hasConflict, true)
 })

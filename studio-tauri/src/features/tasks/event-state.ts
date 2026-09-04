@@ -1,5 +1,5 @@
 import type { TaskEvent } from "../../backend";
-import type { FeatureFact, FeatureKnowledge, FeatureKnowledgeState } from "./export-assessment";
+import type { FeatureFact, FeatureKnowledge, FeatureKnowledgeState, RuntimeExportConflicts } from "./export-assessment";
 
 export function featureCountSummary(fact: FeatureFact | undefined): { count: number; final: boolean } | null {
   if (fact?.state !== "present" || !fact.observedCount) return null;
@@ -18,6 +18,7 @@ export type TaskEventState = {
   progress: number;
   warnings: number;
   featureKnowledge: Record<string, FeatureKnowledge>;
+  exportConflicts: Record<string, RuntimeExportConflicts>;
 };
 
 export function emptyTaskEventState(): TaskEventState {
@@ -33,6 +34,7 @@ export function emptyTaskEventState(): TaskEventState {
     progress: 0,
     warnings: 0,
     featureKnowledge: {},
+    exportConflicts: {},
   };
 }
 
@@ -76,11 +78,6 @@ export function reduceTaskEvent(
       const incoming = (event.kind === "feature_observed" || event.code === "export_conflict" ? "present" : event.parameters?.state) as FeatureKnowledgeState;
       const nextState = previous?.state === "present" ? "present" : incoming;
       if (nextState === "present" || (nextState === "absent" && event.parameters?.complete === true)) {
-        const conflictDetails = event.code === "export_conflict" ? {
-          conflictFormats: event.parameters?.formats,
-          issueCode: event.parameters?.issueCode,
-          availableActions: event.parameters?.availableActions,
-        } : undefined;
         track[feature] = {
           state: nextState,
           observedCount: Number(event.parameters?.observedCount ?? previous?.observedCount ?? 0),
@@ -88,10 +85,18 @@ export function reduceTaskEvent(
           details: {
             ...previous?.details,
             ...(event.parameters?.details as Record<string, unknown> | undefined),
-            ...conflictDetails,
           },
         };
         state.featureKnowledge = { ...state.featureKnowledge, [key]: track };
+        if (event.code === "export_conflict") {
+          const conflicts = { ...(state.exportConflicts[key] ?? {}) };
+          conflicts[feature] = {
+            formats: Array.isArray(event.parameters?.formats) ? event.parameters.formats.map(String) as import("../../backend").ExportFormat[] : [],
+            issueCode: String(event.parameters?.issueCode ?? "format_cannot_preserve_feature"),
+            availableActions: Array.isArray(event.parameters?.availableActions) ? event.parameters.availableActions.map(String) : [],
+          };
+          state.exportConflicts = { ...state.exportConflicts, [key]: conflicts };
+        }
       }
     }
   }
