@@ -161,11 +161,13 @@ where
     };
     write_ass_header(&mut writer)?;
     let mut pending_ass = Vec::new();
+    let mut feature_summary = CaptionFeatureSummary::default();
     let scan = match packetisation {
         TtmlPesPacketisation::MpegTs188 => scan_mpeg_ts_ttml(
             path,
             &tracks,
             |caption| {
+                feature_summary.observe_ttml(&caption);
                 queue_ass_ttml_caption(
                     &mut writer,
                     &mut pending_ass,
@@ -189,6 +191,7 @@ where
             path,
             &tracks,
             |caption| {
+                feature_summary.observe_ttml(&caption);
                 queue_ass_ttml_caption(
                     &mut writer,
                     &mut pending_ass,
@@ -210,7 +213,10 @@ where
         ),
     };
     let summary = match scan {
-        Ok(summary) => summary,
+        Ok(mut summary) => {
+            summary.features = feature_summary.clone();
+            summary
+        }
         Err(error) => {
             let _ = fs::remove_file(&temporary);
             if let Some(path) = &archive_temporary {
@@ -339,9 +345,11 @@ where
     let mut archived_assets = Vec::new();
     write_ass_header(&mut writer)?;
     let mut pending_ass = Vec::new();
+    let mut feature_summary = CaptionFeatureSummary::default();
     let summary = match scan_tlv_ttml(
         path,
         |caption| {
+            feature_summary.observe_ttml(&caption);
             let mut archive = archive_writer.borrow_mut();
             if let Some(archive_writer) = &mut *archive {
                 for resource in ttml_resource_references(&caption) {
@@ -397,7 +405,10 @@ where
             Ok(())
         },
     ) {
-        Ok(summary) => summary,
+        Ok(mut summary) => {
+            summary.features = feature_summary.clone();
+            summary
+        }
         Err(error) => {
             let _ = fs::remove_file(&temporary);
             if let Some(path) = &archive_temporary {

@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use crate::caption::ruby::TtmlRubyBinding;
+use crate::native_b24;
 
 use crate::resource::TtmlResourceMetadata;
 
@@ -104,6 +105,149 @@ pub struct CaptionFeatureSummary {
     pub color: bool,
     pub gaiji: bool,
     pub accessibility: bool,
+}
+
+impl CaptionFeatureSummary {
+    pub(crate) fn observe_b24_scene(&mut self, scene: &native_b24::CaptionScene) {
+        if scene.regions.len() > 1
+            || scene.regions.iter().any(|region| {
+                region.x != 0
+                    || region.y != 0
+                    || region.width != scene.plane_width
+                    || region.height != scene.plane_height
+            })
+        {
+            self.position = true;
+        }
+        if scene.characters.iter().any(|character| {
+            character.text_color & 0x00ff_ffff != 0x00ff_ffff
+                || character.back_color & 0x00ff_ffff != 0
+                || character.stroke_color & 0x00ff_ffff != 0
+        }) {
+            self.color = true;
+        }
+        if scene.regions.iter().any(|region| region.is_ruby) {
+            self.ruby = true;
+        }
+        if scene.regions.iter().any(|region| {
+            let start = region.first_character as usize;
+            let end = start.saturating_add(region.character_count as usize);
+            scene.characters.get(start..end).is_some_and(|characters| {
+                characters.iter().any(|character| character.drcs_code != 0)
+            })
+        }) {
+            self.drcs = true;
+        }
+    }
+
+    pub(crate) fn observe_ttml(&mut self, caption: &TtmlCaption) {
+        if !caption.ruby_bindings.is_empty() {
+            self.ruby = true;
+        }
+        if caption.x != 0
+            || caption.y != 0
+            || caption.width.is_some()
+            || caption.height.is_some()
+            || caption.style.writing_mode.is_some()
+            || caption.style.direction.is_some()
+        {
+            self.position = true;
+        }
+        if caption.style.color.is_some() || caption.style.background_color.is_some() {
+            self.color = true;
+        }
+    }
+}
+
+#[cfg(test)]
+mod feature_tests {
+    use super::*;
+
+    fn b24_character() -> native_b24::CaptionCharacter {
+        native_b24::CaptionCharacter {
+            kind: 0,
+            codepoint: '字' as u32,
+            pua_codepoint: 0,
+            drcs_code: 0,
+            x: 0,
+            y: 0,
+            width: 36,
+            height: 36,
+            horizontal_spacing: 0,
+            vertical_spacing: 0,
+            horizontal_scale: 1.0,
+            vertical_scale: 1.0,
+            text_color: 0xffff_ffff,
+            back_color: 0,
+            stroke_color: 0,
+            style: 0,
+            enclosure_style: 0,
+            utf8: "字".into(),
+        }
+    }
+
+    #[test]
+    fn b24_material_features_are_observed_from_used_caption_content() {
+        let mut character = b24_character();
+        character.drcs_code = 7;
+        character.text_color = 0xff00_ff00;
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![native_b24::CaptionRegion {
+                x: 100,
+                y: 200,
+                width: 36,
+                height: 36,
+                is_ruby: true,
+                first_character: 0,
+                character_count: 1,
+            }],
+            characters: vec![character],
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert!(features.ruby);
+        assert!(features.drcs);
+        assert!(features.position);
+        assert!(features.color);
+    }
+
+    #[test]
+    fn default_b24_presentation_is_not_a_material_feature() {
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![native_b24::CaptionRegion {
+                x: 0,
+                y: 0,
+                width: 960,
+                height: 540,
+                is_ruby: false,
+                first_character: 0,
+                character_count: 1,
+            }],
+            characters: vec![b24_character()],
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert!(!features.ruby);
+        assert!(!features.drcs);
+        assert!(!features.position);
+        assert!(!features.color);
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
