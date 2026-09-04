@@ -38,13 +38,7 @@
   export let preservation: ExportPreservation;
   export let onToggleFormat: (format: ExportFormat) => void = () => {};
   export let onTogglePreservation: (feature: keyof ExportPreservation) => void = () => {};
-  const preservationKeys: (keyof ExportPreservation)[] = ["position", "color", "ruby", "drcs"];
-
-  function toggleAccessibilityAndGaiji() {
-    const enabled = preservation.gaiji && preservation.accessibility;
-    if (preservation.gaiji === enabled) onTogglePreservation("gaiji");
-    if (preservation.accessibility === enabled) onTogglePreservation("accessibility");
-  }
+  const preservationKeys: (keyof ExportPreservation)[] = ["position", "color", "ruby", "gaiji", "drcs", "accessibility"];
 
   const bytes = (value: number) =>
     value
@@ -216,7 +210,6 @@
         <h2>{t("workspace.preserveFeatures")}</h2>
         <div class="batch-preserve-list">
           {#each preservationKeys as feature}<MacCheckbox checked={preservation[feature]} label={t(`feature.${feature}`)} onChange={() => onTogglePreservation(feature)} />{/each}
-          <MacCheckbox checked={preservation.gaiji && preservation.accessibility} label={t("feature.accessibilityAndGaiji")} onChange={toggleAccessibilityAndGaiji} />
         </div>
       </section>
       <section>

@@ -24,17 +24,11 @@
   export let canResume = false;
   export let resumeBusy = false;
   export let onResume: () => void = () => {};
-  const features: Feature[] = ["position", "color", "ruby", "drcs"];
+  const features: Feature[] = ["position", "color", "ruby", "gaiji", "drcs", "accessibility"];
   const lossyFormats = new Set<ExportFormat>(["SRT", "WebVTT"]);
   $: limitations = [...selectedFormats].filter((format) => lossyFormats.has(format));
   $: assessment = assessExports(selectedFormats, preservation, featureKnowledge);
   $: assessmentRows = [...selectedFormats].map((format) => ({ format, result: assessment.formats[format] })).filter((item) => item.result);
-
-  function toggleAccessibilityAndGaiji() {
-    const enabled = preservation.gaiji && preservation.accessibility;
-    if (preservation.gaiji === enabled) onTogglePreservation("gaiji");
-    if (preservation.accessibility === enabled) onTogglePreservation("accessibility");
-  }
 
   function chooseAss(format: ExportFormat) {
     if (!selectedFormats.has("ASS")) onToggleFormat("ASS");
@@ -73,7 +67,6 @@
           {#each features as feature}
             <MacCheckbox checked={preservation[feature]} label={t(`feature.${feature}`)} onChange={() => onTogglePreservation(feature)} />
           {/each}
-          <MacCheckbox checked={preservation.gaiji && preservation.accessibility} label={t("feature.accessibilityAndGaiji")} onChange={toggleAccessibilityAndGaiji} />
         </div>
         <p>{t("workspace.preserveHint")}</p>
       </fieldset>
