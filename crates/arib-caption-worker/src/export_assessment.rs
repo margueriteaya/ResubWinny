@@ -194,6 +194,30 @@ mod tests {
     }
 
     #[test]
+    fn webvtt_position_requires_an_explicit_drop_with_the_current_text_exporter() {
+        let facts = CaptionFeatureSummary {
+            position: true,
+            ..Default::default()
+        };
+        let mut options = ConversionOptions {
+            webvtt: true,
+            ..Default::default()
+        };
+        let error = assess_facts(&options, &facts).unwrap_err();
+        let conflict = error
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<ExportConflict>()
+            .unwrap();
+        assert_eq!(conflict.formats, ["WebVTT"]);
+        assert_eq!(conflict.feature, "position");
+        options.preserve_position = false;
+        assert!(assess_facts(&options, &facts).is_ok());
+        options.preserve_position = true;
+        assert!(assess_facts(&options, &CaptionFeatureSummary::default()).is_ok());
+    }
+
+    #[test]
     fn srt_ruby_is_a_conflict_but_ass_approximation_is_not() {
         let facts = CaptionFeatureSummary {
             ruby: true,

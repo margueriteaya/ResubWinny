@@ -10,7 +10,7 @@ test('assessment entries preserve the source-state and user-intent truth table f
     ASS: ['preserved', 'preserved', 'approximated', 'conditional', 'preserved', 'preserved'],
     TTML: ['preserved', 'preserved', 'preserved', 'conditional', 'approximated', 'preserved'],
     SRT: ['unsupported', 'unsupported', 'unsupported', 'conditional', 'approximated', 'preserved'],
-    WebVTT: ['approximated', 'unsupported', 'unsupported', 'conditional', 'approximated', 'preserved'],
+    WebVTT: ['unsupported', 'unsupported', 'unsupported', 'conditional', 'approximated', 'preserved'],
     JSON: Array(6).fill('preserved'),
     'Raw Data': Array(6).fill('preserved'),
   }
