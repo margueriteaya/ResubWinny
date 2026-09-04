@@ -92,6 +92,18 @@ pub struct B24DecodeSummary {
     pub characters: u64,
     pub drcs_glyphs: u64,
     pub decoder_errors: u64,
+    #[serde(default)]
+    pub features: CaptionFeatureSummary,
+}
+
+#[derive(Debug, Default, Serialize, Clone)]
+pub struct CaptionFeatureSummary {
+    pub ruby: bool,
+    pub drcs: bool,
+    pub position: bool,
+    pub color: bool,
+    pub gaiji: bool,
+    pub accessibility: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

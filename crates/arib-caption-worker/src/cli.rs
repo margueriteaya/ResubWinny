@@ -83,6 +83,13 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
         );
         std::process::exit(2);
     };
+    if command == "capabilities" {
+        emit_json(&serde_json::json!({
+            "type": "capabilities",
+            "capabilities": serde_json::from_str::<serde_json::Value>(include_str!("../../../shared/format_capabilities.json"))?
+        }));
+        return Ok(());
+    }
     if command != "inspect"
         && command != "broadcast-at"
         && command != "decode-b24"
