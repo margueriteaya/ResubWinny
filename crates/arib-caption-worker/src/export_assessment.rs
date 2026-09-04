@@ -63,17 +63,21 @@ fn export_conflict(formats: Vec<String>, feature: &str, issue_code: &str) -> io:
     if formats.is_empty() {
         return Ok(());
     }
+    let mut available_actions = vec![
+        format!("disable_preservation:{feature}"),
+        "remove_format".into(),
+        "choose_compatible_format".into(),
+    ];
+    if feature == "drcs" {
+        available_actions.insert(0, "open_drcs_mapping".into());
+    }
     Err(io::Error::other(ExportConflict {
         issue_code: issue_code.into(),
         formats,
         feature: feature.into(),
         logical_track: std::env::var("RESUBWINNY_LOGICAL_TRACK")
             .unwrap_or_else(|_| "logical-track:default".into()),
-        available_actions: vec![
-            format!("disable_preservation:{feature}"),
-            "remove_format".into(),
-            "choose_compatible_format".into(),
-        ],
+        available_actions,
     }))
 }
 
@@ -229,6 +233,7 @@ mod tests {
             .unwrap();
         assert_eq!(conflict.issue_code, "unresolved_drcs_text_target");
         assert_eq!(conflict.formats, ["SRT"]);
+        assert_eq!(conflict.available_actions[0], "open_drcs_mapping");
     }
 
     #[test]

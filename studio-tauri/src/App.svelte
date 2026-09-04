@@ -380,6 +380,27 @@
     preferencesSession.persist(appSettings);
   }
 
+  function persistOutputPreferences(nextFormats: Set<ExportFormat>, nextPreservation: ExportPreservation) {
+    const formats = [...nextFormats];
+    const next = {
+      ...appSettings,
+      defaultFormat: formats[0] ?? appSettings.defaultFormat,
+      exportPreferences: { formats, preservation: { ...nextPreservation } },
+    };
+    appSettings = next;
+    preferencesSession.persist(next);
+  }
+
+  function toggleOutputFormat(format: ExportFormat) {
+    selectedFormats = selectionSession.toggleFormat(selectedFormats, format);
+    persistOutputPreferences(selectedFormats, preservation);
+  }
+
+  function toggleOutputPreservation(feature: keyof ExportPreservation) {
+    preservation = selectionSession.togglePreservation(preservation, feature);
+    persistOutputPreferences(selectedFormats, preservation);
+  }
+
   function showOnboarding() {
     onboardingRequired = false;
     onboardingError = "";
@@ -1067,10 +1088,9 @@
         onDiagnosticsCount={(count: number) => (diagnosticsCount = count)}
         onError={(message: string) => (error = formatMessage("error.backend", { message }))}
         onStartExport={startExport}
-        onToggleFormat={(next: ExportFormat) => {
-          selectedFormats = selectionSession.toggleFormat(selectedFormats, next);
-        }}
-        onTogglePreservation={(feature: keyof ExportPreservation) => (preservation = selectionSession.togglePreservation(preservation, feature))}
+        onToggleFormat={toggleOutputFormat}
+        onTogglePreservation={toggleOutputPreservation}
+        onOpenDrcsMapping={() => selectView("drcs")}
         onResume={resumeCheckpoint}
       />
       {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
@@ -1091,10 +1111,8 @@
         formats={supportedFormats}
         {selectedFormats}
         {preservation}
-        onToggleFormat={(next: ExportFormat) => {
-          selectedFormats = selectionSession.toggleFormat(selectedFormats, next);
-        }}
-        onTogglePreservation={(feature: keyof ExportPreservation) => (preservation = selectionSession.togglePreservation(preservation, feature))}
+        onToggleFormat={toggleOutputFormat}
+        onTogglePreservation={toggleOutputPreservation}
       />
       {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
     {:else if page === "drcs"}
