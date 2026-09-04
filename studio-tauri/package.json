@@ -10,7 +10,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run verify:contract && svelte-check --tsconfig ./tsconfig.json && vite build",
+    "build": "npm run verify:contract && npm run test:domain && svelte-check --tsconfig ./tsconfig.json && vite build",
+    "test:domain": "node --experimental-strip-types --experimental-specifier-resolution=node --test ../scripts/feature-knowledge.test.mjs",
     "build:worker": "cargo build --manifest-path ../Cargo.toml -p arib-caption-worker --release --features libaribtlv",
     "build:bundle": "npm run build:worker && npm run build",
     "verify:contract": "node ../scripts/verify-frontend-contract.mjs",

@@ -1,5 +1,10 @@
 import type { TaskEvent } from "../../backend";
-import type { FeatureKnowledge, FeatureKnowledgeState } from "./export-assessment";
+import type { FeatureFact, FeatureKnowledge, FeatureKnowledgeState } from "./export-assessment";
+
+export function featureCountSummary(fact: FeatureFact | undefined): { count: number; final: boolean } | null {
+  if (fact?.state !== "present" || !fact.observedCount) return null;
+  return { count: fact.observedCount, final: fact.complete };
+}
 
 export type TaskEventState = {
   archivePath: string;
