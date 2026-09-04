@@ -7,8 +7,19 @@ fn emit_feature_events(
     seen: &mut CaptionFeatureSummary,
     complete: bool,
 ) {
+    for event in feature_events(summary, seen, complete) {
+        emit_json(&event);
+    }
+}
+
+fn feature_events(
+    summary: &B24DecodeSummary,
+    seen: &mut CaptionFeatureSummary,
+    complete: bool,
+) -> Vec<serde_json::Value> {
     let logical_track = std::env::var("RESUBWINNY_LOGICAL_TRACK")
         .unwrap_or_else(|_| "logical-track:default".into());
+    let mut events = Vec::new();
     let features = [
         ("ruby", summary.features.ruby),
         ("drcs", summary.features.drcs),
@@ -27,7 +38,7 @@ fn emit_feature_events(
             _ => seen.accessibility,
         };
         if present && !was_present {
-            emit_json(&serde_json::json!({
+            events.push(serde_json::json!({
                 "type": "feature_observed",
                 "feature": feature,
                 "logicalTrack": logical_track,
@@ -39,7 +50,7 @@ fn emit_feature_events(
     *seen = summary.features.clone();
     if complete {
         for (feature, _) in features {
-            emit_json(&serde_json::json!({
+            events.push(serde_json::json!({
                 "type": "feature_summary",
                 "feature": feature,
                 "logicalTrack": logical_track,
@@ -48,6 +59,40 @@ fn emit_feature_events(
                 "complete": true
             }));
         }
+    }
+    events
+}
+
+#[cfg(test)]
+mod feature_event_tests {
+    use super::*;
+
+    #[test]
+    fn feature_events_are_first_observation_and_eof_only() {
+        let summary = B24DecodeSummary {
+            features: CaptionFeatureSummary {
+                ruby: true,
+                observed_counts: [("ruby".into(), 3)].into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut seen = CaptionFeatureSummary::default();
+        let first = feature_events(&summary, &mut seen, false);
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0]["type"], "feature_observed");
+        assert_eq!(first[0]["feature"], "ruby");
+        assert_eq!(first[0]["observedCount"], 3);
+
+        assert!(feature_events(&summary, &mut seen, false).is_empty());
+
+        let final_events = feature_events(&summary, &mut seen, true);
+        assert_eq!(final_events.len(), 6);
+        assert!(final_events.iter().all(|event| event["type"] == "feature_summary"));
+        assert_eq!(
+            final_events.iter().filter(|event| event["feature"] == "ruby").count(),
+            1
+        );
     }
 }
 
