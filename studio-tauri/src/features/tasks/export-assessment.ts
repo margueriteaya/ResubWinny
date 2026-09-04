@@ -45,7 +45,9 @@ export function assessExports(formats: Iterable<ExportFormat>, preservation: Exp
         }
         continue;
       }
-      const issue: AssessmentIssue = { code: "format_cannot_preserve_feature", feature, severity: state === "present" ? "conflict" : "warning", parameters: { format, feature } };
+      const actions = [`disable_preservation:${feature}`, "remove_format"];
+      if (format !== "ASS" && formatCapabilities("ASS").some((item) => item.feature === feature && item.level !== "unsupported")) actions.push("choose_compatible_format");
+      const issue: AssessmentIssue = { code: "format_cannot_preserve_feature", feature, severity: state === "present" ? "conflict" : "warning", parameters: { format, feature }, actions };
       if (state === "present") { assessment.conflicts.push(issue); result.hasConflict = true; }
       else assessment.conditional.push(issue);
     }

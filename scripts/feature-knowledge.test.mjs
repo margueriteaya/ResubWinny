@@ -5,6 +5,23 @@ import { assessExports } from '../studio-tauri/src/features/tasks/export-assessm
 
 const preservation = { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true }
 
+test('unsupported feature conflicts offer explicit remedies without changing selections', () => {
+  for (const feature of ['position', 'color', 'ruby']) {
+    const formats = new Set(['ASS', 'SRT'])
+    const preferences = { ...preservation }
+    const knowledge = { [feature]: { state: 'present', complete: false } }
+    const result = assessExports(formats, preferences, knowledge)
+    const conflict = result.formats.SRT.conflicts.find((item) => item.feature === feature)
+    assert.deepEqual(conflict.parameters, { format: 'SRT', feature })
+    assert.deepEqual(conflict.actions, [`disable_preservation:${feature}`, 'remove_format', 'choose_compatible_format'])
+    assert.equal(result.hasConflict, true)
+    assert.deepEqual([...formats], ['ASS', 'SRT'])
+    assert.deepEqual(preferences, preservation)
+    assert.equal(assessExports(['ASS'], preferences, knowledge).hasConflict, false)
+    assert.equal(assessExports(formats, { ...preferences, [feature]: false }, knowledge).hasConflict, false)
+  }
+})
+
 const event = (kind, logicalTrack, feature, parameters = {}) => ({
   kind,
   message: kind,
