@@ -468,6 +468,22 @@ mod tests {
     }
 
     #[test]
+    fn export_conflict_never_reconciles_a_part_file_as_completed() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("resubwinny-conflict-{stamp}.ass"));
+        let part = path.with_extension("ass.part");
+        std::fs::write(&part, b"unpublishable partial output").expect("partial output");
+        let record = artifact(path, part.clone());
+
+        assert_eq!(reconciled_artifact_status(&record, "failed"), "incomplete");
+
+        std::fs::remove_file(part).expect("cleanup");
+    }
+
+    #[test]
     fn diagnostics_are_paged_from_jsonl_and_only_recent_records_are_cached() {
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

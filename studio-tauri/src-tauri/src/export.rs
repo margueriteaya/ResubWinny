@@ -24,6 +24,26 @@ use std::{
 };
 use tauri::{AppHandle, Manager, State};
 
+fn worker_failure_details(
+    event: &serde_json::Value,
+) -> (String, String, BTreeMap<String, serde_json::Value>) {
+    let message = event
+        .get("message")
+        .and_then(|value| value.as_str())
+        .unwrap_or("Worker operation failed.")
+        .to_owned();
+    let code = event
+        .get("code")
+        .and_then(|value| value.as_str())
+        .unwrap_or("worker.operation_failed")
+        .to_owned();
+    let parameters = event
+        .get("parameters")
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+        .unwrap_or_default();
+    (message, code, parameters)
+}
+
 #[allow(
     clippy::too_many_arguments,
     reason = "compatibility entry point mirrors the versioned export IPC contract"
@@ -504,18 +524,7 @@ pub fn start_export_impl(
                         }
                         Some("failed") => {
                             failed_flag.store(true, Ordering::Relaxed);
-                            let message = event
-                                .get("message")
-                                .and_then(|value| value.as_str())
-                                .unwrap_or("Worker operation failed.");
-                            let code = event
-                                .get("code")
-                                .and_then(|value| value.as_str())
-                                .unwrap_or("worker.operation_failed");
-                            let parameters: BTreeMap<String, serde_json::Value> = event
-                                .get("parameters")
-                                .and_then(|value| serde_json::from_value(value.clone()).ok())
-                                .unwrap_or_default();
+                            let (message, code, parameters) = worker_failure_details(&event);
                             mark_job_state(
                                 &app,
                                 &shared_state,
@@ -527,15 +536,15 @@ pub fn start_export_impl(
                                 &shared_state,
                                 job_id.as_deref(),
                                 "error",
-                                code,
+                                &code,
                                 parameters.clone(),
-                                message,
+                                &message,
                             );
                             events.emit_with_details(
                                 "failed",
-                                code,
+                                &code,
                                 parameters,
-                                message,
+                                &message,
                                 None,
                                 None,
                                 None,
@@ -603,6 +612,38 @@ pub fn start_export_impl(
         }
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::worker_failure_details;
+
+    #[test]
+    fn export_conflict_keeps_its_structured_parameters() {
+        let event = serde_json::json!({
+            "type": "failed",
+            "code": "export_conflict",
+            "message": "fallback text",
+            "parameters": {
+                "formats": ["ASS", "SRT"],
+                "feature": "ruby",
+                "logicalTrack": "service=1:component=48:lang=jpn",
+                "availableActions": ["disable_preservation:ruby", "remove_format"]
+            }
+        });
+
+        let (message, code, parameters) = worker_failure_details(&event);
+
+        assert_eq!(message, "fallback text");
+        assert_eq!(code, "export_conflict");
+        assert_eq!(parameters["formats"], serde_json::json!(["ASS", "SRT"]));
+        assert_eq!(parameters["feature"], "ruby");
+        assert_eq!(
+            parameters["logicalTrack"],
+            "service=1:component=48:lang=jpn"
+        );
+        assert_eq!(parameters["availableActions"].as_array().unwrap().len(), 2);
+    }
 }
 
 #[tauri::command]
