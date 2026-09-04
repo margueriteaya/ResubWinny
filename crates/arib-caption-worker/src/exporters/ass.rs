@@ -544,6 +544,31 @@ fn ass_font_family(source: &str) -> &str {
     }
 }
 
+fn b24_export_character_text<'a>(
+    character: &'a native_b24::CaptionCharacter,
+    interval: &'a RegionInterval,
+    options: &'a ConversionOptions,
+) -> Option<&'a str> {
+    if !character.utf8.is_empty() {
+        return Some(&character.utf8);
+    }
+    if character.kind != 1 || !options.preserve_drcs {
+        return None;
+    }
+    let mapped = (options.drcs_mode == DrcsMode::UseUserMapping)
+        .then(|| options.drcs_replacements.get(&character.drcs_code))
+        .flatten()
+        .filter(|text| !text.is_empty());
+    mapped.map(String::as_str).or_else(|| {
+        interval
+            .drcs_glyphs
+            .iter()
+            .find(|glyph| glyph.drcs_code == character.drcs_code)
+            .map(|glyph| glyph.alternative_text.as_str())
+            .filter(|text| !text.is_empty())
+    })
+}
+
 pub(crate) fn write_ass_interval(
     writer: &mut BufWriter<File>,
     interval: &RegionInterval,
@@ -573,19 +598,7 @@ pub(crate) fn write_ass_interval(
             line.clear();
             continue;
         }
-        let text = if !character.utf8.is_empty() {
-            Some(character.utf8.as_str())
-        } else if options.preserve_drcs
-            && character.kind == 1
-            && options.drcs_mode == DrcsMode::UseUserMapping
-        {
-            options
-                .drcs_replacements
-                .get(&character.drcs_code)
-                .map(String::as_str)
-        } else {
-            None
-        };
+        let text = b24_export_character_text(character, interval, options);
         let Some(text) = text.filter(|text| keep_text(text, options)) else {
             write_filtered_ass_character_line(
                 writer,
@@ -629,9 +642,8 @@ pub(crate) fn write_ass_interval(
         return Ok(());
     }
     for character in &interval.characters {
-        let has_mapping = options.drcs_mode == DrcsMode::UseUserMapping
-            && options.drcs_replacements.contains_key(&character.drcs_code);
-        if has_mapping || character.kind != 1 || !character.utf8.is_empty() {
+        if character.kind != 1 || b24_export_character_text(character, interval, options).is_some()
+        {
             continue;
         }
         let Some(glyph) = interval
@@ -686,20 +698,9 @@ pub(crate) fn write_ass_interval_group(
     ordered_intervals.sort_by_key(|interval| (interval.region.y, interval.region.x));
     for interval in ordered_intervals {
         for character in &interval.characters {
-            let text = if !character.utf8.is_empty() {
-                export_text(&character.utf8, options)
-            } else if options.preserve_drcs
-                && character.kind == 1
-                && options.drcs_mode == DrcsMode::UseUserMapping
-            {
-                options
-                    .drcs_replacements
-                    .get(&character.drcs_code)
-                    .map(|text| export_text(text, options))
-                    .unwrap_or_default()
-            } else {
-                String::new()
-            };
+            let text = b24_export_character_text(character, interval, options)
+                .map(|text| export_text(text, options))
+                .unwrap_or_default();
             if text.is_empty() {
                 continue;
             }

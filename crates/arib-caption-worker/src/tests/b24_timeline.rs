@@ -294,6 +294,83 @@ fn writes_a_region_that_contains_only_unresolved_drcs() {
 }
 
 #[test]
+fn exports_drcs_alternative_text_for_positioned_and_grouped_text_targets() {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let output = std::env::temp_dir().join(format!("arib-drcs-alternative-{stamp}.ass"));
+    let scene = native_b24::CaptionScene {
+        pts_ms: 0,
+        wait_duration_ms: 1_000,
+        plane_width: 960,
+        plane_height: 540,
+        regions: vec![native_b24::CaptionRegion {
+            x: 100,
+            y: 100,
+            width: 20,
+            height: 20,
+            is_ruby: false,
+            first_character: 0,
+            character_count: 1,
+        }],
+        characters: vec![native_b24::CaptionCharacter {
+            kind: 1,
+            codepoint: 0,
+            pua_codepoint: 0,
+            drcs_code: 1,
+            x: 100,
+            y: 100,
+            width: 20,
+            height: 20,
+            horizontal_spacing: 0,
+            vertical_spacing: 0,
+            horizontal_scale: 1.0,
+            vertical_scale: 1.0,
+            text_color: 0xffffff,
+            back_color: 0,
+            stroke_color: 0,
+            style: 0,
+            enclosure_style: 0,
+            utf8: String::new(),
+        }],
+        drcs_glyphs: vec![native_b24::DrcsGlyph {
+            drcs_code: 1,
+            width: 2,
+            height: 1,
+            depth: 4,
+            depth_bits: 2,
+            alternative_codepoint: 0,
+            md5: "test".into(),
+            alternative_text: "字".into(),
+            pixels: vec![0b1111_0000],
+        }],
+        rendered_image: None,
+    };
+    let mut interval = scene_intervals(&scene).pop().expect("region interval");
+    interval.end_ms = 1_000;
+    for preserve_position in [true, false] {
+        let options = ConversionOptions {
+            preserve_position,
+            ..ConversionOptions::default()
+        };
+        let mut writer = BufWriter::new(File::create(&output).expect("output"));
+        write_ass_interval_group(&mut writer, &[interval.clone(), interval.clone()], &options)
+            .expect("write scene");
+        writer.flush().expect("flush");
+        let ass = fs::read_to_string(&output).expect("read");
+        assert!(ass.contains("字"));
+        assert!(!ass.contains("\\p1"));
+        let srt = write_srt_from_ass(&output, true)
+            .expect("SRT")
+            .expect("path");
+        assert!(fs::read_to_string(&srt).expect("text").contains("字"));
+        fs::remove_file(srt).expect("cleanup SRT");
+    }
+    fs::remove_file(output).expect("cleanup");
+}
+
+#[test]
 fn ass_export_groups_editable_ruby_text_and_keeps_inline_styles() {
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
