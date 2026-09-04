@@ -80,7 +80,6 @@ where
     let mut known_drcs = HashSet::new();
     let mut report_drcs = BTreeMap::new();
     let mut have_drcs = false;
-    let mut feature_summary = CaptionFeatureSummary::default();
     let mut pending_unpositioned = Vec::<RegionInterval>::new();
     let mut last_scene_pid = track.caption_pid;
     let summary = match scan_b24(
@@ -88,7 +87,6 @@ where
         &track,
         |source_pid, scene| {
             last_scene_pid = source_pid;
-            feature_summary.observe_b24_scene(&scene);
             if let Some(archive_writer) = &mut archive_writer {
                 write_archive_record(archive_writer, "scene", &scene)?;
             }
@@ -137,10 +135,7 @@ where
             Ok(())
         },
     ) {
-        Ok(mut summary) => {
-            summary.features = feature_summary.clone();
-            summary
-        }
+        Ok(summary) => summary,
         Err(error) => {
             let _ = fs::remove_file(&temporary);
             if let Some(path) = &archive_temporary {

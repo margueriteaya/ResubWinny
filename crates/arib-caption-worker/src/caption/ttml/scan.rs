@@ -60,6 +60,7 @@ where
         for caption in parse_ttml_captions_until(&document.xml, document.start_ms, Some(end_ms)) {
             summary.captions += 1;
             summary.characters += caption.text.chars().count() as u64;
+            summary.features.observe_ttml(&caption);
             on_caption(caption)?;
         }
     }

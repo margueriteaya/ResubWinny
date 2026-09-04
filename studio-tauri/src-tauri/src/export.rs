@@ -427,6 +427,14 @@ pub fn start_export_impl(
                             event.get("count").and_then(|value| value.as_u64()),
                             None,
                         ),
+                        Some("feature_observed") | Some("feature_summary") => events.emit(
+                            event.get("type").and_then(|value| value.as_str()).unwrap_or("feature-summary"),
+                            "Caption source feature updated.",
+                            None,
+                            None,
+                            event.get("observedCount").and_then(|value| value.as_u64()),
+                            None,
+                        ),
                         Some("checkpoint-written") => events.emit(
                             "checkpoint-written",
                             "Worker checkpoint updated.",

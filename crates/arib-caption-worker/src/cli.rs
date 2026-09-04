@@ -2,6 +2,51 @@ use super::*;
 use std::env;
 use std::sync::{Arc, atomic::Ordering};
 
+fn emit_feature_events(
+    summary: &B24DecodeSummary,
+    seen: &mut CaptionFeatureSummary,
+    complete: bool,
+) {
+    let features = [
+        ("ruby", summary.features.ruby),
+        ("drcs", summary.features.drcs),
+        ("position", summary.features.position),
+        ("color", summary.features.color),
+        ("gaiji", summary.features.gaiji),
+        ("accessibility", summary.features.accessibility),
+    ];
+    for (feature, present) in features {
+        let was_present = match feature {
+            "ruby" => seen.ruby,
+            "drcs" => seen.drcs,
+            "position" => seen.position,
+            "color" => seen.color,
+            "gaiji" => seen.gaiji,
+            _ => seen.accessibility,
+        };
+        if present && !was_present {
+            emit_json(&serde_json::json!({
+                "type": "feature_observed",
+                "feature": feature,
+                "observedCount": 1,
+                "complete": false
+            }));
+        }
+    }
+    *seen = summary.features.clone();
+    if complete {
+        for (feature, present) in features {
+            emit_json(&serde_json::json!({
+                "type": "feature_summary",
+                "feature": feature,
+                "state": if present { "present" } else { "absent" },
+                "observedCount": if present { 1 } else { 0 },
+                "complete": true
+            }));
+        }
+    }
+}
+
 /// Makes the archive the requested primary artifact after conversion has
 /// completed. The conversion pipeline deliberately writes its ordinary
 /// caption output first; archive-only is a CLI publishing policy layered on
@@ -278,6 +323,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
         spawn_control_listener(Arc::clone(&control));
         let progress_control = Arc::clone(&control);
         let cancel_control = Arc::clone(&control);
+        let mut seen_features = CaptionFeatureSummary::default();
         emit_stage("decoding");
         let report = if command == "convert-b24" {
             convert_b24_with_options_and_cancel(
@@ -291,6 +337,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                     emit_json(
                         &serde_json::json!({"type": "progress", "bytes_read": summary.bytes_read, "captions": summary.captions, "warnings": summary.decoder_errors}),
                     );
+                    emit_feature_events(summary, &mut seen_features, false);
                 },
                 move || cancel_control.wait_if_paused(),
             )
@@ -306,6 +353,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                     emit_json(
                         &serde_json::json!({"type": "progress", "bytes_read": summary.bytes_read, "captions": summary.captions, "warnings": summary.decoder_errors}),
                     );
+                    emit_feature_events(summary, &mut seen_features, false);
                 },
                 move || cancel_control.wait_if_paused(),
             )
@@ -318,6 +366,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(error) => return Err(error.into()),
         };
+        emit_feature_events(&report.summary, &mut seen_features, true);
         if control.cancelled.load(Ordering::Relaxed) {
             emit_json(&serde_json::json!({"type": "cancelled"}));
             return Ok(());

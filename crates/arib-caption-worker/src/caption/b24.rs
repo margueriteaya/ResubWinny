@@ -205,6 +205,7 @@ where
     }
     on_pes(pid, pes_offset, pes)?;
     if let Some(scene) = flush_b24_pes(pes, decoder, last_pts, timeline_origin_ms, summary) {
+        summary.features.observe_b24_scene(&scene);
         on_scene(pid, scene)?;
     }
     Ok(())
