@@ -507,12 +507,44 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
         assert!((0.0..=1.0).contains(&preview.y));
         assert_eq!(preview.text_color, 0xff12_ab34);
         assert_eq!(preview.background_color, 0xb000_0000);
+
+        let conflict_output = std::env::temp_dir().join(format!("{stem}-conflict.ass"));
+        let conflict_srt = conflict_output.with_extension("srt");
+        let conflict_part = conflict_output.with_extension("ass.part");
+        fs::write(&conflict_output, "existing final must survive").expect("existing final");
+        let conflict = match convert_with_options_and_cancel(
+            &input_path,
+            &conflict_output,
+            ConversionOptions {
+                srt: true,
+                overwrite: true,
+                ..ConversionOptions::default()
+            },
+            |_| {},
+            || false,
+        ) {
+            Ok(_) => panic!("SRT preservation must conflict with material TTML features"),
+            Err(error) => error,
+        };
+        let conflict = conflict
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<ExportConflict>())
+            .expect("structured export conflict");
+        assert!(conflict.formats.contains(&"SRT".to_owned()));
+        assert_eq!(
+            fs::read_to_string(&conflict_output).expect("existing final"),
+            "existing final must survive"
+        );
+        assert!(!conflict_srt.exists(), "conflicting SRT was published");
+        assert!(!conflict_part.exists(), "conflict .part was retained");
+
         fs::remove_file(input_path).expect("cleanup input");
         fs::remove_file(output_path).expect("cleanup output");
         fs::remove_file(converted_path).expect("cleanup ASS");
         fs::remove_file(report.ttml.expect("TTML output")).expect("cleanup TTML");
         fs::remove_file(report.archive.expect("archive output")).expect("cleanup archive");
         fs::remove_file(report.raw.expect("raw output")).expect("cleanup conversion raw");
+        fs::remove_file(conflict_output).expect("cleanup existing final");
     }
 }
 
