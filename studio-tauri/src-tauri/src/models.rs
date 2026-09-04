@@ -8,6 +8,10 @@ pub struct AppSettings {
     pub ui_font: String,
     pub caption_font: String,
     pub default_format: String,
+    #[serde(default = "default_user_mode")]
+    pub user_mode: String,
+    #[serde(default)]
+    pub export_preferences: ExportSelection,
     #[serde(default = "default_locale")]
     pub locale: String,
     #[serde(default = "default_theme")]
@@ -44,6 +48,7 @@ fn default_locale() -> String {
 fn default_theme() -> String {
     "system".into()
 }
+fn default_user_mode() -> String { "normie".into() }
 
 impl Default for AppSettings {
     fn default() -> Self {
@@ -51,6 +56,8 @@ impl Default for AppSettings {
             ui_font: "system".into(),
             caption_font: "arib".into(),
             default_format: "ASS".into(),
+            user_mode: default_user_mode(),
+            export_preferences: ExportSelection::default(),
             locale: default_locale(),
             theme: default_theme(),
             workspace_layout: WorkspaceLayoutSettings::default(),

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { ChevronDown, FileUp, FileVideo2, FolderPlus, Layers3, ScanText, TriangleAlert } from "@lucide/svelte";
   import { t } from "../../i18n";
+  import type { AppSettings, ExportFormat, ExportPreservation } from "../../backend";
+  import { capabilitySummary } from "../tasks/format-capabilities";
 
   type HistoryItem = {
     name: string;
@@ -19,6 +21,30 @@
   export let onChooseSource: () => void = () => {};
   export let onOpenHistory: (item: HistoryItem) => void = () => {};
   export let onNavigate: (target: "batch" | "drcs") => void = () => {};
+  export let settings: AppSettings;
+  export let onSettingsChange: (settings: AppSettings) => void = () => {};
+  const formats: ExportFormat[] = ["ASS", "TTML", "SRT", "WebVTT", "JSON", "Raw Data"];
+  const preservationKeys: (keyof ExportPreservation)[] = ["position", "color", "ruby", "gaiji", "drcs", "accessibility"];
+  const formatNotes: Record<ExportFormat, string> = {
+    ASS: "保留位置与颜色；Ruby 和复杂布局可能采用兼容近似。",
+    TTML: "适合保留区域、Ruby 与广播字幕结构。",
+    SRT: "兼容性高，但无法表达位置、颜色、Ruby 和图形外字。",
+    WebVTT: "适合 Web 播放；广播专用布局可能无法完整表达。",
+    JSON: "保存结构化字幕数据，适合再次处理。",
+    "Raw Data": "保存原始字幕证据，适合诊断与研究。",
+  };
+  function updatePreferences(next: Partial<AppSettings['exportPreferences']>) {
+    onSettingsChange({ ...settings, exportPreferences: { ...settings.exportPreferences, ...next } });
+  }
+  function toggleFormat(format: ExportFormat) {
+    const next = new Set(settings.exportPreferences.formats);
+    next.has(format) ? next.delete(format) : next.add(format);
+    if (!next.size) next.add("ASS");
+    updatePreferences({ formats: [...next] });
+  }
+  function togglePreservation(key: keyof ExportPreservation) {
+    updatePreferences({ preservation: { ...settings.exportPreferences.preservation, [key]: !settings.exportPreferences.preservation[key] } });
+  }
   let noticeExpanded = false;
 
   const historyStatus = (item: HistoryItem) => {
@@ -43,6 +69,13 @@
     </span>
     <span class="home-primary-action"><FolderPlus size={16} />{t("home.select")}</span>
   </button>
+  <section class="home-output-preferences" aria-label="输出偏好">
+    <h2>输出格式</h2>
+    <div class="format-picker">{#each formats as format}<button type="button" class:selected={settings.exportPreferences.formats.includes(format)} onclick={() => toggleFormat(format)}>{format}</button>{/each}</div>
+    <div class="format-notes">{#each settings.exportPreferences.formats as format}<p class="format-note"><b>{format}</b>：{formatNotes[format]}<br /><small>{capabilitySummary(format)}</small></p>{/each}</div>
+    <h2>保留内容</h2>
+    <div class="preservation-picker">{#each preservationKeys as key}<label><input type="checkbox" checked={settings.exportPreferences.preservation[key]} onchange={() => togglePreservation(key)} />{key === "gaiji" ? "外字" : key === "drcs" ? "DRCS" : key === "accessibility" ? "无障碍信息" : key === "ruby" ? "Ruby" : key === "position" ? "位置" : "颜色"}</label>{/each}</div>
+  </section>
   <aside class="source-rights-notice">
     <TriangleAlert size={14}/><span>{t("home.rightsNotice")}</span>
     <button type="button" aria-expanded={noticeExpanded} aria-controls="source-rights-detail" onclick={() => noticeExpanded = !noticeExpanded}>{t("home.rightsWhy")}<ChevronDown size={13}/></button>
@@ -90,6 +123,7 @@
   .dropzone-copy small { color: var(--rw-text-secondary); font-size: 12px; line-height: 17px; }
   .home-primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; margin-top: 18px; padding: 0 16px; border: 1px solid color-mix(in srgb, var(--rw-accent) 80%, var(--rw-border)); border-radius: 7px; color: #fff; background: var(--rw-accent); font-size: 13px; font-weight: 680; }
   .recent-workbench-section { margin-top: 22px; }
+  .home-output-preferences{margin-top:14px;padding:14px 16px;border:1px solid var(--rw-border-subtle);border-radius:9px;background:var(--rw-surface-muted)}.home-output-preferences h2{margin:0 0 8px;font-size:13px}.home-output-preferences h2:not(:first-child){margin-top:14px}.format-picker,.preservation-picker{display:flex;flex-wrap:wrap;gap:7px}.format-picker button{padding:6px 11px;border:1px solid var(--rw-border);border-radius:6px;color:var(--rw-text-secondary);background:var(--rw-content);font-size:12px}.format-picker button.selected{border-color:var(--rw-accent);color:var(--rw-text);background:color-mix(in srgb,var(--rw-accent) 12%,var(--rw-content))}.format-note{margin:8px 0 0;color:var(--rw-text-secondary);font-size:11px}.preservation-picker label{display:inline-flex;align-items:center;gap:5px;color:var(--rw-text-secondary);font-size:11px}
   .recent-workbench-section > header { display: flex; align-items: center; min-height: 36px; border-bottom: 1px solid var(--rw-border); }
   .recent-workbench-section h2 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 680; }
   .recent-task-list { margin: 0; padding: 0; list-style: none; }

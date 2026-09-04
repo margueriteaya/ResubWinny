@@ -9,6 +9,7 @@
   export let hasTask = false;
   export let taskName = "";
   export let busy = false;
+  export let userMode: 'normie' | 'nerd' = 'normie';
   export let onNavigate: (page: Page) => void = () => {};
 
   const displayVersion = `v${packageMetadata.version.replace(/-alpha(?:\.\d+)?$/, "alpha")}`;
@@ -23,8 +24,10 @@
     <span class="sidebar-selection" aria-hidden="true"></span>
     <button class="liquid-control" type="button" aria-label={t("nav.home")} aria-current={page === "home" ? "page" : undefined} data-tooltip={collapsed ? t("nav.home") : undefined} class:active={page === "home"} onclick={() => onNavigate("home")}><House size={16} /><span>{t("nav.home")}</span></button>
     <button class="liquid-control" type="button" aria-label={t("nav.tasks")} aria-current={page === "tasks" ? "page" : undefined} data-tooltip={collapsed ? t("nav.tasks") : undefined} class:active={page === "tasks"} onclick={() => onNavigate("tasks")}><FileText size={16} /><span>{t("nav.tasks")}</span>{#if hasTask}<em>1</em>{/if}</button>
-    <button class="liquid-control" type="button" aria-label={t("nav.batch")} aria-current={page === "batch" ? "page" : undefined} data-tooltip={collapsed ? t("nav.batch") : undefined} class:active={page === "batch"} onclick={() => onNavigate("batch")}><FolderCog size={16} /><span>{t("nav.batch")}</span></button>
-    <button class="liquid-control" type="button" aria-label={t("nav.drcs")} aria-current={page === "drcs" ? "page" : undefined} data-tooltip={collapsed ? t("nav.drcs") : undefined} class:active={page === "drcs"} onclick={() => onNavigate("drcs")}><ScanText size={16} /><span>{t("nav.drcs")}</span></button>
+    {#if userMode === 'nerd'}
+      <button class="liquid-control" type="button" aria-label={t("nav.batch")} aria-current={page === "batch" ? "page" : undefined} data-tooltip={collapsed ? t("nav.batch") : undefined} class:active={page === "batch"} onclick={() => onNavigate("batch")}><FolderCog size={16} /><span>{t("nav.batch")}</span></button>
+      <button class="liquid-control" type="button" aria-label={t("nav.drcs")} aria-current={page === "drcs" ? "page" : undefined} data-tooltip={collapsed ? t("nav.drcs") : undefined} class:active={page === "drcs"} onclick={() => onNavigate("drcs")}><ScanText size={16} /><span>{t("nav.drcs")}</span></button>
+    {/if}
     <button class="liquid-control" type="button" aria-label={t("nav.settings")} aria-current={page === "settings" ? "page" : undefined} data-tooltip={collapsed ? t("nav.settings") : undefined} class:active={page === "settings"} onclick={() => onNavigate("settings")}><Settings2 size={16} /><span>{t("nav.settings")}</span></button>
   </nav>
   {#if hasTask}

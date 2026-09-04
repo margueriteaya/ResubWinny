@@ -21,11 +21,18 @@ fn normalize(mut settings: AppSettings) -> AppSettings {
     if !matches!(settings.caption_font.as_str(), "arib" | "system") {
         settings.caption_font = "arib".into();
     }
-    if !matches!(
-        settings.default_format.as_str(),
-        "ASS" | "TTML" | "JSON" | "Raw Data"
-    ) {
+    if !matches!(settings.default_format.as_str(), "ASS" | "TTML" | "SRT" | "WebVTT" | "JSON" | "Raw Data") {
         settings.default_format = "ASS".into();
+    }
+    if !matches!(settings.user_mode.as_str(), "normie" | "nerd") {
+        settings.user_mode = "normie".into();
+    }
+    settings.export_preferences.formats.retain(|format| matches!(format.as_str(), "ASS" | "TTML" | "SRT" | "WebVTT" | "JSON" | "Raw Data"));
+    if settings.export_preferences.formats.is_empty() { settings.export_preferences.formats.push("ASS".into()); }
+    // Legacy settings only had defaultFormat. Preserve that choice when the
+    // newly added export preference object was synthesized by serde defaults.
+    if settings.export_preferences.formats == ["ASS".to_string()] && settings.default_format != "ASS" {
+        settings.export_preferences.formats = vec![settings.default_format.clone()];
     }
     if !matches!(settings.theme.as_str(), "system" | "light" | "dark") {
         settings.theme = "system".into();
@@ -176,6 +183,8 @@ mod tests {
             ui_font: "cjk".into(),
             caption_font: "system".into(),
             default_format: "TTML".into(),
+            user_mode: "nerd".into(),
+            export_preferences: Default::default(),
             locale: "ja".into(),
             theme: "dark".into(),
             workspace_layout: Default::default(),
@@ -193,7 +202,9 @@ mod tests {
         let settings = normalize(AppSettings {
             ui_font: "not-a-font-profile".into(),
             caption_font: "untrusted-font".into(),
-            default_format: "SRT".into(),
+            default_format: "invalid".into(),
+            user_mode: "invalid".into(),
+            export_preferences: Default::default(),
             locale: "".into(),
             theme: "neon".into(),
             workspace_layout: crate::models::WorkspaceLayoutSettings {
@@ -207,6 +218,7 @@ mod tests {
         assert_eq!(settings.ui_font, "system");
         assert_eq!(settings.caption_font, "arib");
         assert_eq!(settings.default_format, "ASS");
+        assert_eq!(settings.user_mode, "normie");
         assert_eq!(settings.locale, "system");
         assert_eq!(settings.theme, "system");
         assert_eq!(settings.workspace_layout.source_width, 220);

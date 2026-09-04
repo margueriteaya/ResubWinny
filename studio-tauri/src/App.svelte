@@ -191,6 +191,8 @@
     uiFont: "system",
     captionFont: "arib",
     defaultFormat: "ASS",
+    userMode: "normie",
+    exportPreferences: { formats: ["ASS"], preservation: { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true } },
     locale: "system",
     theme: "system",
     workspaceLayout: {
@@ -381,12 +383,12 @@
     onboardingVisible = true;
   }
 
-  async function completeOnboarding() {
+  async function completeOnboarding(userMode: AppSettings["userMode"]) {
     if (!onboardingRequired) { onboardingVisible = false; return; }
     onboardingSaving = true;
     onboardingError = "";
     try {
-      const next = onboardingSession.completed(appSettings);
+      const next = onboardingSession.completed({ ...appSettings, userMode });
       appSettings = desktopRuntime ? await backend.updateSettings(next) : next;
       onboardingSession.cacheCompletion();
       onboardingVisible = false;
@@ -923,7 +925,8 @@
       void preferencesSession.load(true).then((settings) => {
         if (settings) {
           appSettings = settings;
-          selectedFormats = new Set([settings.defaultFormat as ExportFormat]);
+          selectedFormats = new Set(settings.exportPreferences.formats);
+          preservation = { ...settings.exportPreferences.preservation };
           void preferencesSession.saveCaptionFont(settings.captionFont);
         }
         onboardingRequired = onboardingSession.shouldShow(settings);
@@ -976,7 +979,7 @@
       onChooseSource={() => void chooseSource()}
       minimal={onboardingVisible || !startupReady}
     />
-    {#if startupReady && !onboardingVisible}<AppSidebar {page} collapsed={sidebarCollapsed} hasTask={Boolean(inspection)} taskName={inspection?.name ?? ""} busy={isInspecting || isExporting || batchRunning} onNavigate={selectView} />{/if}
+    {#if startupReady && !onboardingVisible}<AppSidebar {page} collapsed={sidebarCollapsed} userMode={appSettings.userMode} hasTask={Boolean(inspection)} taskName={inspection?.name ?? ""} busy={isInspecting || isExporting || batchRunning} onNavigate={selectView} />{/if}
   {/key}
 
   {#if error}
@@ -988,7 +991,7 @@
   {/if}
 
   {#if startupReady && onboardingVisible}
-  <OnboardingPage saving={onboardingSaving} error={onboardingError} onComplete={completeOnboarding} onOpenAbout={openOnboardingAbout} />
+  <OnboardingPage saving={onboardingSaving} error={onboardingError} userMode={appSettings.userMode} onComplete={completeOnboarding} onOpenAbout={openOnboardingAbout} />
   {:else if startupReady}<section class="application">
     {#key $localeRevision}
     {#if page === "home"}
@@ -998,6 +1001,8 @@
         onChooseSource={chooseSource}
         onOpenHistory={(item) => void openHistory(item)}
         onNavigate={(target) => selectView(target)}
+        settings={appSettings}
+        onSettingsChange={(settings) => { const next = { ...settings, defaultFormat: settings.exportPreferences.formats[0] ?? settings.defaultFormat }; appSettings = next; selectedFormats = new Set(next.exportPreferences.formats); preservation = { ...next.exportPreferences.preservation }; void backend.updateSettings(next); }}
       />
     {:else if page === "tasks"}
       {#if TaskWorkspaceComponent}

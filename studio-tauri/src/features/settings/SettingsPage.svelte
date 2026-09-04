@@ -15,7 +15,7 @@
   export let onSettingsPreview: (settings: AppSettings) => void | Promise<void> = () => {}
   export let onError: (reason: unknown) => void = () => {}
   export let onShowOnboarding: () => void = () => {}
-  const defaults: AppSettings = { uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', locale: 'system', theme: 'system', workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false }, onboardingVersion: 0 }
+  const defaults: AppSettings = { uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', userMode: 'normie', exportPreferences: { formats: ['ASS'], preservation: { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true } }, locale: 'system', theme: 'system', workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false }, onboardingVersion: 0 }
   let preferences: AppSettings = { ...defaults }
   export let panel: Panel = 'general'
   let persistenceState: 'idle' | 'saving' | 'saved' | 'error' = 'idle'
@@ -157,6 +157,7 @@
         <div class="setting-copy"><h3>{t('settings.language')}</h3><p>{t('settings.languageDescription')}</p></div>
         <div class="setting-control"><div class="language-row"><PopupButton label={t('settings.language')} value={preferences.locale} options={languageOptions} disabled={languageRefreshBusy} onOpen={refreshLanguagePacks} onChange={(value) => void selectLanguage(value)} /><button class="icon-button liquid-control" data-tooltip={t('settings.openLanguagePackDirectory')} aria-label={t('settings.openLanguagePackDirectory')} onclick={openLanguagePackDirectory}><FolderOpen size={18} /></button></div><p class="control-hint">{t('settings.languagePackFolderDescription')}</p>{#if languageError}<p class="settings-error" role="alert">{languageError}</p>{/if}</div>
       </section>
+      <section class="settings-group"><div class="setting-copy"><h3>使用模式</h3><p>切换信息呈现方式，不会改变任务或输出结果。</p></div><div class="setting-control"><MacSegmentedControl ariaLabel="使用模式" value={preferences.userMode} options={[{value:'normie',label:'工作模式'},{value:'nerd',label:'狂热模式'}]} onChange={(value) => updatePreferences({...preferences, userMode: value as AppSettings['userMode']})} /></div></section>
       <section class="settings-group">
         <div class="setting-copy"><h3>{t('settings.theme')}</h3><p>{t('settings.themeDescription')}</p></div>
         <div class="setting-control theme-control"><MacSegmentedControl ariaLabel={t('settings.theme')} value={preferences.theme} options={[{value:'system',label:t('settings.themeSystem')},{value:'light',label:t('settings.themeLight')},{value:'dark',label:t('settings.themeDark')}]} onChange={(value) => updatePreferences({...preferences, theme: value as AppSettings['theme']}, 'appearance')} /></div>
@@ -167,7 +168,7 @@
       <section class="settings-group"><div class="setting-copy"><h3>{t('settings.captionFont')}</h3><p>{t('settings.captionFontDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.captionFont')} value={preferences.captionFont} options={[{value:'arib',label:t('settings.aribBundled', 'Rounded M+ 1m for ARIB (bundled)')},{value:'system',label:t('settings.systemFallbackShort', 'System fallback')}]} onChange={(value) => updatePreferences({...preferences, captionFont: value as AppSettings['captionFont']}, 'caption')} /><div class="caption-sample"><span>ニュースをお伝えします</span><b>{t('settings.aribPreview', 'ARIB / DRCS-aware preview')}</b></div></div></section>
     {:else if panel === 'output'}
       <header><h2>{t('settings.output')}</h2><p>{t('settings.outputDescription')}</p></header>
-      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.defaultFormat')}</h3><p>{t('settings.faithfulDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.defaultFormat')} value={preferences.defaultFormat} options={['ASS','TTML','JSON','Raw Data'].map((value) => ({value,label:value}))} onChange={(value) => updatePreferences({...preferences, defaultFormat: value as AppSettings['defaultFormat']})} /></div></section>
+      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.defaultFormat')}</h3><p>{t('settings.faithfulDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.defaultFormat')} value={preferences.defaultFormat} options={['ASS','TTML','SRT','WebVTT','JSON','Raw Data'].map((value) => ({value,label:value}))} onChange={(value) => updatePreferences({...preferences, defaultFormat: value as AppSettings['defaultFormat'], exportPreferences: {...preferences.exportPreferences, formats: [value as AppSettings['defaultFormat']]}})} /></div></section>
     {:else if panel === 'playback'}
       <header><h2>{t('settings.playbackAndRuntime')}</h2><p>{t('settings.playerDescription')}</p></header>
       <section class="settings-group runtime-group"><div class="setting-copy"><h3>{t('settings.runtimeStatus')}</h3><p>{t('settings.previewControlsDescription')}</p></div><div class="setting-control">
