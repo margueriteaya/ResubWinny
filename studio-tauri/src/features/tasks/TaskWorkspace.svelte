@@ -1,6 +1,6 @@
 <script lang="ts">
   import { FolderOpen, FolderPlus, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Upload } from "@lucide/svelte";
-  import type { ExportFormat, ExportPreservation, Inspection, PlaybackTimeMapping, PreviewCommand, Track, WorkspaceLayoutSettings } from "../../backend";
+  import type { ExportFormat, ExportPreservation, Inspection, PlaybackTimeMapping, PreviewCommand, Track, UserMode, WorkspaceLayoutSettings } from "../../backend";
   import { t } from "../../i18n";
   import TaskOutputPanel from "./TaskOutputPanel.svelte";
   import { trackDisplayDetail, trackDisplayLabel, trackKey } from "../tracks";
@@ -12,6 +12,7 @@
   type Format = { name: ExportFormat; description: string };
   type TaskTab = "preview" | "events" | "diagnostics";
   export let inspection: Inspection | null = null;
+  export let userMode: UserMode = "normie";
   export let isInspecting = false;
   export let previewIndexing = false;
   export let routeLabel = "";
@@ -150,14 +151,14 @@
   <div class:source-collapsed={sourceIsCollapsed} class:output-collapsed={outputIsCollapsed} class="task-workspace" style={`--source-width:${sourceWidth}px;--output-width:${outputWidth}px`}>
     <div class="workspace-pane source-pane">
       <header class="pane-header"><b>{t("workspace.sourceFile")}</b><button class="pane-toggle liquid-control" onclick={toggleSource} data-tooltip={sourceIsCollapsed ? t("app.showSidebar") : t("app.hideSidebar")} aria-label={sourceIsCollapsed ? t("app.showSidebar") : t("app.hideSidebar")}>{#if sourceIsCollapsed}<PanelLeftOpen size={16} />{:else}<PanelLeftClose size={16} />{/if}</button></header>
-      {#if !sourceIsCollapsed}<TaskSourcePanel {inspection} {routeLabel} selectedTrackKeys={selectedTracks} selectionDisabled={isExporting && !previewIndexing} onSelectTrack={onSelectTrack} />{/if}
+      {#if !sourceIsCollapsed}<TaskSourcePanel {inspection} {routeLabel} {userMode} selectedTrackKeys={selectedTracks} selectionDisabled={isExporting && !previewIndexing} onSelectTrack={onSelectTrack} />{/if}
     </div>
     {#if !sourceIsCollapsed}
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex -->
       <div class="pane-separator source-separator" role="separator" aria-orientation="vertical" aria-label={t("workspace.resizeSource")} aria-valuemin="220" aria-valuemax="320" aria-valuenow={sourceWidth} tabindex="0" onpointerdown={(event) => resizePane("source", event)} onkeydown={(event) => resizeFromKeyboard("source", event)}></div>
     {/if}
     <TaskPreviewPanel
-      {taskTab} {currentJobId} {archivePath} {desktopRuntime} {logs} {captions} {warnings} selectedTrackCount={selectedTracks.size} {diagnosticsCount} {bytesRead} {progress} {isExporting} {previewIndexing} {projectTimeMs} {durationMs} {playerRunning} {playerPaused} {previewAvailable} {compactViewport} trackLabel={selectedTrackLabel} trackName={selectedTrackName} trackDetail={selectedTrackDetail}
+      {taskTab} {currentJobId} {archivePath} {desktopRuntime} {logs} {captions} {warnings} selectedTrackCount={selectedTracks.size} {diagnosticsCount} {bytesRead} {progress} {isExporting} {previewIndexing} {projectTimeMs} {durationMs} {playerRunning} {playerPaused} {previewAvailable} {compactViewport} {userMode} trackLabel={userMode === "nerd" ? selectedTrackLabel : ""} trackName={selectedTrackName} trackDetail={selectedTrackDetail}
       bind:nativePreview bind:playbackMapping {appliedPlaybackMapping} {playbackMappingBusy}
       onSelectTab={onSelectTab} onPlayerCommand={onPlayerCommand} onStartPreview={onStartPreview} onStopPreview={onStopPreview}
       onResizePreview={onResizePreview} {onSeekProject} {onSeekTarget} {onSetVolume} onSaveMapping={onSaveMapping}

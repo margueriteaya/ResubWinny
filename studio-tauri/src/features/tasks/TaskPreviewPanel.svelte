@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { ChevronRight, CircleCheck, CirclePlay, ListVideo, LoaderCircle, Maximize2, Pause, Play, Square, SquarePlay, Stethoscope, TriangleAlert, Volume2 } from "@lucide/svelte";
-  import type { PlaybackTimeMapping, PreviewCommand } from "../../backend";
+  import type { PlaybackTimeMapping, PreviewCommand, UserMode } from "../../backend";
   import { t } from "../../i18n";
   import TaskDiagnostics from "./TaskDiagnostics.svelte";
   import TaskTimeline from "./TaskTimeline.svelte";
@@ -11,6 +11,7 @@
 
   type TaskTab = "preview" | "events" | "diagnostics";
   export let taskTab: TaskTab = "preview";
+  export let userMode: UserMode = "normie";
   export let currentJobId = "";
   export let desktopRuntime = false;
   export let archivePath = "";
@@ -114,7 +115,7 @@
     { value: "preview", label: t("workspace.captionPreview"), icon: SquarePlay },
     { value: "events", label: `${t("workspace.eventList")} · ${captions.toLocaleString()}`, icon: ListVideo },
     { value: "diagnostics", label: `${t("workspace.diagnostics")} · ${diagnosticsCount}`, icon: Stethoscope },
-  ];
+  ].filter((option) => option.value !== "diagnostics" || userMode === "nerd" || diagnosticsCount > 0 || warnings > 0);
   $: projectRange = projectRangeForMedia(durationMs, appliedPlaybackMapping);
   $: scrubberValueMs = scrubberActive ? scrubberTargetMs : projectTimeMs;
   $: mappingIsAutomatic = playbackMapping.segmentId === "recording-origin"

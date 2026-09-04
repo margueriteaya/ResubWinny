@@ -1032,6 +1032,7 @@
       {#if TaskWorkspaceComponent}
       <svelte:component this={TaskWorkspaceComponent}
         {inspection}
+        userMode={appSettings.userMode}
         {isInspecting}
         {previewIndexing}
         routeLabel={routeDisplayLabel}
