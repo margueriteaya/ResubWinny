@@ -514,13 +514,17 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
 
         let conflict_output = std::env::temp_dir().join(format!("{stem}-conflict.ass"));
         let conflict_srt = conflict_output.with_extension("srt");
+        let conflict_webvtt = conflict_output.with_extension("vtt");
         let conflict_part = conflict_output.with_extension("ass.part");
         fs::write(&conflict_output, "existing final must survive").expect("existing final");
+        fs::write(&conflict_srt, "existing SRT must survive").expect("existing SRT");
+        fs::write(&conflict_webvtt, "existing WebVTT must survive").expect("existing WebVTT");
         let conflict = match convert_with_options_and_cancel(
             &input_path,
             &conflict_output,
             ConversionOptions {
                 srt: true,
+                webvtt: true,
                 overwrite: true,
                 ..ConversionOptions::default()
             },
@@ -539,7 +543,14 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
             fs::read_to_string(&conflict_output).expect("existing final"),
             "existing final must survive"
         );
-        assert!(!conflict_srt.exists(), "conflicting SRT was published");
+        assert_eq!(
+            fs::read_to_string(&conflict_srt).expect("existing SRT"),
+            "existing SRT must survive"
+        );
+        assert_eq!(
+            fs::read_to_string(&conflict_webvtt).expect("existing WebVTT"),
+            "existing WebVTT must survive"
+        );
         assert!(!conflict_part.exists(), "conflict .part was retained");
 
         fs::remove_file(input_path).expect("cleanup input");
@@ -551,6 +562,8 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
         fs::remove_dir_all(report.font_directory.expect("font sidecar"))
             .expect("cleanup font sidecar");
         fs::remove_file(conflict_output).expect("cleanup existing final");
+        fs::remove_file(conflict_srt).expect("cleanup existing SRT");
+        fs::remove_file(conflict_webvtt).expect("cleanup existing WebVTT");
     }
 }
 
