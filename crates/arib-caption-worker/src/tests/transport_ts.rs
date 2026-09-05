@@ -309,45 +309,55 @@ fn actual_conflicts_stop_source_reads_and_preserve_existing_finals() {
 
 #[test]
 fn inspection_is_bounded_and_multiformat_conversion_reads_source_once() {
-    let directory = std::env::temp_dir().join(format!("arib-read-budget-{}", std::process::id()));
-    fs::create_dir_all(&directory).unwrap();
-    let input = directory.join("source.ts");
-    let output = directory.join("output.ass");
-    let mut source = private_pes_ttml_ts_fixture();
-    let mut null = [0xff; 188];
-    null[..4].copy_from_slice(&[0x47, 0x1f, 0xff, 0x10]);
-    while source.len() < 128 * 1024 * 1024 {
-        source.extend_from_slice(&null);
+    for m2ts in [false, true] {
+        let directory =
+            std::env::temp_dir().join(format!("arib-read-budget-{}-{m2ts}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let input = directory.join(if m2ts { "source.m2ts" } else { "source.ts" });
+        let output = directory.join("output.ass");
+        let fixture = private_pes_ttml_ts_fixture();
+        let mut source = if m2ts {
+            m2ts_from_ts_packets(&fixture)
+        } else {
+            fixture
+        };
+        let null = ts_packet(0x1fff, false, &[]);
+        while source.len() < 128 * 1024 * 1024 {
+            if m2ts {
+                source.extend([0; 4]);
+            }
+            source.extend(null);
+        }
+        fs::write(&input, &source).unwrap();
+        let length = source.len() as u64;
+        drop(source);
+        let (inspection, reads) = crate::input::measure_reads(&input, || inspect_input(&input));
+        assert_eq!(inspection.unwrap().tracks.len(), 1);
+        assert!(reads.opens > 0);
+        assert!(reads.bytes < 96 * 1024 * 1024, "inspection: {reads:?}");
+        let (result, reads) = crate::input::measure_reads(&input, || {
+            convert_with_options_and_cancel(
+                &input,
+                &output,
+                ConversionOptions {
+                    ttml: true,
+                    ..Default::default()
+                },
+                |_| {},
+                || false,
+            )
+        });
+        let report = result.unwrap();
+        assert_eq!(report.summary.captions, 1);
+        assert!(output.exists());
+        assert!(output.with_extension("ttml").exists());
+        assert!(reads.bytes >= length, "conversion missed input: {reads:?}");
+        assert!(
+            reads.bytes < length + 32 * 1024 * 1024,
+            "extra source pass: {reads:?}"
+        );
+        fs::remove_dir_all(directory).unwrap();
     }
-    fs::write(&input, &source).unwrap();
-    let length = source.len() as u64;
-    drop(source);
-    let (inspection, reads) = crate::input::measure_reads(&input, || inspect_input(&input));
-    assert_eq!(inspection.unwrap().tracks.len(), 1);
-    assert!(reads.opens > 0);
-    assert!(reads.bytes < 96 * 1024 * 1024, "inspection: {reads:?}");
-    let (result, reads) = crate::input::measure_reads(&input, || {
-        convert_with_options_and_cancel(
-            &input,
-            &output,
-            ConversionOptions {
-                ttml: true,
-                ..Default::default()
-            },
-            |_| {},
-            || false,
-        )
-    });
-    let report = result.unwrap();
-    assert_eq!(report.summary.captions, 1);
-    assert!(output.exists());
-    assert!(output.with_extension("ttml").exists());
-    assert!(reads.bytes >= length, "conversion missed input: {reads:?}");
-    assert!(
-        reads.bytes < length + 32 * 1024 * 1024,
-        "extra source pass: {reads:?}"
-    );
-    fs::remove_dir_all(directory).unwrap();
 }
 
 #[test]
