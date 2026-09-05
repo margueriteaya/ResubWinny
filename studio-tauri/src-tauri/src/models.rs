@@ -48,7 +48,9 @@ fn default_locale() -> String {
 fn default_theme() -> String {
     "system".into()
 }
-fn default_user_mode() -> String { "normie".into() }
+fn default_user_mode() -> String {
+    "normie".into()
+}
 
 impl Default for AppSettings {
     fn default() -> Self {

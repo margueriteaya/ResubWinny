@@ -83,7 +83,10 @@ pub fn inspect_source(app: AppHandle, path: String) -> Result<Inspection, String
                 service_id: None,
                 language: None,
                 service_name: None,
-                logical_track: format!("mpeg-ts-ttml:pmt={pmt_pid}:kind={kind}:ordinal={}", index + 1),
+                logical_track: format!(
+                    "mpeg-ts-ttml:pmt={pmt_pid}:kind={kind}:ordinal={}",
+                    index + 1
+                ),
             });
         }
     }

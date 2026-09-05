@@ -452,11 +452,23 @@ pub fn start_export_impl(
                             None,
                         ),
                         Some("feature_observed") | Some("feature_summary") => {
-                            let kind = event.get("type").and_then(|value| value.as_str()).unwrap_or("feature_summary");
-                            let parameters = ["logicalTrack", "feature", "state", "observedCount", "complete", "details"]
-                                .into_iter()
-                                .filter_map(|key| event.get(key).cloned().map(|value| (key.to_owned(), value)))
-                                .collect();
+                            let kind = event
+                                .get("type")
+                                .and_then(|value| value.as_str())
+                                .unwrap_or("feature_summary");
+                            let parameters = [
+                                "logicalTrack",
+                                "feature",
+                                "state",
+                                "observedCount",
+                                "complete",
+                                "details",
+                            ]
+                            .into_iter()
+                            .filter_map(|key| {
+                                event.get(key).cloned().map(|value| (key.to_owned(), value))
+                            })
+                            .collect();
                             events.emit_with_details(
                                 kind,
                                 format!("task.{kind}"),
@@ -541,14 +553,7 @@ pub fn start_export_impl(
                                 &message,
                             );
                             events.emit_with_details(
-                                "failed",
-                                &code,
-                                parameters,
-                                &message,
-                                None,
-                                None,
-                                None,
-                                None,
+                                "failed", &code, parameters, &message, None, None, None, None,
                             );
                         }
                         _ => events.emit("log", event.to_string(), None, None, None, None),

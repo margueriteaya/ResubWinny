@@ -21,14 +21,24 @@ fn normalize(mut settings: AppSettings) -> AppSettings {
     if !matches!(settings.caption_font.as_str(), "arib" | "system") {
         settings.caption_font = "arib".into();
     }
-    if !matches!(settings.default_format.as_str(), "ASS" | "TTML" | "SRT" | "WebVTT" | "JSON" | "Raw Data") {
+    if !matches!(
+        settings.default_format.as_str(),
+        "ASS" | "TTML" | "SRT" | "WebVTT" | "JSON" | "Raw Data"
+    ) {
         settings.default_format = "ASS".into();
     }
     if !matches!(settings.user_mode.as_str(), "normie" | "nerd") {
         settings.user_mode = "normie".into();
     }
-    settings.export_preferences.formats.retain(|format| matches!(format.as_str(), "ASS" | "TTML" | "SRT" | "WebVTT" | "JSON" | "Raw Data"));
-    if settings.export_preferences.formats.is_empty() { settings.export_preferences.formats.push("ASS".into()); }
+    settings.export_preferences.formats.retain(|format| {
+        matches!(
+            format.as_str(),
+            "ASS" | "TTML" | "SRT" | "WebVTT" | "JSON" | "Raw Data"
+        )
+    });
+    if settings.export_preferences.formats.is_empty() {
+        settings.export_preferences.formats.push("ASS".into());
+    }
     if !matches!(settings.theme.as_str(), "system" | "light" | "dark") {
         settings.theme = "system".into();
     }
@@ -137,8 +147,9 @@ fn open_directory(directory: &std::path::Path) -> Result<(), String> {
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
     match fs::read(settings_path(&app)?) {
-        Ok(bytes) => decode_settings(&bytes)
-            .map_err(|error| format!("Could not decode settings: {error}")),
+        Ok(bytes) => {
+            decode_settings(&bytes).map_err(|error| format!("Could not decode settings: {error}"))
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(AppSettings::default()),
         Err(error) => Err(format!("Could not read settings: {error}")),
     }
@@ -188,7 +199,13 @@ mod tests {
         assert_eq!(settings.export_preferences.formats, ["ASS"]);
         let preservation = serde_json::to_value(settings.export_preferences.preservation).unwrap();
         assert_eq!(preservation.as_object().unwrap().len(), 6);
-        assert!(preservation.as_object().unwrap().values().all(|value| value == true));
+        assert!(
+            preservation
+                .as_object()
+                .unwrap()
+                .values()
+                .all(|value| value == true)
+        );
     }
 
     #[test]
@@ -199,7 +216,10 @@ mod tests {
             document["onboardingVersion"] = 3.into();
             document["workspaceLayout"]["sourceWidth"] = 280.into();
             document.as_object_mut().unwrap().remove("userMode");
-            document.as_object_mut().unwrap().remove("exportPreferences");
+            document
+                .as_object_mut()
+                .unwrap()
+                .remove("exportPreferences");
             let settings = decode_settings(&serde_json::to_vec(&document).unwrap()).unwrap();
             assert_eq!(settings.user_mode, "normie");
             assert_eq!(settings.export_preferences.formats, [format]);
@@ -217,8 +237,12 @@ mod tests {
         };
         settings.export_preferences.preservation.ruby = false;
         settings.export_preferences.preservation.drcs = false;
-        for formats in [vec!["ASS"], vec!["ASS", "SRT", "TTML", "WebVTT", "JSON", "Raw Data"]] {
-            settings.export_preferences.formats = formats.iter().map(|format| (*format).into()).collect();
+        for formats in [
+            vec!["ASS"],
+            vec!["ASS", "SRT", "TTML", "WebVTT", "JSON", "Raw Data"],
+        ] {
+            settings.export_preferences.formats =
+                formats.iter().map(|format| (*format).into()).collect();
             let before = serde_json::to_value(&settings).unwrap();
             for mode in ["nerd", "normie"] {
                 let mut changed = settings.clone();
