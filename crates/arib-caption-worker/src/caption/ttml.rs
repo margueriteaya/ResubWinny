@@ -153,7 +153,28 @@ pub(crate) fn expand_ttml_inline_style_references(
         let closing = if preserved.ends_with("/>") { "/>" } else { ">" };
         let opening = preserved.trim_end_matches(closing);
         output.push_str(opening);
-        output.push_str(&ttml_style_attributes(&style));
+        let mut expanded = ttml_style_attributes(&style);
+        for name in [
+            "color",
+            "backgroundColor",
+            "fontSize",
+            "fontFamily",
+            "fontStyle",
+            "fontWeight",
+            "writingMode",
+            "textAlign",
+            "textOutline",
+            "lineHeight",
+            "letterSpacing",
+            "opacity",
+            "displayAlign",
+        ] {
+            let name = format!("tts:{name}");
+            if attribute(opening, &name).is_some() {
+                expanded = remove_xml_attribute(&expanded, &name);
+            }
+        }
+        output.push_str(&expanded);
         output.push_str(closing);
         remaining = &remaining[end + 1..];
     }
