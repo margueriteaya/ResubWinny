@@ -138,6 +138,24 @@ test('runtime export conflicts do not contaminate source feature details', () =>
   })
 })
 
+test('runtime export conflicts preserve an already complete feature summary', () => {
+  const track = 'logical-track'
+  let state = reduce(emptyTaskEventState(), event('feature_observed', track, 'drcs', { observedCount: 2 }))
+  state = reduce(state, event('feature_summary', track, 'drcs', { state: 'present', observedCount: 5, complete: true }))
+  state = reduce(state, {
+    kind: 'failed',
+    code: 'export_conflict',
+    message: 'fallback text',
+    parameters: { logicalTrack: track, feature: 'drcs', formats: ['SRT'], issueCode: 'unresolved_drcs_text_target' },
+  })
+  assert.deepEqual(state.featureKnowledge['recording.ts::logical-track'].drcs, {
+    state: 'present',
+    observedCount: 5,
+    complete: true,
+    details: {},
+  })
+})
+
 test('conditional DRCS converges to approximation or a format-specific runtime conflict', () => {
   const knowledge = { drcs: { state: 'present', observedCount: 1, complete: false } }
   const allowed = assessExports(['ASS', 'SRT'], preservation, knowledge)

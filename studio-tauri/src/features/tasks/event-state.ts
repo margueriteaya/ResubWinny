@@ -81,7 +81,7 @@ export function reduceTaskEvent(
         track[feature] = {
           state: nextState,
           observedCount: Number(event.parameters?.observedCount ?? previous?.observedCount ?? 0),
-          complete: event.parameters?.complete === true,
+          complete: event.parameters?.complete === true || previous?.complete === true,
           details: {
             ...previous?.details,
             ...(event.parameters?.details as Record<string, unknown> | undefined),
