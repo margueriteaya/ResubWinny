@@ -471,7 +471,7 @@ where
             "TLV TTML conversion requires an ISDB-S3 TLV input",
         ));
     }
-    let mut input = File::open(path)?;
+    let mut input = crate::input::open_input(path)?;
     let mut demuxer = NativeTlvDemuxer::new()?;
     let mut tracks = BTreeMap::new();
     let mut timeline_origin = None;

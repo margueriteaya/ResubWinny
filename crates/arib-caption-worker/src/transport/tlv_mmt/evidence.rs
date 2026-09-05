@@ -121,7 +121,7 @@ pub(crate) fn dump_tlv_stpp_raw(
     let temporary = output.with_extension("jsonl.part");
     let mut writer = BufWriter::new(File::create(&temporary)?);
     write_tlv_raw_header(&mut writer, path)?;
-    let mut reader = BufReader::with_capacity(1024 * 1024, File::open(path)?);
+    let mut reader = BufReader::with_capacity(1024 * 1024, crate::input::open_input(path)?);
     let mut offset = probe.sync_offset.unwrap_or_default() as u64;
     reader.seek(SeekFrom::Start(offset))?;
     let mut diagnostics = TlvDiagnostics::default();

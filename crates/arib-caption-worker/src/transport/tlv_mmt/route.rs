@@ -38,7 +38,7 @@ where
             "TLV TTML conversion requires an ISDB-S3 TLV input",
         ));
     }
-    let mut reader = BufReader::with_capacity(1024 * 1024, File::open(path)?);
+    let mut reader = BufReader::with_capacity(1024 * 1024, crate::input::open_input(path)?);
     let mut offset = probe.sync_offset.unwrap_or_default() as u64;
     reader.seek(SeekFrom::Start(offset))?;
     let mut diagnostics = TlvDiagnostics::default();

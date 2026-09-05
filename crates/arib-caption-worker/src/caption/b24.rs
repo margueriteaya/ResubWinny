@@ -59,7 +59,7 @@ where
     C: FnMut() -> bool,
     R: FnMut(u16, u64, &[u8]) -> io::Result<()>,
 {
-    let mut reader = BufReader::with_capacity(1024 * 1024, File::open(path)?);
+    let mut reader = BufReader::with_capacity(1024 * 1024, crate::input::open_input(path)?);
     let mut packet = [0u8; 188];
     let mut pes = Vec::new();
     let mut pes_pid = None;

@@ -20,6 +20,7 @@ mod export_assessment;
 mod exporters;
 #[cfg(feature = "fuzzing")]
 pub mod fuzzing;
+mod input;
 mod inspection;
 mod jobs;
 mod models;

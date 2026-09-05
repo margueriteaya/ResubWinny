@@ -589,7 +589,7 @@ pub(crate) fn inspect_mmtp_packet(
 }
 
 pub(crate) fn scan_tlv_diagnostics(path: &Path, start: usize) -> io::Result<TlvDiagnostics> {
-    let mut reader = BufReader::with_capacity(1024 * 1024, File::open(path)?);
+    let mut reader = BufReader::with_capacity(1024 * 1024, crate::input::open_input(path)?);
     let mut bytes = vec![0; PSI_SCAN_BYTES];
     let length = reader.read(&mut bytes)?;
     bytes.truncate(length);
@@ -634,7 +634,7 @@ pub(crate) fn scan_tlv_diagnostics(path: &Path, start: usize) -> io::Result<TlvD
 }
 
 pub(crate) fn read_tlv_packet(
-    reader: &mut BufReader<File>,
+    reader: &mut BufReader<impl Read>,
     offset: &mut u64,
 ) -> io::Result<Option<(u8, Vec<u8>, u64)>> {
     let packet_offset = *offset;

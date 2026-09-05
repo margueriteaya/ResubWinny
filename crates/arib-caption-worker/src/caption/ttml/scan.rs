@@ -82,7 +82,7 @@ where
     C: FnMut() -> bool,
     R: FnMut(u16, u64, &[u8]) -> io::Result<()>,
 {
-    let mut reader = BufReader::with_capacity(1024 * 1024, File::open(path)?);
+    let mut reader = BufReader::with_capacity(1024 * 1024, crate::input::open_input(path)?);
     let mut packet = vec![0u8; framing.packet_size];
     let mut pes: HashMap<u16, Vec<u8>> = tracks.pids.iter().map(|pid| (*pid, Vec::new())).collect();
     let mut timeline_origin_ms = None;

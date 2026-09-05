@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    fs::File,
     io::{self, BufReader, Read, Seek, SeekFrom},
     path::Path,
 };
@@ -116,7 +115,7 @@ impl PsiAssembler {
 }
 
 pub(crate) fn probe_path(path: &Path) -> io::Result<InputProbe> {
-    let mut file = File::open(path)?;
+    let mut file = crate::input::open_input(path)?;
     let mut bytes = vec![0; PROBE_BYTES];
     let length = file.read(&mut bytes)?;
     bytes.truncate(length);
@@ -429,7 +428,7 @@ fn scan_broadcast_metadata(
     start_offset: u64,
     scan_bytes: u64,
 ) -> io::Result<BroadcastMetadata> {
-    let mut file = BufReader::with_capacity(64 * 1024, File::open(path)?);
+    let mut file = BufReader::with_capacity(64 * 1024, crate::input::open_input(path)?);
     file.seek(SeekFrom::Start(start_offset))?;
     let mut packet = vec![0; packet_size];
     let mut bytes_read = 0_u64;
@@ -566,7 +565,7 @@ pub(crate) fn classified_data_pids(section: &[u8]) -> (Vec<u16>, Vec<u16>, Vec<u
 /// Their payload is inspected as declared ARIB-TTML only after the bounded
 /// PES/XML route has isolated a complete document.
 pub(crate) fn discover_mpeg_ts_data_tracks(path: &Path) -> io::Result<Option<DataTracks>> {
-    let mut file = File::open(path)?;
+    let mut file = crate::input::open_input(path)?;
     let mut bytes = vec![0; PSI_SCAN_BYTES];
     let length = file.read(&mut bytes)?;
     let mut pmt_pid = None;
@@ -628,7 +627,7 @@ where
 }
 
 pub(crate) fn discover_b24_tracks(path: &Path) -> io::Result<Vec<B24Track>> {
-    let mut file = File::open(path)?;
+    let mut file = crate::input::open_input(path)?;
     let file_length = file.metadata()?.len();
     let mut pmt_programs_by_pid = HashMap::new();
     let mut service_names = HashMap::new();
@@ -667,7 +666,7 @@ pub(crate) fn discover_b24_tracks(path: &Path) -> io::Result<Vec<B24Track>> {
 }
 
 fn scan_b24_psi_window(
-    file: &mut File,
+    file: &mut (impl Read + std::io::Seek),
     start_offset: u64,
     length: u64,
     pmt_programs_by_pid: &mut HashMap<u16, u16>,

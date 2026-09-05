@@ -1,5 +1,4 @@
 use std::{
-    fs::File,
     io::{self, Read},
     path::Path,
 };
@@ -16,7 +15,7 @@ use crate::{
 /// deliberately discarded only at the packet boundary; all PSI/PES parsing
 /// remains in the shared bounded MPEG-TS helpers.
 pub(crate) fn discover_m2ts_data_tracks(path: &Path) -> io::Result<Option<DataTracks>> {
-    let mut file = File::open(path)?;
+    let mut file = crate::input::open_input(path)?;
     let mut bytes = vec![0; PSI_SCAN_BYTES];
     let length = file.read(&mut bytes)?;
     let mut pmt_pid = None;
