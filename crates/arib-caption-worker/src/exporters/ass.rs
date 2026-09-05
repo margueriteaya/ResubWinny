@@ -110,9 +110,10 @@ fn write_ass_standalone_ruby(
             .saturating_sub(ASS_RUBY_GAP),
         RubyPlacement::Below => base_box.bottom().saturating_add(ASS_RUBY_GAP),
     };
+    let text = export_ttml_text(&caption.text, &caption.style, options);
     let Some(plan) = layout_ruby(
         &RubyLayoutRequest {
-            text: &caption.text,
+            text: &text,
             container: RubyLayoutBox {
                 x: target_left.floor() as i32,
                 y: ruby_y,
@@ -242,7 +243,7 @@ fn write_ass_ttml_caption_at(
     anchor: Option<(i32, i32)>,
     options: &ConversionOptions,
 ) -> io::Result<()> {
-    let filtered_text = export_text(&caption.text, options);
+    let filtered_text = export_ttml_text(&caption.text, &caption.style, options);
     if filtered_text.is_empty() {
         return Ok(());
     }
@@ -255,10 +256,17 @@ fn write_ass_ttml_caption_at(
     let mut runs = caption
         .rich_body
         .as_deref()
-        .and_then(|body| filter_ttml_preserved_body(body, options))
+        .and_then(|body| filter_ttml_preserved_body(body, &caption.style, options))
         .map(|body| parse_ass_inline_runs(&body, &caption.style))
         .unwrap_or_default();
+    for run in &mut runs {
+        run.text = export_ttml_text(&run.text, &run.style, options);
+    }
+    runs.retain(|run| !run.text.is_empty());
     if runs.is_empty() {
+        if caption.rich_body.is_some() {
+            return Ok(());
+        }
         runs.push(AssInlineRun {
             text: filtered_text,
             style: caption.style.clone(),
@@ -461,10 +469,31 @@ pub(crate) fn filter_ttml_inline_body(body: &str, preserve_color: bool) -> Strin
     output
 }
 
+pub(crate) fn strip_ttml_font_resource_attributes(body: &str) -> String {
+    let mut output = String::new();
+    let mut remaining = body;
+    while let Some(start) = remaining.find('<') {
+        output.push_str(&remaining[..start]);
+        let Some(relative_end) = remaining[start..].find('>') else {
+            output.push_str(&remaining[start..]);
+            return output;
+        };
+        let end = start + relative_end + 1;
+        output.push_str(&remove_xml_attribute(
+            &remaining[start..end],
+            "arib-tt:font-face",
+        ));
+        remaining = &remaining[end..];
+    }
+    output.push_str(remaining);
+    output
+}
+
 /// Filter source text while keeping its surrounding inline structure. The
 /// shared material-feature mask spans text nodes, including styled fragments.
 pub(crate) fn filter_ttml_preserved_body(
     body: &str,
+    base_style: &TtmlCaptionStyle,
     options: &ConversionOptions,
 ) -> Option<String> {
     let mut body = filter_ttml_inline_body(body, options.preserve_color);
@@ -506,10 +535,13 @@ pub(crate) fn filter_ttml_preserved_body(
         cleaned.push_str(remaining);
         body = cleaned;
     }
-    if options.preserve_gaiji && options.preserve_accessibility {
+    let has_drcs_transform = !options.preserve_drcs;
+    if options.preserve_gaiji && options.preserve_accessibility && !has_drcs_transform {
         return Some(body);
     }
-    let prefix = "<body xmlns:tts='http://www.w3.org/ns/ttml#styling' xmlns:ttm='http://www.w3.org/ns/ttml#metadata' xmlns:arib='https://resubwinny.dev/ns/arib'>";
+    let prefix = format!(
+        "<body xmlns:tts='http://www.w3.org/ns/ttml#styling' xmlns:ttm='http://www.w3.org/ns/ttml#metadata' xmlns:arib='https://resubwinny.dev/ns/arib' xmlns:arib-tt='{ARIB_TTML_NAMESPACE}'>"
+    );
     let wrapped = format!("{prefix}{body}</body>");
     let document = roxmltree::Document::parse(&wrapped).ok()?;
     let nodes = document
@@ -528,7 +560,17 @@ pub(crate) fn filter_ttml_preserved_body(
     let mut cursor = 0;
     let mut edits = Vec::new();
     for node in nodes {
-        let filtered = node
+        let mut style = base_style.clone();
+        if let Some(font_resource) = node.ancestors().find_map(|ancestor| {
+            ancestor.attributes().find_map(|attribute| {
+                (attribute.name() == "font-face"
+                    && attribute.namespace() == Some(ARIB_TTML_NAMESPACE))
+                .then(|| attribute.value().to_owned())
+            })
+        }) {
+            style.font_resource = Some(font_resource);
+        }
+        let source = node
             .text()
             .unwrap_or_default()
             .chars()
@@ -538,6 +580,7 @@ pub(crate) fn filter_ttml_preserved_body(
                 keep
             })
             .collect::<String>();
+        let filtered = export_ttml_text(&source, &style, options);
         let range = node.range();
         edits.push((
             range.start - prefix.len()..range.end - prefix.len(),

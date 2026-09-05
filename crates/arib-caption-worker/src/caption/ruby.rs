@@ -571,6 +571,7 @@ fn plain_ttml_inline_text(value: &str) -> String {
             _ => {}
         }
     }
+    let output = decode_numeric_xml_entities(&output);
     output
         .replace("&amp;", "&")
         .replace("&lt;", "<")
@@ -578,6 +579,33 @@ fn plain_ttml_inline_text(value: &str) -> String {
         .replace("&quot;", "\"")
         .replace("&apos;", "'")
         .replace("&#39;", "'")
+}
+
+fn decode_numeric_xml_entities(value: &str) -> String {
+    let mut decoded = String::new();
+    let mut remaining = value;
+    while let Some(start) = remaining.find("&#") {
+        decoded.push_str(&remaining[..start]);
+        let entity = &remaining[start + 2..];
+        let Some(end) = entity.find(';') else {
+            decoded.push_str(&remaining[start..]);
+            return decoded;
+        };
+        let digits = &entity[..end];
+        let codepoint = digits
+            .strip_prefix('x')
+            .or_else(|| digits.strip_prefix('X'))
+            .and_then(|digits| u32::from_str_radix(digits, 16).ok())
+            .or_else(|| digits.parse::<u32>().ok());
+        if let Some(character) = codepoint.and_then(char::from_u32) {
+            decoded.push(character);
+        } else {
+            decoded.push_str(&remaining[start..start + 3 + end]);
+        }
+        remaining = &entity[end + 1..];
+    }
+    decoded.push_str(remaining);
+    decoded
 }
 
 fn ttml_inline_style(tag: &str, inherited: &TtmlCaptionStyle) -> TtmlCaptionStyle {
@@ -609,6 +637,9 @@ fn merge_ttml_inline_style(style: &mut TtmlCaptionStyle, tag: &str) {
         if let Some(value) = attribute(tag, name) {
             *target = Some(value);
         }
+    }
+    if let Some(value) = attribute(tag, "arib-tt:font-face") {
+        style.font_resource = Some(value);
     }
 }
 

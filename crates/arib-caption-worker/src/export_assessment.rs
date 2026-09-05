@@ -59,7 +59,12 @@ fn unsupported_formats(options: &ConversionOptions, feature: &str) -> Vec<String
         .collect()
 }
 
-fn export_conflict(formats: Vec<String>, feature: &str, issue_code: &str) -> io::Result<()> {
+fn export_conflict(
+    formats: Vec<String>,
+    feature: &str,
+    issue_code: &str,
+    offer_drcs_mapping: bool,
+) -> io::Result<()> {
     if formats.is_empty() {
         return Ok(());
     }
@@ -68,7 +73,7 @@ fn export_conflict(formats: Vec<String>, feature: &str, issue_code: &str) -> io:
         "remove_format".into(),
         "choose_compatible_format".into(),
     ];
-    if feature == "drcs" {
+    if feature == "drcs" && offer_drcs_mapping {
         available_actions.insert(0, "open_drcs_mapping".into());
     }
     Err(io::Error::other(ExportConflict {
@@ -83,7 +88,7 @@ fn export_conflict(formats: Vec<String>, feature: &str, issue_code: &str) -> io:
 
 fn conflict(options: &ConversionOptions, feature: &str) -> io::Result<()> {
     let formats = unsupported_formats(options, feature);
-    export_conflict(formats, feature, "format_cannot_preserve_feature")
+    export_conflict(formats, feature, "format_cannot_preserve_feature", false)
 }
 
 pub(crate) fn assess_b24_scene(
@@ -121,7 +126,7 @@ pub(crate) fn assess_b24_scene(
                 .filter(|format| matches!(*format, "SRT" | "WebVTT"))
                 .map(str::to_owned)
                 .collect();
-            export_conflict(formats, "drcs", "unresolved_drcs_text_target")?;
+            export_conflict(formats, "drcs", "unresolved_drcs_text_target", true)?;
         }
     }
     Ok(())
@@ -133,7 +138,16 @@ pub(crate) fn assess_ttml_caption(
 ) -> io::Result<()> {
     let mut facts = CaptionFeatureSummary::default();
     facts.observe_ttml(caption);
-    assess_facts(options, &facts)
+    assess_facts(options, &facts)?;
+    if options.preserve_drcs && !caption.drcs_uses.is_empty() {
+        let formats = selected_formats(options)
+            .into_iter()
+            .filter(|format| matches!(*format, "ASS" | "TTML" | "SRT" | "WebVTT"))
+            .map(str::to_owned)
+            .collect();
+        export_conflict(formats, "drcs", "unresolved_drcs_text_target", false)?;
+    }
+    Ok(())
 }
 
 fn assess_facts(options: &ConversionOptions, facts: &CaptionFeatureSummary) -> io::Result<()> {
@@ -291,5 +305,52 @@ mod tests {
         options.drcs_mode = crate::DrcsMode::UseUserMapping;
         options.drcs_replacements.insert(7, "字".into());
         assert!(assess_b24_scene(&options, &scene).is_ok());
+    }
+
+    #[test]
+    fn b62_drcs_conflicts_only_for_resource_backed_unmapped_characters() {
+        let ordinary = crate::parse_ttml_captions(
+            r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><p begin='0s' end='1s' arib-tt:font-face='subt://9'>字</p></body></tt>"#,
+            0,
+        )
+        .remove(0);
+        let unresolved = crate::parse_ttml_captions(
+            r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><p begin='0s' end='1s' arib-tt:font-face='subt://9'>&#xE000;</p></body></tt>"#,
+            0,
+        )
+        .remove(0);
+        let mut options = ConversionOptions {
+            srt: true,
+            webvtt: true,
+            ttml: true,
+            archive: true,
+            raw: true,
+            preserve_position: false,
+            preserve_color: false,
+            preserve_ruby: false,
+            ..Default::default()
+        };
+
+        assert!(assess_ttml_caption(&options, &ordinary).is_ok());
+        let error = assess_ttml_caption(&options, &unresolved).unwrap_err();
+        let conflict = error
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<ExportConflict>())
+            .unwrap();
+        assert_eq!(conflict.issue_code, "unresolved_drcs_text_target");
+        assert_eq!(conflict.formats, ["ASS", "TTML", "SRT", "WebVTT"]);
+        assert!(
+            !conflict
+                .available_actions
+                .iter()
+                .any(|action| action == "open_drcs_mapping")
+        );
+
+        options.drcs_mode = crate::DrcsMode::UseUserMapping;
+        options.drcs_replacements.insert(0xe000, "字".into());
+        assert!(assess_ttml_caption(&options, &unresolved).is_err());
+        options.preserve_drcs = false;
+        options.drcs_replacements.clear();
+        assert!(assess_ttml_caption(&options, &unresolved).is_ok());
     }
 }

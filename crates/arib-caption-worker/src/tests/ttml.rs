@@ -289,12 +289,128 @@ fn dropping_ruby_removes_annotations_but_keeps_styled_base_text() {
         "<ruby><span tts:ruby='base' tts:color='#ff0000'>漢</span><rt><span>かん</span></rt></ruby><span>終</span>",
         "<span tts:ruby='container'><span tts:ruby='base' tts:color='#ff0000'>漢</span><span tts:ruby='text'>かん</span></span><span>終</span>",
     ] {
-        let filtered = filter_ttml_preserved_body(body, &options).expect("rich body");
+        let filtered = filter_ttml_preserved_body(body, &TtmlCaptionStyle::default(), &options)
+            .expect("rich body");
         assert!(!filtered.contains("かん"));
         assert!(!filtered.contains("ruby"));
         assert!(filtered.contains("tts:color='#ff0000'"));
         assert_eq!(ttml_plain_text(&filtered), "漢終");
     }
+}
+
+#[test]
+fn drops_only_resource_backed_b62_drcs_text() {
+    let body = "<span arib-tt:font-face='subt://9'>&#xE000;</span><span arib-tt:font-face='subt://9'>字</span>終";
+    let mut options = ConversionOptions {
+        drcs_mode: DrcsMode::UseUserMapping,
+        ..Default::default()
+    };
+    options.drcs_replacements.insert(0xe000, "映".into());
+    let unresolved = filter_ttml_preserved_body(body, &TtmlCaptionStyle::default(), &options)
+        .expect("unresolved rich body");
+    assert_eq!(ttml_plain_text(&unresolved), "&#xE000;字終");
+
+    options.preserve_drcs = false;
+    let dropped = filter_ttml_preserved_body(body, &TtmlCaptionStyle::default(), &options)
+        .expect("dropped rich body");
+    assert_eq!(ttml_plain_text(&dropped), "字終");
+}
+
+#[test]
+fn b62_drcs_drop_reaches_ass_and_ttml_outputs() {
+    let caption = parse_ttml_captions(
+        r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><p begin='0s' end='1s'><span arib-tt:font-face='subt://9'>&#xE000;</span></p></body></tt>"#,
+        0,
+    )
+    .remove(0);
+    let options = ConversionOptions {
+        drcs_mode: DrcsMode::UseUserMapping,
+        preserve_drcs: false,
+        overwrite: true,
+        ..Default::default()
+    };
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let directory = std::env::temp_dir().join(format!("arib-b62-drcs-output-{stamp}"));
+    fs::create_dir_all(&directory).expect("temporary directory");
+    let ass = directory.join("dropped.ass");
+    let ttml = directory.join("dropped.ttml");
+
+    let mut ass_writer = BufWriter::new(File::create(&ass).expect("ASS output"));
+    write_ass_header(&mut ass_writer).expect("ASS header");
+    write_ass_ttml_group(&mut ass_writer, std::slice::from_ref(&caption), &options)
+        .expect("ASS caption");
+    ass_writer.flush().expect("ASS flush");
+    let mut ttml_writer = BufWriter::new(File::create(&ttml).expect("TTML output"));
+    write_ttml_header(&mut ttml_writer).expect("TTML header");
+    write_ttml_caption(&mut ttml_writer, &caption, &options).expect("TTML caption");
+    write_ttml_footer(&mut ttml_writer).expect("TTML footer");
+    ttml_writer.flush().expect("TTML flush");
+
+    assert!(
+        !fs::read_to_string(ass)
+            .expect("dropped ASS text")
+            .contains("Dialogue:")
+    );
+    assert!(
+        !fs::read_to_string(ttml)
+            .expect("dropped TTML text")
+            .contains("<p ")
+    );
+    fs::remove_dir_all(directory).expect("cleanup dropped outputs");
+}
+
+#[test]
+fn resolves_b62_drcs_font_style_at_the_character_run() {
+    let xml = r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><head><styling>
+      <style xml:id='drcs' arib-tt:font-face='subt://9'/>
+    </styling></head><body><p begin='0s' end='1s'>
+      <span>字</span><span xml:id='wrapper'><span style='drcs'>&#xE000;</span></span>
+    </p></body></tt>"#;
+    let caption = parse_ttml_captions(xml, 0).remove(0);
+
+    assert_eq!(caption.drcs_uses.len(), 1);
+    assert_eq!(caption.drcs_uses[0].source_codepoint, 0xe000);
+    assert_eq!(caption.drcs_uses[0].resource_index, 9);
+}
+
+#[test]
+fn escaped_numeric_text_is_not_double_decoded_as_b62_drcs() {
+    let xml = r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body>
+      <p begin='0s' end='1s' arib-tt:font-face='subt://9'>&amp;#xE000;</p>
+    </body></tt>"#;
+    let caption = parse_ttml_captions(xml, 0).remove(0);
+
+    assert_eq!(caption.text, "&#xE000;");
+    assert!(caption.drcs_uses.is_empty());
+}
+
+#[test]
+fn ttml_output_removes_unpublished_b62_font_resource_reference() {
+    let caption = parse_ttml_captions(
+        r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body>
+          <p begin='0s' end='1s' arib-tt:font-face='subt://9'>字</p>
+        </body></tt>"#,
+        0,
+    )
+    .remove(0);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let output = std::env::temp_dir().join(format!("arib-b62-font-strip-{stamp}.ttml"));
+    let mut writer = BufWriter::new(File::create(&output).expect("TTML output"));
+    write_ttml_header(&mut writer).expect("TTML header");
+    write_ttml_caption(&mut writer, &caption, &ConversionOptions::default()).expect("TTML caption");
+    write_ttml_footer(&mut writer).expect("TTML footer");
+    writer.flush().expect("TTML flush");
+
+    let text = fs::read_to_string(&output).expect("TTML text");
+    assert!(!text.contains("font-face"));
+    assert!(roxmltree::Document::parse(&text).is_ok());
+    fs::remove_file(output).expect("cleanup TTML output");
 }
 
 #[test]

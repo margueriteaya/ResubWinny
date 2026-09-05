@@ -163,6 +163,7 @@ mod tests {
             height: Some(40),
             style: TtmlCaptionStyle::default(),
             rich_body: None,
+            drcs_uses: Vec::new(),
             ruby_bindings: Vec::new(),
             source_layout: None,
             source: None,

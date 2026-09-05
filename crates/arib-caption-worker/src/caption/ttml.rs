@@ -1,6 +1,8 @@
 use crate::*;
 use roxmltree::{Document, Node, NodeType};
 
+pub(crate) const ARIB_TTML_NAMESPACE: &str = "http://www.arib.or.jp/ns/arib-ttml/v1_0";
+
 pub(crate) fn attribute(tag: &str, name: &str) -> Option<String> {
     for quote in ['\"', '\''] {
         let marker = format!("{name}={quote}");
@@ -130,6 +132,9 @@ pub(crate) fn ttml_style_attributes(style: &TtmlCaptionStyle) -> String {
             output.push_str(&format!(" tts:{name}=\"{}\"", xml_escape(value)));
         }
     }
+    if let Some(value) = &style.font_resource {
+        output.push_str(&format!(" arib-tt:font-face=\"{}\"", xml_escape(value)));
+    }
     output
 }
 
@@ -173,6 +178,9 @@ pub(crate) fn expand_ttml_inline_style_references(
             if attribute(opening, &name).is_some() {
                 expanded = remove_xml_attribute(&expanded, &name);
             }
+        }
+        if attribute(opening, "arib-tt:font-face").is_some() {
+            expanded = remove_xml_attribute(&expanded, "arib-tt:font-face");
         }
         output.push_str(&expanded);
         output.push_str(closing);
@@ -895,6 +903,7 @@ pub(crate) fn parse_ttml_captions_until(
                     ttml_ruby_bindings(&parse_ttml_inline_runs(body, &style), ruby_writing_mode)
                 })
                 .unwrap_or_default();
+            let drcs_uses = ttml_drcs_uses(&text, &style, rich_body.as_deref());
             captions.push(TtmlCaption {
                 start_ms: base_pts_ms + start,
                 end_ms: base_pts_ms + end,
@@ -905,6 +914,7 @@ pub(crate) fn parse_ttml_captions_until(
                 height,
                 style,
                 rich_body,
+                drcs_uses,
                 ruby_bindings,
                 source_layout: Some(TtmlSourceLayout {
                     plane_width: display_plane.source_width,
@@ -1002,6 +1012,7 @@ fn parse_ttml_captions_legacy(
                     ttml_ruby_bindings(&parse_ttml_inline_runs(body, &style), ruby_writing_mode)
                 })
                 .unwrap_or_default();
+            let drcs_uses = ttml_drcs_uses(&text, &style, rich_body.as_deref());
             captions.push(TtmlCaption {
                 start_ms: base_pts_ms.saturating_add(start),
                 end_ms: base_pts_ms.saturating_add(end),
@@ -1012,6 +1023,7 @@ fn parse_ttml_captions_legacy(
                 height,
                 style,
                 rich_body,
+                drcs_uses,
                 ruby_bindings,
                 source_layout: Some(TtmlSourceLayout {
                     plane_width: display_plane.source_width,

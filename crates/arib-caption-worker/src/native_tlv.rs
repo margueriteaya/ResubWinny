@@ -713,6 +713,52 @@ mod tests {
     }
 
     #[test]
+    fn native_b62_drcs_conflict_prevents_publication_until_dropped() {
+        let document = br#"<?xml version="1.0"?><tt xmlns="http://www.w3.org/ns/ttml" xmlns:arib-tt="http://www.arib.or.jp/ns/arib-ttml/v1_0"><body><div><p begin="0s" end="1s" arib-tt:font-face="subt://1">&#xE000;</p></div></body></tt>"#;
+        let mut source = crate::synthetic::make_b62_tlv_stream(document);
+        source.extend([0x7f, 0xff, 0, 0].repeat(2));
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("arib-native-b62-drcs-{stamp}"));
+        fs::create_dir_all(&directory).expect("temporary directory");
+        let input = directory.join("source.tlv");
+        let output = directory.join("output.ass");
+        fs::write(&input, source).expect("native DRCS fixture");
+
+        let error = match convert_with_options_and_cancel(
+            &input,
+            &output,
+            ConversionOptions::default(),
+            |_| {},
+            || false,
+        ) {
+            Ok(_) => panic!("unmapped B62 DRCS was published"),
+            Err(error) => error,
+        };
+        let conflict = error
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<crate::ExportConflict>())
+            .expect("structured DRCS conflict");
+        assert_eq!(conflict.issue_code, "unresolved_drcs_text_target");
+        assert_eq!(conflict.formats, ["ASS"]);
+        assert!(!output.exists());
+        assert!(!output.with_extension("ass.part").exists());
+
+        let options = ConversionOptions {
+            preserve_drcs: false,
+            ..Default::default()
+        };
+        let report = convert_with_options_and_cancel(&input, &output, options, |_| {}, || false)
+            .expect("native B62 conversion with DRCS dropped");
+        assert_eq!(report.summary.captions, 1);
+        let ass = fs::read_to_string(&output).expect("DRCS-dropped ASS");
+        assert!(!ass.contains('\u{e000}'));
+        fs::remove_dir_all(directory).expect("cleanup native DRCS fixture");
+    }
+
+    #[test]
     fn caption_callback_copies_document_and_resources_before_returning() {
         let mut state = CallbackState::default();
         let mut document = b"<tt/>".to_vec();

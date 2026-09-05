@@ -28,6 +28,31 @@ pub(crate) fn export_text(value: &str, options: &ConversionOptions) -> String {
     )
 }
 
+pub(crate) fn export_ttml_text(
+    value: &str,
+    style: &TtmlCaptionStyle,
+    options: &ConversionOptions,
+) -> String {
+    let resource_backed = style
+        .font_resource
+        .as_deref()
+        .and_then(subt_resource_index)
+        .is_some();
+    let text = value
+        .chars()
+        .filter_map(|character| {
+            if !resource_backed || ttml_drcs_kind(character).is_none() {
+                return Some(character.to_string());
+            }
+            if !options.preserve_drcs {
+                return None;
+            }
+            Some(character.to_string())
+        })
+        .collect::<String>();
+    export_text(&text, options)
+}
+
 pub(crate) fn publish_file(temporary: &Path, output: &Path, overwrite: bool) -> io::Result<()> {
     if !overwrite || !output.exists() {
         return fs::rename(temporary, output);

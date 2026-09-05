@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use crate::ARIB_TTML_NAMESPACE;
 use crate::caption::ruby::TtmlRubyBinding;
 use crate::native_b24;
 
@@ -228,15 +229,14 @@ impl CaptionFeatureSummary {
             self.color = true;
             self.mark("color", true);
         }
-        if caption
-            .style
-            .font_resource
-            .as_deref()
-            .and_then(subt_resource_index)
-            .is_some()
-        {
+        let drcs_count = ttml_font_resource_character_count(
+            &caption.text,
+            &caption.style,
+            caption.rich_body.as_deref(),
+        );
+        if drcs_count > 0 {
             self.drcs = true;
-            self.mark("drcs", true);
+            self.mark_count("drcs", drcs_count);
         }
         let gaiji_count = crate::caption_features::gaiji_ranges(&caption.text).len();
         if gaiji_count > 0 {
@@ -415,21 +415,51 @@ mod feature_tests {
     }
 
     #[test]
-    fn ttml_drcs_requires_a_caption_font_resource_reference() {
-        let mut referenced = crate::parse_ttml_captions(
-            r#"<tt><body><p begin='0s' end='1s' arib-tt:font-face='subt://9'>字</p></body></tt>"#,
+    fn ttml_drcs_mapping_uses_require_a_resource_backed_drcs_character() {
+        let ordinary = crate::parse_ttml_captions(
+            r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><p begin='0s' end='1s' arib-tt:font-face='subt://9'>字</p></body></tt>"#,
             0,
         )
         .remove(0);
+        let mut ordinary_features = CaptionFeatureSummary::default();
+        ordinary_features.observe_ttml(&ordinary);
+        assert!(ordinary_features.drcs);
+        assert!(ordinary.drcs_uses.is_empty());
+
+        let referenced = crate::parse_ttml_captions(
+            r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><p begin='0s' end='1s' arib-tt:font-face='subt://9'>&#xE000;</p></body></tt>"#,
+            0,
+        )
+        .remove(0);
+        assert_eq!(referenced.text, "\u{e000}");
+        assert_eq!(referenced.style.font_resource.as_deref(), Some("subt://9"));
         let mut features = CaptionFeatureSummary::default();
         features.observe_ttml(&referenced);
         assert!(features.drcs);
         assert_eq!(features.observed_counts["drcs"], 1);
+        assert_eq!(referenced.drcs_uses[0].source_codepoint, 0xe000);
+        assert_eq!(referenced.drcs_uses[0].resource_index, 9);
 
-        referenced.style.font_resource = None;
+        let unreferenced = crate::parse_ttml_captions(
+            "<tt><body><p begin='0s' end='1s'>&#xE000;</p></body></tt>",
+            0,
+        )
+        .remove(0);
         let mut without_reference = CaptionFeatureSummary::default();
-        without_reference.observe_ttml(&referenced);
+        without_reference.observe_ttml(&unreferenced);
         assert!(!without_reference.drcs);
+    }
+
+    #[test]
+    fn ttml_drcs_mapping_classifies_private_and_replacement_characters() {
+        assert_eq!(ttml_drcs_kind('\u{e000}'), Some(TtmlDrcsKind::PrivateUse));
+        assert_eq!(ttml_drcs_kind('\u{f0000}'), Some(TtmlDrcsKind::PrivateUse));
+        assert_eq!(
+            ttml_drcs_kind('\u{fffc}'),
+            Some(TtmlDrcsKind::ObjectReplacement)
+        );
+        assert_eq!(ttml_drcs_kind('\u{fffd}'), Some(TtmlDrcsKind::Replacement));
+        assert_eq!(ttml_drcs_kind('字'), None);
     }
 }
 
@@ -445,10 +475,138 @@ pub(crate) struct TtmlCaption {
     pub(crate) style: TtmlCaptionStyle,
     pub(crate) rich_body: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) drcs_uses: Vec<TtmlDrcsUse>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) ruby_bindings: Vec<TtmlRubyBinding>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) source_layout: Option<TtmlSourceLayout>,
     pub(crate) source: Option<TtmlCaptionSource>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum TtmlDrcsKind {
+    PrivateUse,
+    ObjectReplacement,
+    Replacement,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TtmlDrcsUse {
+    pub(crate) run_index: usize,
+    pub(crate) character_index: usize,
+    pub(crate) source_codepoint: u32,
+    pub(crate) resource_index: u32,
+    pub(crate) kind: TtmlDrcsKind,
+}
+
+pub(crate) fn ttml_drcs_kind(character: char) -> Option<TtmlDrcsKind> {
+    match character as u32 {
+        0xe000..=0xf8ff | 0xf0000..=0xffffd | 0x100000..=0x10fffd => Some(TtmlDrcsKind::PrivateUse),
+        0xfffc => Some(TtmlDrcsKind::ObjectReplacement),
+        0xfffd => Some(TtmlDrcsKind::Replacement),
+        _ => None,
+    }
+}
+
+pub(crate) fn ttml_drcs_uses(
+    text: &str,
+    style: &TtmlCaptionStyle,
+    rich_body: Option<&str>,
+) -> Vec<TtmlDrcsUse> {
+    ttml_resolved_runs(text, style, rich_body)
+        .iter()
+        .enumerate()
+        .flat_map(|(run_index, run)| {
+            let resource_index = run
+                .style
+                .font_resource
+                .as_deref()
+                .and_then(subt_resource_index);
+            run.text
+                .chars()
+                .enumerate()
+                .filter_map(move |(character_index, character)| {
+                    Some(TtmlDrcsUse {
+                        run_index,
+                        character_index,
+                        source_codepoint: character as u32,
+                        resource_index: resource_index?,
+                        kind: ttml_drcs_kind(character)?,
+                    })
+                })
+        })
+        .collect()
+}
+
+fn ttml_resolved_runs(
+    text: &str,
+    style: &TtmlCaptionStyle,
+    rich_body: Option<&str>,
+) -> Vec<crate::TtmlInlineRun> {
+    let mut runs = rich_body
+        .and_then(|body| {
+            let prefix = format!(
+                "<body xmlns:tts='http://www.w3.org/ns/ttml#styling' xmlns:ttm='http://www.w3.org/ns/ttml#metadata' xmlns:arib='https://resubwinny.dev/ns/arib' xmlns:arib-tt='{ARIB_TTML_NAMESPACE}'>"
+            );
+            let wrapped = format!("{prefix}{body}</body>");
+            let document = roxmltree::Document::parse(&wrapped).ok()?;
+            Some(
+                document
+                    .descendants()
+                    .filter(|node| node.is_text())
+                    .filter_map(|node| {
+                        let text = node.text()?.to_owned();
+                        if text.is_empty() {
+                            return None;
+                        }
+                        let mut run_style = style.clone();
+                        if let Some(font_resource) = node.ancestors().find_map(|ancestor| {
+                            ancestor.attributes().find_map(|attribute| {
+                                (attribute.name() == "font-face"
+                                    && attribute.namespace() == Some(ARIB_TTML_NAMESPACE))
+                                .then(|| attribute.value().to_owned())
+                            })
+                        }) {
+                            run_style.font_resource = Some(font_resource);
+                        }
+                        Some(crate::TtmlInlineRun {
+                            text,
+                            style: run_style,
+                            ..Default::default()
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .unwrap_or_default();
+    if runs.is_empty() {
+        runs.push(crate::TtmlInlineRun {
+            text: text.to_owned(),
+            style: style.clone(),
+            ..Default::default()
+        });
+    }
+    runs
+}
+
+pub(crate) fn ttml_font_resource_character_count(
+    text: &str,
+    style: &TtmlCaptionStyle,
+    rich_body: Option<&str>,
+) -> usize {
+    ttml_resolved_runs(text, style, rich_body)
+        .iter()
+        .filter(|run| {
+            run.style
+                .font_resource
+                .as_deref()
+                .and_then(subt_resource_index)
+                .is_some()
+        })
+        .map(|run| run.text.chars().count())
+        .sum()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
