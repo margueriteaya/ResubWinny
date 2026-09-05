@@ -252,16 +252,12 @@ fn write_ass_ttml_caption_at(
         .as_deref()
         .and_then(ass_font_size_from_ttml)
         .unwrap_or(42);
-    let mut runs = if options.preserve_ruby {
-        caption
-            .rich_body
-            .as_deref()
-            .and_then(|body| filter_ttml_preserved_body(body, options))
-            .map(|body| parse_ass_inline_runs(&body, &caption.style))
-            .unwrap_or_default()
-    } else {
-        Vec::new()
-    };
+    let mut runs = caption
+        .rich_body
+        .as_deref()
+        .and_then(|body| filter_ttml_preserved_body(body, options))
+        .map(|body| parse_ass_inline_runs(&body, &caption.style))
+        .unwrap_or_default();
     if runs.is_empty() {
         runs.push(AssInlineRun {
             text: filtered_text,
@@ -471,7 +467,45 @@ pub(crate) fn filter_ttml_preserved_body(
     body: &str,
     options: &ConversionOptions,
 ) -> Option<String> {
-    let body = filter_ttml_inline_body(body, options.preserve_color);
+    let mut body = filter_ttml_inline_body(body, options.preserve_color);
+    if !options.preserve_ruby {
+        let prefix = "<body xmlns:tts='http://www.w3.org/ns/ttml#styling'>";
+        let wrapped = format!("{prefix}{body}</body>");
+        let document = roxmltree::Document::parse(&wrapped).ok()?;
+        let annotation = |node: roxmltree::Node<'_, '_>| {
+            node.is_element()
+                && (node.tag_name().name() == "rt"
+                    || node.attributes().any(|attr| {
+                        attr.name() == "ruby"
+                            && matches!(attr.value(), "text" | "textContainer" | "delimiter")
+                    }))
+        };
+        let ranges = document
+            .descendants()
+            .filter(|node| annotation(*node) && !node.ancestors().skip(1).any(annotation))
+            .map(|node| node.range())
+            .collect::<Vec<_>>();
+        for range in ranges.into_iter().rev() {
+            body.replace_range(range.start - prefix.len()..range.end - prefix.len(), "");
+        }
+        body = body
+            .replace("<ruby>", "<span>")
+            .replace("</ruby>", "</span>");
+        let mut remaining = body.as_str();
+        let mut cleaned = String::new();
+        while let Some(start) = remaining.find('<') {
+            cleaned.push_str(&remaining[..start]);
+            let end = start + remaining[start..].find('>')? + 1;
+            let mut tag = remaining[start..end].to_owned();
+            for name in ["tts:ruby", "tts:rubyPosition", "tts:rubyAlign"] {
+                tag = remove_xml_attribute(&tag, name);
+            }
+            cleaned.push_str(&tag);
+            remaining = &remaining[end..];
+        }
+        cleaned.push_str(remaining);
+        body = cleaned;
+    }
     if options.preserve_gaiji && options.preserve_accessibility {
         return Some(body);
     }

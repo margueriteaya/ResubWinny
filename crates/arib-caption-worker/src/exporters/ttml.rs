@@ -283,14 +283,10 @@ pub(crate) fn write_ttml_caption(
             Default::default()
         },
         style,
-        if options.preserve_ruby {
-            caption
-                .rich_body
-                .as_deref()
-                .and_then(|body| filter_ttml_preserved_body(body, options))
-        } else {
-            None
-        }
-        .unwrap_or_else(|| xml_escape(&filtered_text)),
+        caption
+            .rich_body
+            .as_deref()
+            .and_then(|body| filter_ttml_preserved_body(body, options))
+            .unwrap_or_else(|| xml_escape(&filtered_text)),
     )
 }

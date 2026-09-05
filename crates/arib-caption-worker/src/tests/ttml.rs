@@ -280,6 +280,24 @@ fn preserves_safe_ttml_ruby_and_span_markup_for_ttml_interchange() {
 }
 
 #[test]
+fn dropping_ruby_removes_annotations_but_keeps_styled_base_text() {
+    let options = ConversionOptions {
+        preserve_ruby: false,
+        ..Default::default()
+    };
+    for body in [
+        "<ruby><span tts:ruby='base' tts:color='#ff0000'>漢</span><rt><span>かん</span></rt></ruby><span>終</span>",
+        "<span tts:ruby='container'><span tts:ruby='base' tts:color='#ff0000'>漢</span><span tts:ruby='text'>かん</span></span><span>終</span>",
+    ] {
+        let filtered = filter_ttml_preserved_body(body, &options).expect("rich body");
+        assert!(!filtered.contains("かん"));
+        assert!(!filtered.contains("ruby"));
+        assert!(filtered.contains("tts:color='#ff0000'"));
+        assert_eq!(ttml_plain_text(&filtered), "漢終");
+    }
+}
+
+#[test]
 fn dropping_accessibility_or_gaiji_keeps_ttml_ruby_and_inline_colour() {
     let xml = "<tt><body><p begin='0s' end='1s'>♪<ruby><span tts:ruby='base' tts:color='#ff0000'>漢</span><rt><span tts:ruby='text'>かん</span></rt></ruby><span>終&amp;</span></p></body></tt>";
     let caption = parse_ttml_captions(xml, 0).pop().expect("caption");
