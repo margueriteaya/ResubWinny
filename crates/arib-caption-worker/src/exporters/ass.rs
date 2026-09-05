@@ -110,7 +110,19 @@ fn write_ass_standalone_ruby(
             .saturating_sub(ASS_RUBY_GAP),
         RubyPlacement::Below => base_box.bottom().saturating_add(ASS_RUBY_GAP),
     };
-    let text = export_ttml_text(&caption.text, &caption.style, options);
+    let text = caption
+        .rich_body
+        .as_deref()
+        .and_then(|body| filter_ttml_caption_preserved_body(body, caption, options))
+        .map(|body| ttml_plain_text(&body))
+        .unwrap_or_else(|| {
+            export_ttml_text(
+                &caption.text,
+                &caption.style,
+                caption.source.as_ref(),
+                options,
+            )
+        });
     let Some(plan) = layout_ruby(
         &RubyLayoutRequest {
             text: &text,
@@ -243,7 +255,12 @@ fn write_ass_ttml_caption_at(
     anchor: Option<(i32, i32)>,
     options: &ConversionOptions,
 ) -> io::Result<()> {
-    let filtered_text = export_ttml_text(&caption.text, &caption.style, options);
+    let filtered_text = export_ttml_text(
+        &caption.text,
+        &caption.style,
+        caption.source.as_ref(),
+        options,
+    );
     if filtered_text.is_empty() {
         return Ok(());
     }
@@ -256,11 +273,11 @@ fn write_ass_ttml_caption_at(
     let mut runs = caption
         .rich_body
         .as_deref()
-        .and_then(|body| filter_ttml_preserved_body(body, &caption.style, options))
+        .and_then(|body| filter_ttml_caption_preserved_body(body, caption, options))
         .map(|body| parse_ass_inline_runs(&body, &caption.style))
         .unwrap_or_default();
     for run in &mut runs {
-        run.text = export_ttml_text(&run.text, &run.style, options);
+        run.text = export_ttml_text(&run.text, &run.style, caption.source.as_ref(), options);
     }
     runs.retain(|run| !run.text.is_empty());
     if runs.is_empty() {
@@ -491,9 +508,27 @@ pub(crate) fn strip_ttml_font_resource_attributes(body: &str) -> String {
 
 /// Filter source text while keeping its surrounding inline structure. The
 /// shared material-feature mask spans text nodes, including styled fragments.
+#[cfg(test)]
 pub(crate) fn filter_ttml_preserved_body(
     body: &str,
     base_style: &TtmlCaptionStyle,
+    options: &ConversionOptions,
+) -> Option<String> {
+    filter_ttml_preserved_body_with_source(body, base_style, None, options)
+}
+
+pub(crate) fn filter_ttml_caption_preserved_body(
+    body: &str,
+    caption: &TtmlCaption,
+    options: &ConversionOptions,
+) -> Option<String> {
+    filter_ttml_preserved_body_with_source(body, &caption.style, caption.source.as_ref(), options)
+}
+
+fn filter_ttml_preserved_body_with_source(
+    body: &str,
+    base_style: &TtmlCaptionStyle,
+    source: Option<&TtmlCaptionSource>,
     options: &ConversionOptions,
 ) -> Option<String> {
     let mut body = filter_ttml_inline_body(body, options.preserve_color);
@@ -535,7 +570,9 @@ pub(crate) fn filter_ttml_preserved_body(
         cleaned.push_str(remaining);
         body = cleaned;
     }
-    let has_drcs_transform = !options.preserve_drcs;
+    let has_drcs_transform = !options.preserve_drcs
+        || (options.drcs_mode == DrcsMode::UseUserMapping
+            && !options.ttml_drcs_replacements.is_empty());
     if options.preserve_gaiji && options.preserve_accessibility && !has_drcs_transform {
         return Some(body);
     }
@@ -570,7 +607,7 @@ pub(crate) fn filter_ttml_preserved_body(
         }) {
             style.font_resource = Some(font_resource);
         }
-        let source = node
+        let retained_text = node
             .text()
             .unwrap_or_default()
             .chars()
@@ -580,7 +617,7 @@ pub(crate) fn filter_ttml_preserved_body(
                 keep
             })
             .collect::<String>();
-        let filtered = export_ttml_text(&source, &style, options);
+        let filtered = export_ttml_text(&retained_text, &style, source, options);
         let range = node.range();
         edits.push((
             range.start - prefix.len()..range.end - prefix.len(),

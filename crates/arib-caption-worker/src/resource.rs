@@ -1,5 +1,6 @@
 use base64::Engine;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize)]
@@ -7,11 +8,20 @@ pub(crate) struct TtmlResourceMetadata {
     pub(crate) index: u8,
     pub(crate) data_type: u8,
     pub(crate) byte_length: usize,
+    pub(crate) content_sha256: String,
     pub(crate) format_hint: Option<&'static str>,
     pub(crate) format_validation: &'static str,
     pub(crate) width: Option<u32>,
     pub(crate) height: Option<u32>,
     pub(crate) preview_available: bool,
+}
+
+pub(crate) fn resource_sha256(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+pub(crate) fn b62_drcs_mapping_key(content_sha256: &str, source_codepoint: u32) -> String {
+    format!("b62:sha256:{content_sha256}:u+{source_codepoint:04X}")
 }
 
 #[derive(Debug, Clone, Serialize)]

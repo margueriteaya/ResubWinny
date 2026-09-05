@@ -129,6 +129,7 @@ where
                                     index: resource.index,
                                     data_type: resource.data_type,
                                     byte_length: resource.bytes.len(),
+                                    content_sha256: resource_sha256(&resource.bytes),
                                     format_hint: format.format_hint,
                                     format_validation: format.format_validation,
                                     width: format.width,

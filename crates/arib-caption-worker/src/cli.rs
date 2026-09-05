@@ -302,7 +302,8 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                     match load_drcs_mapping(Path::new(&mapping_path)) {
                         Ok(mapping) => {
                             options.drcs_mode = DrcsMode::UseUserMapping;
-                            options.drcs_replacements = mapping;
+                            options.drcs_replacements = mapping.b24;
+                            options.ttml_drcs_replacements = mapping.b62;
                         }
                         Err(error) => {
                             eprintln!("could not load DRCS mapping: {error}");

@@ -1,4 +1,6 @@
-use crate::{CaptionFeatureSummary, ConversionOptions, TtmlCaption, native_b24};
+use crate::{
+    CaptionFeatureSummary, ConversionOptions, TtmlCaption, native_b24, ttml_drcs_mapping_key,
+};
 use serde::Serialize;
 use std::{fmt, io};
 
@@ -64,6 +66,7 @@ fn export_conflict(
     feature: &str,
     issue_code: &str,
     offer_drcs_mapping: bool,
+    offer_compatible_format: bool,
 ) -> io::Result<()> {
     if formats.is_empty() {
         return Ok(());
@@ -71,8 +74,10 @@ fn export_conflict(
     let mut available_actions = vec![
         format!("disable_preservation:{feature}"),
         "remove_format".into(),
-        "choose_compatible_format".into(),
     ];
+    if offer_compatible_format {
+        available_actions.push("choose_compatible_format".into());
+    }
     if feature == "drcs" && offer_drcs_mapping {
         available_actions.insert(0, "open_drcs_mapping".into());
     }
@@ -88,7 +93,13 @@ fn export_conflict(
 
 fn conflict(options: &ConversionOptions, feature: &str) -> io::Result<()> {
     let formats = unsupported_formats(options, feature);
-    export_conflict(formats, feature, "format_cannot_preserve_feature", false)
+    export_conflict(
+        formats,
+        feature,
+        "format_cannot_preserve_feature",
+        false,
+        true,
+    )
 }
 
 pub(crate) fn assess_b24_scene(
@@ -126,7 +137,7 @@ pub(crate) fn assess_b24_scene(
                 .filter(|format| matches!(*format, "SRT" | "WebVTT"))
                 .map(str::to_owned)
                 .collect();
-            export_conflict(formats, "drcs", "unresolved_drcs_text_target", true)?;
+            export_conflict(formats, "drcs", "unresolved_drcs_text_target", true, true)?;
         }
     }
     Ok(())
@@ -140,12 +151,30 @@ pub(crate) fn assess_ttml_caption(
     facts.observe_ttml(caption);
     assess_facts(options, &facts)?;
     if options.preserve_drcs && !caption.drcs_uses.is_empty() {
+        let unresolved = caption.drcs_uses.iter().filter(|drcs_use| {
+            options.drcs_mode != crate::DrcsMode::UseUserMapping
+                || ttml_drcs_mapping_key(
+                    caption.source.as_ref(),
+                    drcs_use.resource_index,
+                    drcs_use.source_codepoint,
+                )
+                .as_ref()
+                .and_then(|key| options.ttml_drcs_replacements.get(key))
+                .is_none_or(String::is_empty)
+        });
+        let unresolved = unresolved.collect::<Vec<_>>();
+        if unresolved.is_empty() {
+            return Ok(());
+        }
         let formats = selected_formats(options)
             .into_iter()
             .filter(|format| matches!(*format, "ASS" | "TTML" | "SRT" | "WebVTT"))
             .map(str::to_owned)
             .collect();
-        export_conflict(formats, "drcs", "unresolved_drcs_text_target", false)?;
+        // The scoped mapping contract is usable by the CLI and by mappings
+        // already persisted by Studio. Do not advertise the dictionary action
+        // until the B62 report path can surface these identities and glyphs.
+        export_conflict(formats, "drcs", "unresolved_drcs_text_target", false, false)?;
     }
     Ok(())
 }
@@ -166,6 +195,46 @@ fn assess_facts(options: &ConversionOptions, facts: &CaptionFeatureSummary) -> i
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn attach_b62_resource(caption: &mut TtmlCaption, bytes: &[u8]) -> String {
+        let digest = crate::resource::resource_sha256(bytes);
+        caption.source = Some(crate::TtmlCaptionSource {
+            route: "test",
+            source_offset: 0,
+            mmpt_packet_id: 1,
+            mpu_sequence_number: Some(1),
+            mmtp_sequence_number: None,
+            presentation_ntp: None,
+            normalized_pts: None,
+            reference_start_pts: None,
+            reference_start_ntp: None,
+            reference_start_time_leap_indicator: None,
+            timeline_basis: crate::TlvTimelineBasis::MptPresentationNtp,
+            track_id: None,
+            component_tag: None,
+            timing_mode: None,
+            operation_mode: None,
+            display_mode: None,
+            compression_type: None,
+            random_access: false,
+            discontinuity: false,
+            discontinuity_reasons: 0,
+            xml_encoding: "UTF-8".into(),
+            resources: vec![crate::TtmlResourceMetadata {
+                index: 9,
+                data_type: 1,
+                byte_length: bytes.len(),
+                content_sha256: digest.clone(),
+                format_hint: Some("woff2"),
+                format_validation: "header-validated",
+                width: None,
+                height: None,
+                preview_available: false,
+            }],
+            resources_complete: true,
+        });
+        crate::resource::b62_drcs_mapping_key(&digest, 0xe000)
+    }
 
     fn unresolved_drcs_scene() -> native_b24::CaptionScene {
         native_b24::CaptionScene {
@@ -314,11 +383,12 @@ mod tests {
             0,
         )
         .remove(0);
-        let unresolved = crate::parse_ttml_captions(
+        let mut unresolved = crate::parse_ttml_captions(
             r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><p begin='0s' end='1s' arib-tt:font-face='subt://9'>&#xE000;</p></body></tt>"#,
             0,
         )
         .remove(0);
+        let mapping_key = attach_b62_resource(&mut unresolved, b"font-resource-a");
         let mut options = ConversionOptions {
             srt: true,
             webvtt: true,
@@ -345,10 +415,25 @@ mod tests {
                 .iter()
                 .any(|action| action == "open_drcs_mapping")
         );
+        assert!(
+            !conflict
+                .available_actions
+                .iter()
+                .any(|action| action == "choose_compatible_format")
+        );
 
         options.drcs_mode = crate::DrcsMode::UseUserMapping;
         options.drcs_replacements.insert(0xe000, "字".into());
         assert!(assess_ttml_caption(&options, &unresolved).is_err());
+        options
+            .ttml_drcs_replacements
+            .insert(mapping_key, "映".into());
+        assert!(assess_ttml_caption(&options, &unresolved).is_ok());
+
+        let mut same_codepoint_other_resource = unresolved.clone();
+        attach_b62_resource(&mut same_codepoint_other_resource, b"font-resource-b");
+        assert!(assess_ttml_caption(&options, &same_codepoint_other_resource).is_err());
+
         options.preserve_drcs = false;
         options.drcs_replacements.clear();
         assert!(assess_ttml_caption(&options, &unresolved).is_ok());

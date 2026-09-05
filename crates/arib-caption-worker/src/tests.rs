@@ -270,6 +270,7 @@ fn matches_subt_reference_to_same_mpu_resource_evidence() {
             index: 4,
             data_type: 1,
             byte_length: 12,
+            content_sha256: resource_sha256(b"resource-four"),
             format_hint: Some("png"),
             format_validation: "header-validated",
             width: Some(1920),
@@ -378,8 +379,32 @@ fn reads_hexadecimal_and_decimal_drcs_mapping_codes() {
     fs::write(&path, r#"{"0x2A7F":"秘","10880":"替"}"#).unwrap();
     let mapping = load_drcs_mapping(&path).unwrap();
     let _ = fs::remove_file(path);
-    assert_eq!(mapping.get(&0x2A7F), Some(&"秘".to_string()));
-    assert_eq!(mapping.get(&10880), Some(&"替".to_string()));
+    assert_eq!(mapping.b24.get(&0x2A7F), Some(&"秘".to_string()));
+    assert_eq!(mapping.b24.get(&10880), Some(&"替".to_string()));
+}
+
+#[test]
+fn reads_resource_scoped_b62_drcs_mapping_keys_without_changing_b24() {
+    let digest = resource_sha256(b"font-resource");
+    let key = b62_drcs_mapping_key(&digest, 0xe000);
+    let path = std::env::temp_dir().join(format!(
+        "arib-caption-b62-drcs-map-{}.json",
+        std::process::id()
+    ));
+    fs::write(
+        &path,
+        serde_json::to_vec(&serde_json::json!({
+            "0x2A7F": "秘",
+            key.clone(): "映"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let mapping = load_drcs_mapping(&path).unwrap();
+    let _ = fs::remove_file(path);
+
+    assert_eq!(mapping.b24.get(&0x2A7F), Some(&"秘".to_string()));
+    assert_eq!(mapping.b62.get(&key), Some(&"映".to_string()));
 }
 
 #[test]

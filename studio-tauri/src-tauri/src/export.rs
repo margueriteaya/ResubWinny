@@ -152,10 +152,8 @@ pub fn start_export_impl(
         let replacements: serde_json::Map<String, serde_json::Value> = mappings
             .into_iter()
             .filter(|m| m.action == "character" && !m.text.trim().is_empty())
-            .filter_map(|m| {
-                m.id.split_once('-')
-                    .map(|(code, _)| (code.to_owned(), serde_json::Value::String(m.text)))
-            })
+            .filter_map(|m| character_mapping_key(&m.id).map(|key| (key, m.text)))
+            .map(|(key, text)| (key, serde_json::Value::String(text)))
             .collect();
         if !replacements.is_empty() {
             let map_path = PathBuf::from(&output).with_extension("drcs-map.json");
@@ -619,9 +617,27 @@ pub fn start_export_impl(
     Ok(())
 }
 
+fn character_mapping_key(id: &str) -> Option<String> {
+    if id.starts_with("b62:sha256:") {
+        return Some(id.to_owned());
+    }
+    id.split_once('-').map(|(code, _)| code.to_owned())
+}
+
 #[cfg(test)]
 mod contract_tests {
-    use super::worker_failure_details;
+    use super::{character_mapping_key, worker_failure_details};
+
+    #[test]
+    fn character_mapping_keys_preserve_scoped_b62_ids_and_legacy_b24_codes() {
+        let b62 = format!("b62:sha256:{}:u+E000", "a".repeat(64));
+        assert_eq!(character_mapping_key(&b62), Some(b62));
+        assert_eq!(character_mapping_key("0x2A7F-3"), Some("0x2A7F".to_owned()));
+        assert_eq!(
+            character_mapping_key("not-a-report-id"),
+            Some("not".to_owned())
+        );
+    }
 
     #[test]
     fn export_conflict_keeps_its_structured_parameters() {

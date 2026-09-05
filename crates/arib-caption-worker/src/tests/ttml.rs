@@ -316,6 +316,162 @@ fn drops_only_resource_backed_b62_drcs_text() {
     assert_eq!(ttml_plain_text(&dropped), "字終");
 }
 
+fn attach_test_b62_resource(caption: &mut TtmlCaption, bytes: &[u8]) -> String {
+    let digest = resource_sha256(bytes);
+    caption.source = Some(TtmlCaptionSource {
+        route: "test",
+        source_offset: 0,
+        mmpt_packet_id: 1,
+        mpu_sequence_number: Some(1),
+        mmtp_sequence_number: None,
+        presentation_ntp: None,
+        normalized_pts: None,
+        reference_start_pts: None,
+        reference_start_ntp: None,
+        reference_start_time_leap_indicator: None,
+        timeline_basis: TlvTimelineBasis::MptPresentationNtp,
+        track_id: None,
+        component_tag: None,
+        timing_mode: None,
+        operation_mode: None,
+        display_mode: None,
+        compression_type: None,
+        random_access: false,
+        discontinuity: false,
+        discontinuity_reasons: 0,
+        xml_encoding: "UTF-8".into(),
+        resources: vec![TtmlResourceMetadata {
+            index: 9,
+            data_type: 1,
+            byte_length: bytes.len(),
+            content_sha256: digest.clone(),
+            format_hint: Some("woff2"),
+            format_validation: "header-validated",
+            width: None,
+            height: None,
+            preview_available: false,
+        }],
+        resources_complete: true,
+    });
+    b62_drcs_mapping_key(&digest, 0xe000)
+}
+
+#[test]
+fn scoped_b62_mapping_changes_ass_ttml_srt_and_webvtt_output() {
+    let mut caption = parse_ttml_captions(
+        r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><p begin='0s' end='1s'><span arib-tt:font-face='subt://9'>&#xE000;</span>終</p></body></tt>"#,
+        0,
+    )
+    .remove(0);
+    let mapping_key = attach_test_b62_resource(&mut caption, b"font-resource-a");
+    let mut options = ConversionOptions {
+        drcs_mode: DrcsMode::UseUserMapping,
+        overwrite: true,
+        ..Default::default()
+    };
+    options
+        .ttml_drcs_replacements
+        .insert(mapping_key, "映".into());
+
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let directory = std::env::temp_dir().join(format!("arib-b62-scoped-map-{stamp}"));
+    fs::create_dir_all(&directory).expect("temporary directory");
+    let ass = directory.join("mapped.ass");
+    let ttml = directory.join("mapped.ttml");
+    let mut ass_writer = BufWriter::new(File::create(&ass).expect("ASS output"));
+    write_ass_header(&mut ass_writer).expect("ASS header");
+    write_ass_ttml_group(&mut ass_writer, std::slice::from_ref(&caption), &options)
+        .expect("ASS caption");
+    ass_writer.flush().expect("ASS flush");
+    let mut ttml_writer = BufWriter::new(File::create(&ttml).expect("TTML output"));
+    write_ttml_header(&mut ttml_writer).expect("TTML header");
+    write_ttml_caption(&mut ttml_writer, &caption, &options).expect("TTML caption");
+    write_ttml_footer(&mut ttml_writer).expect("TTML footer");
+    ttml_writer.flush().expect("TTML flush");
+    let srt = write_srt_from_ass(&ass, true)
+        .expect("SRT")
+        .expect("SRT path");
+    let vtt = write_webvtt_from_ass(&ass, true)
+        .expect("WebVTT")
+        .expect("WebVTT path");
+
+    for output in [&ass, &ttml, &srt, &vtt] {
+        let text = fs::read_to_string(output).expect("mapped output");
+        assert!(text.contains('映'), "{}: {text}", output.display());
+        assert!(text.contains('終'), "{}: {text}", output.display());
+        assert!(!text.contains('\u{e000}'), "{}: {text}", output.display());
+    }
+    assert!(!fs::read_to_string(&ttml).unwrap().contains("font-face"));
+    fs::remove_dir_all(directory).expect("cleanup mapped outputs");
+}
+
+#[test]
+fn scoped_b62_mapping_reaches_standalone_ruby_ass_text() {
+    let mut captions = parse_ttml_captions(
+        r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><div>
+          <p begin='0s' end='1s'>漢</p>
+          <p begin='0s' end='1s'><span arib-tt:font-face='subt://9'>&#xE000;</span></p>
+        </div></body></tt>"#,
+        0,
+    );
+    let mapping_key = attach_test_b62_resource(&mut captions[1], b"ruby-font-resource");
+    captions[1].ruby_bindings.push(TtmlRubyBinding {
+        ruby_text: "\u{e000}".into(),
+        base_caption_index: 0,
+        base_run_start: 0,
+        base_run_end: 1,
+        base_start: 0,
+        base_end: 1,
+        base_text: "漢".into(),
+        base_cell_boxes: vec![RubyLayoutBox {
+            x: 960,
+            y: 920,
+            width: 42,
+            height: 42,
+        }],
+        base_box: Some(RubyLayoutBox {
+            x: 960,
+            y: 920,
+            width: 42,
+            height: 42,
+        }),
+        source_ruby_box: Some(RubyLayoutBox {
+            x: 960,
+            y: 890,
+            width: 42,
+            height: 18,
+        }),
+        placement: RubyPlacement::Above,
+        writing_mode: RubyWritingMode::HorizontalTb,
+        resolver: RubyBindingResolver::SourceGeometry,
+        ruby_style: TtmlCaptionStyle::default(),
+    });
+    let mut options = ConversionOptions {
+        drcs_mode: DrcsMode::UseUserMapping,
+        ..Default::default()
+    };
+    options
+        .ttml_drcs_replacements
+        .insert(mapping_key, "映".into());
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let output = std::env::temp_dir().join(format!("arib-b62-ruby-map-{stamp}.ass"));
+    let mut writer = BufWriter::new(File::create(&output).expect("ASS output"));
+    write_ass_header(&mut writer).expect("ASS header");
+    write_ass_ttml_group(&mut writer, &captions, &options).expect("ASS captions");
+    writer.flush().expect("ASS flush");
+
+    let ass = fs::read_to_string(&output).expect("mapped ASS");
+    assert!(ass.contains('映'), "{ass}");
+    assert!(!ass.contains('\u{e000}'), "{ass}");
+    fs::remove_file(output).expect("cleanup mapped Ruby ASS");
+}
+
 #[test]
 fn b62_drcs_drop_reaches_ass_and_ttml_outputs() {
     let caption = parse_ttml_captions(

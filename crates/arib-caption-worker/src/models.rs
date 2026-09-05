@@ -501,6 +501,20 @@ pub(crate) struct TtmlDrcsUse {
     pub(crate) kind: TtmlDrcsKind,
 }
 
+pub(crate) fn ttml_drcs_mapping_key(
+    source: Option<&TtmlCaptionSource>,
+    resource_index: u32,
+    source_codepoint: u32,
+) -> Option<String> {
+    let index = u8::try_from(resource_index).ok()?;
+    let resource = source?
+        .resources
+        .iter()
+        .find(|resource| resource.index == index)?;
+    (!resource.content_sha256.is_empty())
+        .then(|| crate::resource::b62_drcs_mapping_key(&resource.content_sha256, source_codepoint))
+}
+
 pub(crate) fn ttml_drcs_kind(character: char) -> Option<TtmlDrcsKind> {
     match character as u32 {
         0xe000..=0xf8ff | 0xf0000..=0xffffd | 0x100000..=0x10fffd => Some(TtmlDrcsKind::PrivateUse),

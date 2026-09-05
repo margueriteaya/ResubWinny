@@ -1,6 +1,12 @@
 use crate::*;
 
-pub(crate) fn load_drcs_mapping(path: &Path) -> io::Result<HashMap<u32, String>> {
+#[derive(Debug, Default)]
+pub(crate) struct DrcsMappings {
+    pub(crate) b24: HashMap<u32, String>,
+    pub(crate) b62: HashMap<String, String>,
+}
+
+pub(crate) fn load_drcs_mapping(path: &Path) -> io::Result<DrcsMappings> {
     let values: HashMap<String, String> =
         serde_json::from_reader(File::open(path)?).map_err(|error| {
             io::Error::new(
@@ -8,24 +14,42 @@ pub(crate) fn load_drcs_mapping(path: &Path) -> io::Result<HashMap<u32, String>>
                 format!("invalid DRCS mapping file: {error}"),
             )
         })?;
-    values
-        .into_iter()
-        .map(|(key, value)| {
-            let code = key
-                .trim()
-                .strip_prefix("0x")
-                .or_else(|| key.trim().strip_prefix("0X"))
-                .map(|number| u32::from_str_radix(number, 16))
-                .unwrap_or_else(|| key.trim().parse::<u32>())
-                .map_err(|error| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("invalid DRCS code {key:?}: {error}"),
-                    )
-                })?;
-            Ok((code, value))
-        })
-        .collect()
+    let mut mappings = DrcsMappings::default();
+    for (key, value) in values {
+        if let Some(identity) = parse_b62_mapping_key(&key) {
+            mappings.b62.insert(identity, value);
+            continue;
+        }
+        let code = key
+            .trim()
+            .strip_prefix("0x")
+            .or_else(|| key.trim().strip_prefix("0X"))
+            .map(|number| u32::from_str_radix(number, 16))
+            .unwrap_or_else(|| key.trim().parse::<u32>())
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("invalid DRCS code {key:?}: {error}"),
+                )
+            })?;
+        mappings.b24.insert(code, value);
+    }
+    Ok(mappings)
+}
+
+fn parse_b62_mapping_key(key: &str) -> Option<String> {
+    let key = key.trim();
+    let remainder = key.strip_prefix("b62:sha256:")?;
+    let (digest, codepoint) = remainder.split_once(":u+")?;
+    if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    let source_codepoint = u32::from_str_radix(codepoint, 16).ok()?;
+    char::from_u32(source_codepoint)?;
+    Some(crate::resource::b62_drcs_mapping_key(
+        &digest.to_ascii_lowercase(),
+        source_codepoint,
+    ))
 }
 
 impl Default for ConversionOptions {
@@ -34,6 +58,7 @@ impl Default for ConversionOptions {
             track_id: None,
             drcs_mode: DrcsMode::PreserveGlyph,
             drcs_replacements: HashMap::new(),
+            ttml_drcs_replacements: HashMap::new(),
             overwrite: false,
             webvtt: false,
             srt: false,

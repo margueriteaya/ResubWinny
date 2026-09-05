@@ -226,7 +226,12 @@ pub(crate) fn write_ttml_caption(
     caption: &TtmlCaption,
     options: &ConversionOptions,
 ) -> io::Result<()> {
-    let filtered_text = export_ttml_text(&caption.text, &caption.style, options);
+    let filtered_text = export_ttml_text(
+        &caption.text,
+        &caption.style,
+        caption.source.as_ref(),
+        options,
+    );
     if filtered_text.is_empty() {
         return Ok(());
     }
@@ -275,7 +280,7 @@ pub(crate) fn write_ttml_caption(
     let body = caption
         .rich_body
         .as_deref()
-        .and_then(|body| filter_ttml_preserved_body(body, &caption.style, options))
+        .and_then(|body| filter_ttml_caption_preserved_body(body, caption, options))
         .unwrap_or_else(|| xml_escape(&filtered_text));
     let body = strip_ttml_font_resource_attributes(&body);
     if ttml_plain_text(&body).is_empty() {

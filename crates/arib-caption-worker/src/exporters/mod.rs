@@ -31,6 +31,7 @@ pub(crate) fn export_text(value: &str, options: &ConversionOptions) -> String {
 pub(crate) fn export_ttml_text(
     value: &str,
     style: &TtmlCaptionStyle,
+    source: Option<&TtmlCaptionSource>,
     options: &ConversionOptions,
 ) -> String {
     let resource_backed = style
@@ -46,6 +47,19 @@ pub(crate) fn export_ttml_text(
             }
             if !options.preserve_drcs {
                 return None;
+            }
+            let key = ttml_drcs_mapping_key(
+                source,
+                subt_resource_index(style.font_resource.as_deref()?)?,
+                character as u32,
+            );
+            if options.drcs_mode == DrcsMode::UseUserMapping
+                && let Some(replacement) = key
+                    .as_ref()
+                    .and_then(|key| options.ttml_drcs_replacements.get(key))
+                    .filter(|replacement| !replacement.is_empty())
+            {
+                return Some(replacement.clone());
             }
             Some(character.to_string())
         })
