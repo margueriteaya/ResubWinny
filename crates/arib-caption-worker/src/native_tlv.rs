@@ -761,8 +761,10 @@ mod tests {
 
     #[test]
     fn native_b62_report_exposes_scoped_mapping_and_retry_publishes_it() {
-        let document = br#"<?xml version="1.0"?><tt xmlns="http://www.w3.org/ns/ttml" xmlns:arib-tt="http://www.arib.or.jp/ns/arib-ttml/v1_0"><body><div><p begin="0s" end="1s" arib-tt:font-face="subt://1">&#xE000;</p></div></body></tt>"#;
-        let resource = b"synthetic-font-resource";
+        let document = br#"<?xml version="1.0"?><tt xmlns="http://www.w3.org/ns/ttml" xmlns:arib-tt="http://www.arib.or.jp/ns/arib-ttml/v1_0"><body><div><p begin="0s" end="1s" arib-tt:font-face="subt://1">&#xE080;</p></div></body></tt>"#;
+        let resource = include_bytes!("../testdata/golden/b62-drcs-e080.ttf");
+        let font = ttf_parser::Face::parse(resource, 0).expect("valid subset font resource");
+        assert!(font.glyph_index('\u{e080}').is_some());
         let mut source =
             crate::synthetic::make_b62_tlv_stream_with_resource(document, Some(resource));
         source.extend([0x7f, 0xff, 0, 0].repeat(2));
@@ -797,7 +799,8 @@ mod tests {
         let report_path = output.with_extension("drcs.json");
         let report: serde_json::Value =
             serde_json::from_slice(&fs::read(&report_path).expect("B62 report")).unwrap();
-        let mapping_id = crate::b62_drcs_mapping_key(&crate::resource_sha256(resource), 0xe000);
+        assert_eq!(report["glyphs"][0]["resource_format"], "truetype");
+        let mapping_id = crate::b62_drcs_mapping_key(&crate::resource_sha256(resource), 0xe080);
         assert_eq!(report["glyphs"][0]["mapping_id"], mapping_id);
 
         let mut options = ConversionOptions {
@@ -813,7 +816,7 @@ mod tests {
         assert_eq!(result.summary.captions, 1);
         let ass = fs::read_to_string(&output).expect("mapped ASS");
         assert!(ass.contains('映'));
-        assert!(!ass.contains('\u{e000}'));
+        assert!(!ass.contains('\u{e080}'));
         fs::remove_dir_all(directory).expect("cleanup native mapping fixture");
     }
 

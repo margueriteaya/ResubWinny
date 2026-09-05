@@ -221,9 +221,13 @@ mod tests {
         let directory = std::env::temp_dir().join(format!("studio-b62-report-{stamp}"));
         let asset_directory = directory.join("captions.drcs");
         std::fs::create_dir_all(&asset_directory).unwrap();
-        let asset = asset_directory.join("font.woff2");
-        std::fs::write(&asset, b"font-bytes").unwrap();
-        let id = format!("b62:sha256:{}:u+E000", "a".repeat(64));
+        let asset = asset_directory.join("font.ttf");
+        std::fs::write(
+            &asset,
+            include_bytes!("../../../crates/arib-caption-worker/testdata/golden/b62-drcs-e080.ttf"),
+        )
+        .unwrap();
+        let id = format!("b62:sha256:{}:u+E080", "a".repeat(64));
         let report = directory.join("captions.drcs.json");
         std::fs::write(
             &report,
@@ -231,8 +235,8 @@ mod tests {
                 "glyphs": [{
                     "kind": "b62_font",
                     "mapping_id": id,
-                    "source_codepoint": 0xe000,
-                    "resource_format": "woff2",
+                    "source_codepoint": 0xe080,
+                    "resource_format": "truetype",
                     "asset": asset,
                     "alternative_text": ""
                 }]
