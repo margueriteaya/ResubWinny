@@ -258,6 +258,20 @@ mod tests {
     }
 
     #[test]
+    fn changing_default_format_does_not_rewrite_explicit_formats() {
+        let formats = ["ASS", "SRT", "TTML"];
+        let mut settings = AppSettings::default();
+        settings.export_preferences.formats = formats.iter().map(|format| (*format).into()).collect();
+
+        for default_format in ["ASS", "SRT", "TTML", "WebVTT", "JSON", "Raw Data"] {
+            settings.default_format = default_format.into();
+            let normalized = normalize(settings.clone());
+            assert_eq!(normalized.default_format, default_format);
+            assert_eq!(normalized.export_preferences.formats, formats);
+        }
+    }
+
+    #[test]
     fn keeps_supported_persisted_setting_values() {
         let settings = normalize(AppSettings {
             ui_font: "cjk".into(),
