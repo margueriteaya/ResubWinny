@@ -362,7 +362,11 @@ fn inspection_is_bounded_and_multiformat_conversion_reads_source_once() {
 
 #[test]
 fn converts_private_pes_ttml_in_a_188_byte_mpeg_ts_container() {
-    let stem = format!("arib-caption-ts-ttml-{}", std::process::id());
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let stem = format!("arib-caption-ts-ttml-{stamp}");
     let input_path = std::env::temp_dir().join(format!("{stem}.ts"));
     let output_path = std::env::temp_dir().join(format!("{stem}.ass"));
     fs::write(&input_path, private_pes_ttml_ts_fixture()).expect("fixture");
@@ -420,6 +424,7 @@ fn converts_private_pes_ttml_in_a_188_byte_mpeg_ts_container() {
     fs::remove_file(report.ttml.expect("TTML output")).expect("cleanup TTML");
     fs::remove_file(report.archive.expect("archive output")).expect("cleanup archive");
     fs::remove_file(report.raw.expect("raw output")).expect("cleanup raw");
+    fs::remove_dir_all(report.font_directory.expect("font sidecar")).expect("cleanup font sidecar");
 }
 
 #[test]

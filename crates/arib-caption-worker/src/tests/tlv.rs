@@ -430,7 +430,11 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
     for packet_type in 0..2 {
         input.extend(tlv_packet(packet_type, vec![0]));
     }
-    let stem = format!("arib-caption-tlv-dump-{}", std::process::id());
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let stem = format!("arib-caption-tlv-dump-{stamp}");
     let input_path = std::env::temp_dir().join(format!("{stem}.tlv"));
     let output_path = std::env::temp_dir().join(format!("{stem}.jsonl"));
     #[cfg(not(feature = "libaribtlv"))]
@@ -544,6 +548,8 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
         fs::remove_file(report.ttml.expect("TTML output")).expect("cleanup TTML");
         fs::remove_file(report.archive.expect("archive output")).expect("cleanup archive");
         fs::remove_file(report.raw.expect("raw output")).expect("cleanup conversion raw");
+        fs::remove_dir_all(report.font_directory.expect("font sidecar"))
+            .expect("cleanup font sidecar");
         fs::remove_file(conflict_output).expect("cleanup existing final");
     }
 }
