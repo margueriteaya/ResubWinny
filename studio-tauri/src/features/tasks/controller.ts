@@ -9,6 +9,7 @@ import {
   type Track,
 } from "../../backend";
 import { trackKey } from "../tracks";
+import { selectedCaptionTrack } from "./export-eligibility";
 
 export type { ExportFormat, ExportPreservation } from "../../backend";
 export type TaskExportPlan = {
@@ -40,10 +41,8 @@ export function createExportPlan(
   selectedTrackKeys: Set<string>,
   outputDirectory = inspection.path.replace(/[\\/][^\\/]+$/, ""),
 ): TaskExportPlan | null {
-  const selectedTrack = inspection.tracks.find((track) =>
-    selectedTrackKeys.has(taskTrackKey(track)),
-  );
-  if (inspection.tracks.length > 0 && !selectedTrack) return null;
+  const selectedTrack = selectedCaptionTrack(inspection.tracks, selectedTrackKeys);
+  if (!selectedTrack) return null;
 
   if (!formats.size || !outputDirectory.trim()) return null;
   const separator = outputDirectory.includes("\\") ? "\\" : "/";

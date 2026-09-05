@@ -8,6 +8,7 @@
   import TaskSourcePanel from "./TaskSourcePanel.svelte";
   import type { MediaTimeMs, ProjectTimeMs } from "./time-mapping";
   import type { FeatureKnowledge, RuntimeExportConflicts } from "./export-assessment";
+  import { selectedCaptionTrack } from "./export-eligibility";
 
   type Format = { name: ExportFormat; description: string };
   type TaskTab = "preview" | "events" | "diagnostics";
@@ -88,7 +89,7 @@
     sourceCollapsed = workspaceLayout.sourceCollapsed;
     outputCollapsed = workspaceLayout.outputCollapsed;
   }
-  $: selectedTrack = inspection?.tracks.find((track) => selectedTracks.has(trackKey(track)));
+  $: selectedTrack = selectedCaptionTrack(inspection?.tracks ?? [], selectedTracks);
   $: selectedTrackLabel = selectedTrack?.pid ?? "";
   $: selectedTrackName = selectedTrack ? trackDisplayLabel(selectedTrack) : "";
   $: selectedTrackDetail = selectedTrack ? trackDisplayDetail(selectedTrack) : "";
@@ -171,7 +172,7 @@
     {/if}
     <div class="workspace-pane output-pane">
       <header class="pane-header"><b>{t("workspace.outputSettings")}</b><button class="pane-toggle liquid-control" onclick={toggleOutput} data-tooltip={outputIsCollapsed ? t("workspace.showOutput") : t("workspace.hideOutput")} aria-label={outputIsCollapsed ? t("workspace.showOutput") : t("workspace.hideOutput")}>{#if outputIsCollapsed}<PanelRightOpen size={16} />{:else}<PanelRightClose size={16} />{/if}</button></header>
-      {#if !outputIsCollapsed}<TaskOutputPanel {inspection} {formats} {selectedFormats} {preservation} {featureKnowledge} {runtimeConflicts} {error} {isExporting} {exportPending} {canResume} {resumeBusy} {onToggleFormat} {onTogglePreservation} {onOpenDrcsMapping} onStartExport={onStartExport} {onResume} bind:outputDirectory {onChooseOutputDirectory} />{/if}
+      {#if !outputIsCollapsed}<TaskOutputPanel {inspection} {formats} {selectedFormats} {preservation} {featureKnowledge} {runtimeConflicts} {error} {isExporting} {exportPending} hasSelectedTrack={Boolean(selectedTrack)} {canResume} {resumeBusy} {onToggleFormat} {onTogglePreservation} {onOpenDrcsMapping} onStartExport={onStartExport} {onResume} bind:outputDirectory {onChooseOutputDirectory} />{/if}
     </div>
   </div>
 {:else}
