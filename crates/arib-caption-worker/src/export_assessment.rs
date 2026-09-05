@@ -363,6 +363,35 @@ mod tests {
     }
 
     #[test]
+    fn srt_ttml_conflicts_follow_material_layout_and_color_facts() {
+        let options = ConversionOptions {
+            srt: true,
+            ..Default::default()
+        };
+        let defaults = crate::parse_ttml_captions(
+            "<tt><body><p begin='0s' end='1s' tts:color='#FFFFFFFF' tts:backgroundColor='#00000000' tts:textOutline='none'>本文</p></body></tt>",
+            0,
+        )
+        .remove(0);
+        assert!(assess_ttml_caption(&options, &defaults).is_ok());
+
+        for (attribute, expected_feature) in [
+            ("tts:textAlign='center'", "position"),
+            ("tts:textOutline='2px #000000'", "color"),
+        ] {
+            let xml = format!("<tt><body><p begin='0s' end='1s' {attribute}>本文</p></body></tt>");
+            let caption = crate::parse_ttml_captions(&xml, 0).remove(0);
+            let error = assess_ttml_caption(&options, &caption).unwrap_err();
+            let conflict = error
+                .get_ref()
+                .and_then(|error| error.downcast_ref::<ExportConflict>())
+                .unwrap();
+            assert_eq!(conflict.formats, ["SRT"]);
+            assert_eq!(conflict.feature, expected_feature);
+        }
+    }
+
+    #[test]
     fn unresolved_drcs_conflicts_only_with_selected_text_targets() {
         let scene = unresolved_drcs_scene();
         let mut options = ConversionOptions::default();

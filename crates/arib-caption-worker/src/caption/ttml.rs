@@ -924,6 +924,10 @@ pub(crate) fn parse_ttml_captions_until(
                     y: source_y,
                     width: source_width,
                     height: source_height,
+                    explicit_origin: region_tag
+                        .is_some_and(|tag| attribute(tag, "tts:origin").is_some()),
+                    explicit_extent: region_tag
+                        .is_some_and(|tag| attribute(tag, "tts:extent").is_some()),
                     style: source_style,
                     rich_body: source_rich_body,
                 }),
@@ -1033,6 +1037,10 @@ fn parse_ttml_captions_legacy(
                     y: source_y,
                     width: source_width,
                     height: source_height,
+                    explicit_origin: region_tag
+                        .is_some_and(|tag| attribute(tag, "tts:origin").is_some()),
+                    explicit_extent: region_tag
+                        .is_some_and(|tag| attribute(tag, "tts:extent").is_some()),
                     style: source_style,
                     rich_body: source_rich_body,
                 }),

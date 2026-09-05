@@ -215,17 +215,32 @@ impl CaptionFeatureSummary {
             self.ruby = true;
             self.mark("ruby", true);
         }
-        if caption.x != 0
-            || caption.y != 0
-            || caption.width.is_some()
-            || caption.height.is_some()
+        if caption
+            .source_layout
+            .as_ref()
+            .is_some_and(|layout| layout.explicit_origin || layout.explicit_extent)
             || caption.style.writing_mode.is_some()
             || caption.style.direction.is_some()
+            || caption.style.text_align.is_some()
+            || caption.style.display_align.is_some()
         {
             self.position = true;
             self.mark("position", true);
         }
-        if caption.style.color.is_some() || caption.style.background_color.is_some() {
+        let inline_runs = caption
+            .rich_body
+            .as_deref()
+            .map(|body| crate::parse_ttml_inline_runs(body, &caption.style))
+            .unwrap_or_default();
+        if ttml_style_has_material_color(&caption.style)
+            || inline_runs.iter().any(|run| {
+                ttml_style_has_material_color(&run.style)
+                    || run
+                        .ruby_style
+                        .as_ref()
+                        .is_some_and(ttml_style_has_material_color)
+            })
+        {
             self.color = true;
             self.mark("color", true);
         }
@@ -250,6 +265,81 @@ impl CaptionFeatureSummary {
             self.mark_count("accessibility", accessibility_count);
         }
     }
+}
+
+fn ttml_style_has_material_color(style: &TtmlCaptionStyle) -> bool {
+    style
+        .color
+        .as_deref()
+        .is_some_and(ttml_foreground_is_material)
+        || style
+            .background_color
+            .as_deref()
+            .is_some_and(ttml_background_is_material)
+        || style
+            .text_outline
+            .as_deref()
+            .is_some_and(ttml_outline_is_material)
+}
+
+fn compact_ttml_color(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| !character.is_ascii_whitespace())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn ttml_foreground_is_material(value: &str) -> bool {
+    !matches!(
+        compact_ttml_color(value).as_str(),
+        "white"
+            | "#fff"
+            | "#ffff"
+            | "#ffffff"
+            | "#ffffffff"
+            | "rgb(255,255,255)"
+            | "rgba(255,255,255,1)"
+            | "rgba(255,255,255,1.0)"
+    )
+}
+
+fn ttml_background_is_material(value: &str) -> bool {
+    let compact = compact_ttml_color(value);
+    let transparent_hex = compact
+        .strip_prefix('#')
+        .is_some_and(|hex| match hex.len() {
+            4 => hex.ends_with('0'),
+            8 => hex.ends_with("00"),
+            _ => false,
+        });
+    let transparent_rgba =
+        compact.starts_with("rgba(") && (compact.ends_with(",0)") || compact.ends_with(",0.0)"));
+    compact != "transparent" && !transparent_hex && !transparent_rgba
+}
+
+fn ttml_outline_is_material(value: &str) -> bool {
+    if value.trim().eq_ignore_ascii_case("none") {
+        return false;
+    }
+    let widths = value.split_whitespace().filter_map(|token| {
+        ["px", "em", "c", "%"]
+            .into_iter()
+            .find_map(|unit| token.strip_suffix(unit))
+            .and_then(|number| number.parse::<f64>().ok())
+    });
+    let mut found_width = false;
+    for width in widths {
+        found_width = true;
+        if width > 0.0 {
+            return true;
+        }
+    }
+    !found_width
+        && value
+            .trim()
+            .parse::<f64>()
+            .map_or(true, |width| width > 0.0)
 }
 
 pub(crate) fn b24_character_is_gaiji_source(character: &native_b24::CaptionCharacter) -> bool {
@@ -412,6 +502,69 @@ mod feature_tests {
         assert!(features.accessibility);
         assert_eq!(features.observed_counts["gaiji"], 1);
         assert_eq!(features.observed_counts["accessibility"], 1);
+    }
+
+    #[test]
+    fn ttml_default_colors_and_transparent_background_are_not_material() {
+        for color in ["white", "#FFF", "#FFFFFF", "#FFFFFFFF"] {
+            for background in ["transparent", "#00000000", "#FFFFFF00"] {
+                let xml = format!(
+                    "<tt><body><p begin='0s' end='1s' tts:color='{color}' tts:backgroundColor='{background}' tts:textOutline='none'>本文</p></body></tt>"
+                );
+                let caption = crate::parse_ttml_captions(&xml, 0).remove(0);
+                let mut features = CaptionFeatureSummary::default();
+
+                features.observe_ttml(&caption);
+
+                assert!(
+                    !features.color,
+                    "{color} with {background} should be default presentation"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn ttml_fallback_coordinates_are_not_material_but_explicit_geometry_is() {
+        let ordinary =
+            crate::parse_ttml_captions("<tt><body><p begin='0s' end='1s'>本文</p></body></tt>", 0)
+                .remove(0);
+        assert_eq!((ordinary.x, ordinary.y), (960, 920));
+        let mut ordinary_features = CaptionFeatureSummary::default();
+        ordinary_features.observe_ttml(&ordinary);
+        assert!(!ordinary_features.position);
+
+        let explicit = crate::parse_ttml_captions(
+            "<tt><head><layout><region xml:id='r' tts:origin='960px 920px'/></layout></head><body><p region='r' begin='0s' end='1s'>本文</p></body></tt>",
+            0,
+        )
+        .remove(0);
+        assert_eq!((explicit.x, explicit.y), (960, 920));
+        let mut explicit_features = CaptionFeatureSummary::default();
+        explicit_features.observe_ttml(&explicit);
+        assert!(explicit_features.position);
+    }
+
+    #[test]
+    fn ttml_alignment_outline_and_inline_color_are_material_features() {
+        for attribute in ["tts:textAlign='center'", "tts:displayAlign='after'"] {
+            let xml = format!("<tt><body><p begin='0s' end='1s' {attribute}>本文</p></body></tt>");
+            let caption = crate::parse_ttml_captions(&xml, 0).remove(0);
+            let mut features = CaptionFeatureSummary::default();
+            features.observe_ttml(&caption);
+            assert!(features.position, "{attribute} should be material layout");
+        }
+
+        for body in [
+            "<p begin='0s' end='1s' tts:textOutline='2px #000000'>本文</p>",
+            "<p begin='0s' end='1s'><span tts:color='#00FFFF'>本文</span></p>",
+        ] {
+            let xml = format!("<tt><body>{body}</body></tt>");
+            let caption = crate::parse_ttml_captions(&xml, 0).remove(0);
+            let mut features = CaptionFeatureSummary::default();
+            features.observe_ttml(&caption);
+            assert!(features.color, "{body} should be material color");
+        }
     }
 
     #[test]
@@ -640,6 +793,10 @@ pub(crate) struct TtmlSourceLayout {
     pub(crate) y: i32,
     pub(crate) width: Option<i32>,
     pub(crate) height: Option<i32>,
+    #[serde(skip)]
+    pub(crate) explicit_origin: bool,
+    #[serde(skip)]
+    pub(crate) explicit_extent: bool,
     pub(crate) style: TtmlCaptionStyle,
     pub(crate) rich_body: Option<String>,
 }
