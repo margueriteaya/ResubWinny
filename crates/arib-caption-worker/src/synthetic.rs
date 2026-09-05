@@ -113,6 +113,10 @@ pub fn make_mmtp_packet(
 /// video, audio, application, and layout assets. The document is carried as an
 /// uncompressed UTF-8 subtitle subsample after the MPT that declares its track.
 pub fn make_b62_tlv_stream(document: &[u8]) -> Vec<u8> {
+    make_b62_tlv_stream_with_resource(document, None)
+}
+
+pub fn make_b62_tlv_stream_with_resource(document: &[u8], resource: Option<&[u8]>) -> Vec<u8> {
     assert!(
         document.len() <= u16::MAX as usize,
         "TTML document exceeds one synthetic subtitle subsample"
@@ -154,9 +158,26 @@ pub fn make_b62_tlv_stream(document: &[u8]) -> Vec<u8> {
     signalling_mmtp.extend(pa);
     let signalling = tlv_for_mmtp(1, &signalling_mmtp);
 
-    let mut mfu = vec![0x30, 0x01, 0x00, 0x00, 0x00];
+    let last_subsample = u8::from(resource.is_some());
+    let mut mfu = vec![0x30, 0x01, 0x00, last_subsample, 0x00];
     append_u16(&mut mfu, document.len());
     mfu.extend(document);
+    let media = b62_media_packet(1, &mfu);
+    let mut stream = [signalling, media].concat();
+    if let Some(resource) = resource {
+        assert!(
+            resource.len() <= u16::MAX as usize,
+            "B62 resource exceeds one synthetic subtitle subsample"
+        );
+        let mut mfu = vec![0x30, 0x01, 0x01, 0x01, 0x10];
+        append_u16(&mut mfu, resource.len());
+        mfu.extend(resource);
+        stream.extend(b62_media_packet(2, &mfu));
+    }
+    stream
+}
+
+fn b62_media_packet(sequence_number: u32, mfu: &[u8]) -> Vec<u8> {
     let mut mpu = Vec::new();
     append_u16(&mut mpu, 6 + 14 + mfu.len());
     mpu.extend([0x28, 0]);
@@ -166,10 +187,7 @@ pub fn make_b62_tlv_stream(document: &[u8]) -> Vec<u8> {
     append_u32(&mut mpu, 0);
     mpu.extend([0, 0]);
     mpu.extend(mfu);
-    let media_mmtp = make_mmtp_packet(0xf330, 1, 0, &mpu);
-    let media = tlv_for_mmtp(1, &media_mmtp);
-
-    [signalling, media].concat()
+    tlv_for_mmtp(1, &make_mmtp_packet(0xf330, sequence_number, 0, &mpu))
 }
 
 fn append_u16(output: &mut Vec<u8>, value: usize) {

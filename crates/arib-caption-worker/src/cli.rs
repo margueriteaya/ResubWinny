@@ -341,6 +341,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
         let progress_control = Arc::clone(&control);
         let cancel_control = Arc::clone(&control);
         let mut seen_features = CaptionFeatureSummary::default();
+        let requested_drcs_report = options.drcs_report;
         emit_stage("decoding");
         let report = if command == "convert-b24" {
             convert_b24_with_options_and_cancel(
@@ -381,7 +382,41 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                 emit_json(&serde_json::json!({"type": "cancelled", "reason": error.to_string()}));
                 return Ok(());
             }
-            Err(error) => return Err(error.into()),
+            Err(error) => {
+                let conflict = error
+                    .get_ref()
+                    .and_then(|error| error.downcast_ref::<ExportConflict>());
+                let drcs_report = output.with_extension("drcs.json");
+                if requested_drcs_report
+                    && conflict.is_some_and(|conflict| conflict.drcs_report_created)
+                    && drcs_report.exists()
+                {
+                    let count = fs::read(&drcs_report)
+                        .ok()
+                        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+                        .and_then(|report| report["glyphs"].as_array().map(Vec::len))
+                        .unwrap_or_default();
+                    let drcs_directory = output.with_extension("drcs");
+                    emit_json(&serde_json::json!({
+                        "type": "drcs-discovered",
+                        "count": count,
+                        "directory": drcs_directory,
+                        "report": drcs_report,
+                    }));
+                    for (kind, path) in [
+                        ("drcs-directory", drcs_directory),
+                        ("drcs-report", drcs_report),
+                    ] {
+                        emit_json(&serde_json::json!({
+                            "type": "artifact-created",
+                            "kind": kind,
+                            "path": path,
+                            "status": "completed",
+                        }));
+                    }
+                }
+                return Err(error.into());
+            }
         };
         emit_feature_events(&report.summary, &mut seen_features, true);
         if control.cancelled.load(Ordering::Relaxed) {

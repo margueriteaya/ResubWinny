@@ -36,8 +36,8 @@ export class DrcsDictionaryController {
     return serialiseDrcsMappings(this.hooks.mappings());
   }
 
-  async load() {
-    const source = this.hooks.sourcePath();
+  async load(sourceOverride?: string) {
+    const source = sourceOverride ?? this.hooks.sourcePath();
     if (!source) {
       this.hooks.updateGlyphs([]);
       this.hooks.updateMessage(this.hooks.message("drcs.selectTask"));

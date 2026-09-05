@@ -93,7 +93,7 @@ export async function createQueuedJobs(
       output,
       archive: false,
       raw: false,
-      drcsReport: false,
+      drcsReport: true,
       drcsMappings,
       trackId: trackId(selected),
       formats,

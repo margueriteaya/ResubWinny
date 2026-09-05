@@ -439,6 +439,9 @@ mod tests {
     #[test]
     fn keeps_a_worker_confirmed_artifact_completed_after_later_failure() {
         let mut record = artifact("new.ass".into(), "new.ass.part".into());
+        record.kind = "drcs-report".into();
+        record.path = "new.drcs.json".into();
+        record.temporary_path.clear();
         record.status = "completed".into();
         assert_eq!(reconciled_artifact_status(&record, "failed"), "completed");
     }

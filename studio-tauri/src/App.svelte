@@ -883,7 +883,16 @@
   }
   const drcsController = new DrcsDictionaryController({
     desktopRuntime,
-    sourcePath: () => inspection?.path,
+    sourcePath: () =>
+      inspection
+        ? createExportPlan(
+            inspection,
+            selectedFormats,
+            preservation,
+            selectedTracks,
+            outputDirectory,
+          )?.output ?? inspection.path
+        : undefined,
     mappings: () => savedDrcsMappings,
     updateMappings: (mappings) => (savedDrcsMappings = mappings),
     updateGlyphs: (glyphs) => (drcsGlyphs = glyphs),
@@ -891,7 +900,23 @@
     message: formatMessage,
   });
 
-  const loadDrcs = () => drcsController.load();
+  async function loadDrcs() {
+    if (desktopRuntime && currentJobId) {
+      try {
+        const artifacts = await backend.getJobArtifacts(currentJobId);
+        const report = artifacts.find(
+          (artifact) => artifact.kind === "drcs-report" && artifact.status === "completed",
+        );
+        if (report) {
+          await drcsController.load(report.path);
+          return;
+        }
+      } catch {
+        // Fall back to the current task's output plan for an in-progress task.
+      }
+    }
+    await drcsController.load();
+  }
   const mappings = () => savedDrcsMappings;
   const exportMappings = () => drcsController.export();
   const saveGlyphMapping = (

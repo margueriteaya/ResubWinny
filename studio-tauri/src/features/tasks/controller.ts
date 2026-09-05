@@ -97,7 +97,7 @@ export async function startTaskExport(
     raw: false,
     trackId: plan.trackId,
     logicalTrack: plan.logicalTrack,
-    drcsReport: false,
+    drcsReport: true,
     drcsMappings,
     formats: plan.formats,
     preservation: plan.preservation,

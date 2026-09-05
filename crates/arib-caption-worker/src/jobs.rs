@@ -342,13 +342,95 @@ where
     let mut archived_resource_references = BTreeSet::new();
     let mut archived_resource_evidence = BTreeSet::new();
     let mut archived_assets = Vec::new();
+    let current_b62_resources = RefCell::new(
+        None::<(
+            u16,
+            Option<u32>,
+            HashMap<u8, std::sync::Arc<TlvSubtitleResource>>,
+        )>,
+    );
+    let report_b62 = RefCell::new(BTreeMap::<String, B62DrcsReportGlyph>::new());
+    let report_b62_bytes = RefCell::new(0_usize);
     write_ass_header(&mut writer)?;
     let mut pending_ass = Vec::new();
     let mut feature_summary = CaptionFeatureSummary::default();
     let summary = match scan_tlv_ttml(
         path,
         |caption| {
-            assess_ttml_caption(&options, &caption)?;
+            if options.drcs_report {
+                let current = current_b62_resources.borrow();
+                let mut report = report_b62.borrow_mut();
+                let mut report_bytes = report_b62_bytes.borrow_mut();
+                if let Some(source) = caption.source.as_ref()
+                    && let Some((packet_id, mpu_sequence_number, resources)) = current.as_ref()
+                    && *packet_id == source.mmpt_packet_id
+                    && *mpu_sequence_number == source.mpu_sequence_number
+                {
+                    for drcs_use in &caption.drcs_uses {
+                        let Some(mapping_id) = ttml_drcs_mapping_key(
+                            Some(source),
+                            drcs_use.resource_index,
+                            drcs_use.source_codepoint,
+                        ) else {
+                            continue;
+                        };
+                        let resolved = options.drcs_mode == crate::DrcsMode::UseUserMapping
+                            && options
+                                .ttml_drcs_replacements
+                                .get(&mapping_id)
+                                .is_some_and(|replacement| !replacement.is_empty());
+                        if resolved || report.contains_key(&mapping_id) || report.len() >= 64 {
+                            continue;
+                        }
+                        let Some(index) = u8::try_from(drcs_use.resource_index).ok() else {
+                            continue;
+                        };
+                        let Some(resource) = resources.get(&index) else {
+                            continue;
+                        };
+                        if report_bytes.saturating_add(resource.bytes.len()) > 32 * 1024 * 1024 {
+                            continue;
+                        }
+                        *report_bytes = report_bytes.saturating_add(resource.bytes.len());
+                        report.insert(
+                            mapping_id.clone(),
+                            B62DrcsReportGlyph {
+                                mapping_id,
+                                source_codepoint: drcs_use.source_codepoint,
+                                resource: std::sync::Arc::clone(resource),
+                            },
+                        );
+                    }
+                }
+            }
+            let mapping_report_covers_conflict = options.drcs_report
+                && caption.drcs_uses.iter().all(|drcs_use| {
+                    let Some(mapping_id) = ttml_drcs_mapping_key(
+                        caption.source.as_ref(),
+                        drcs_use.resource_index,
+                        drcs_use.source_codepoint,
+                    ) else {
+                        return false;
+                    };
+                    let resolved = options.drcs_mode == crate::DrcsMode::UseUserMapping
+                        && options
+                            .ttml_drcs_replacements
+                            .get(&mapping_id)
+                            .is_some_and(|replacement| !replacement.is_empty());
+                    resolved || report_b62.borrow().contains_key(&mapping_id)
+                });
+            if let Err(error) = assess_ttml_caption_with_mapping_offer(
+                &options,
+                &caption,
+                mapping_report_covers_conflict,
+            ) {
+                if options.drcs_report
+                    && write_b62_drcs_report(output, path, &report_b62.borrow(), true)?.is_some()
+                {
+                    return Err(crate::export_assessment::with_drcs_report_created(error));
+                }
+                return Err(error);
+            }
             feature_summary.observe_ttml(&caption);
             let mut archive = archive_writer.borrow_mut();
             if let Some(archive_writer) = &mut *archive {
@@ -384,6 +466,18 @@ where
         |summary| progress(summary),
         cancelled,
         |packet_offset, payload| {
+            if options.drcs_report {
+                *current_b62_resources.borrow_mut() = Some((
+                    payload.packet_id,
+                    payload.mpu_sequence_number,
+                    payload
+                        .resources
+                        .iter()
+                        .cloned()
+                        .map(|resource| (resource.index, std::sync::Arc::new(resource)))
+                        .collect(),
+                ));
+            }
             if let Some(archive_writer) = &mut *archive_writer.borrow_mut()
                 && let Some(mpu_sequence_number) = payload.mpu_sequence_number
             {
@@ -439,6 +533,11 @@ where
             write_archive_record(archive_writer, "asset_evidence", &asset)?;
         }
     }
+    let drcs_report = if options.drcs_report {
+        write_b62_drcs_report(output, path, &report_b62.borrow(), true)?
+    } else {
+        None
+    };
     writer.flush()?;
     publish_file(&temporary, output, options.overwrite)?;
     if let (Some(mut ttml_writer), Some(ttml), Some(ttml_temporary)) =
@@ -477,8 +576,8 @@ where
         output: primary,
         ass,
         font_directory,
-        drcs_directory: None,
-        drcs_report: None,
+        drcs_directory: drcs_report.as_ref().map(|_| output.with_extension("drcs")),
+        drcs_report,
         ttml,
         archive,
         raw,

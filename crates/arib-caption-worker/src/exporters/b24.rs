@@ -79,6 +79,7 @@ where
     let mut final_scene_end = 0;
     let mut known_drcs = HashSet::new();
     let mut report_drcs = BTreeMap::new();
+    let mut report_drcs_bytes = 0_usize;
     let mut have_drcs = false;
     let mut pending_unpositioned = Vec::<RegionInterval>::new();
     let mut last_scene_pid = track.caption_pid;
@@ -87,6 +88,27 @@ where
         &track,
         |source_pid, scene| {
             last_scene_pid = source_pid;
+            if options.drcs_report {
+                for glyph in &scene.drcs_glyphs {
+                    let unresolved = glyph.alternative_text.is_empty()
+                        && (options.drcs_mode != crate::DrcsMode::UseUserMapping
+                            || options
+                                .drcs_replacements
+                                .get(&glyph.drcs_code)
+                                .is_none_or(String::is_empty));
+                    let key = drcs_asset_key(glyph);
+                    if !unresolved
+                        || report_drcs.contains_key(&key)
+                        || report_drcs.len() >= 64
+                        || report_drcs_bytes.saturating_add(glyph.pixels.len()) > 32 * 1024 * 1024
+                    {
+                        continue;
+                    }
+                    have_drcs |= write_drcs_asset(&drcs_directory, glyph, &mut known_drcs)?;
+                    report_drcs_bytes = report_drcs_bytes.saturating_add(glyph.pixels.len());
+                    report_drcs.insert(key, glyph.clone());
+                }
+            }
             assess_b24_scene(&options, &scene)?;
             if let Some(archive_writer) = &mut archive_writer {
                 write_archive_record(archive_writer, "scene", &scene)?;
@@ -117,14 +139,6 @@ where
                     write_caption_archive_record(archive_writer, CaptionCueRef::B24(&interval))?;
                 }
             }
-            if options.preserve_drcs && options.drcs_report {
-                have_drcs |= write_drcs_assets(&drcs_directory, &scene, &mut known_drcs)?;
-                for glyph in &scene.drcs_glyphs {
-                    report_drcs
-                        .entry(drcs_asset_key(glyph))
-                        .or_insert_with(|| glyph.clone());
-                }
-            }
             Ok(())
         },
         |summary| progress(summary),
@@ -151,6 +165,12 @@ where
             if let Some(path) = &raw_temporary {
                 let _ = fs::remove_file(path);
             }
+            if options.drcs_report
+                && !report_drcs.is_empty()
+                && write_drcs_report(output, path, &drcs_directory, &report_drcs, true)?.is_some()
+            {
+                return Err(crate::export_assessment::with_drcs_report_created(error));
+            }
             return Err(error);
         }
     };
@@ -176,7 +196,7 @@ where
     if !options.preserve_position {
         write_ass_interval_group(&mut writer, &final_intervals, &options)?;
     }
-    let drcs_report = if options.preserve_drcs && options.drcs_report {
+    let drcs_report = if options.drcs_report {
         write_drcs_report(
             output,
             path,

@@ -603,10 +603,20 @@ pub struct DrcsReport {
 #[derive(Deserialize)]
 pub struct DrcsReportGlyph {
     pub asset: String,
-    pub width: u32,
-    pub height: u32,
-    pub depth_bits: u8,
-    pub drcs_code: u32,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+    #[serde(default)]
+    pub depth_bits: Option<u8>,
+    #[serde(default)]
+    pub drcs_code: Option<u32>,
+    #[serde(default)]
+    pub mapping_id: Option<String>,
+    #[serde(default)]
+    pub source_codepoint: Option<u32>,
+    #[serde(default)]
+    pub resource_format: Option<String>,
     #[serde(default)]
     pub alternative_text: String,
 }

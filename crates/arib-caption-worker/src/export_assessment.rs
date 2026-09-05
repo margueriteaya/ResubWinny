@@ -6,7 +6,7 @@ use std::{fmt, io};
 
 const CAPABILITIES: &str = include_str!("../../../shared/format_capabilities.json");
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ExportConflict {
     pub(crate) issue_code: String,
@@ -14,6 +14,8 @@ pub(crate) struct ExportConflict {
     pub(crate) feature: String,
     pub(crate) logical_track: String,
     pub(crate) available_actions: Vec<String>,
+    #[serde(skip)]
+    pub(crate) drcs_report_created: bool,
 }
 
 impl fmt::Display for ExportConflict {
@@ -88,7 +90,20 @@ fn export_conflict(
         logical_track: std::env::var("RESUBWINNY_LOGICAL_TRACK")
             .unwrap_or_else(|_| "logical-track:default".into()),
         available_actions,
+        drcs_report_created: false,
     }))
+}
+
+pub(crate) fn with_drcs_report_created(error: io::Error) -> io::Error {
+    let Some(conflict) = error
+        .get_ref()
+        .and_then(|error| error.downcast_ref::<ExportConflict>())
+    else {
+        return error;
+    };
+    let mut conflict = conflict.clone();
+    conflict.drcs_report_created = true;
+    io::Error::other(conflict)
 }
 
 fn conflict(options: &ConversionOptions, feature: &str) -> io::Result<()> {
@@ -147,6 +162,14 @@ pub(crate) fn assess_ttml_caption(
     options: &ConversionOptions,
     caption: &TtmlCaption,
 ) -> io::Result<()> {
+    assess_ttml_caption_with_mapping_offer(options, caption, false)
+}
+
+pub(crate) fn assess_ttml_caption_with_mapping_offer(
+    options: &ConversionOptions,
+    caption: &TtmlCaption,
+    mapping_report_covers_conflict: bool,
+) -> io::Result<()> {
     let mut facts = CaptionFeatureSummary::default();
     facts.observe_ttml(caption);
     assess_facts(options, &facts)?;
@@ -171,10 +194,23 @@ pub(crate) fn assess_ttml_caption(
             .filter(|format| matches!(*format, "ASS" | "TTML" | "SRT" | "WebVTT"))
             .map(str::to_owned)
             .collect();
-        // The scoped mapping contract is usable by the CLI and by mappings
-        // already persisted by Studio. Do not advertise the dictionary action
-        // until the B62 report path can surface these identities and glyphs.
-        export_conflict(formats, "drcs", "unresolved_drcs_text_target", false, false)?;
+        let offer_mapping = mapping_report_covers_conflict
+            && options.drcs_report
+            && unresolved.iter().all(|drcs_use| {
+                ttml_drcs_mapping_key(
+                    caption.source.as_ref(),
+                    drcs_use.resource_index,
+                    drcs_use.source_codepoint,
+                )
+                .is_some()
+            });
+        export_conflict(
+            formats,
+            "drcs",
+            "unresolved_drcs_text_target",
+            offer_mapping,
+            false,
+        )?;
     }
     Ok(())
 }
@@ -421,6 +457,15 @@ mod tests {
                 .iter()
                 .any(|action| action == "choose_compatible_format")
         );
+
+        options.drcs_report = true;
+        let error =
+            assess_ttml_caption_with_mapping_offer(&options, &unresolved, true).unwrap_err();
+        let conflict = error
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<ExportConflict>())
+            .unwrap();
+        assert_eq!(conflict.available_actions[0], "open_drcs_mapping");
 
         options.drcs_mode = crate::DrcsMode::UseUserMapping;
         options.drcs_replacements.insert(0xe000, "字".into());

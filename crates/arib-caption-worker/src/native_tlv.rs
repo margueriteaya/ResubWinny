@@ -760,6 +760,64 @@ mod tests {
     }
 
     #[test]
+    fn native_b62_report_exposes_scoped_mapping_and_retry_publishes_it() {
+        let document = br#"<?xml version="1.0"?><tt xmlns="http://www.w3.org/ns/ttml" xmlns:arib-tt="http://www.arib.or.jp/ns/arib-ttml/v1_0"><body><div><p begin="0s" end="1s" arib-tt:font-face="subt://1">&#xE000;</p></div></body></tt>"#;
+        let resource = b"synthetic-font-resource";
+        let mut source =
+            crate::synthetic::make_b62_tlv_stream_with_resource(document, Some(resource));
+        source.extend([0x7f, 0xff, 0, 0].repeat(2));
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("arib-native-b62-map-{stamp}"));
+        fs::create_dir_all(&directory).expect("temporary directory");
+        let input = directory.join("source.tlv");
+        let output = directory.join("output.ass");
+        fs::write(&input, source).expect("native DRCS mapping fixture");
+        let options = ConversionOptions {
+            drcs_report: true,
+            ..Default::default()
+        };
+
+        let error =
+            match convert_with_options_and_cancel(&input, &output, options, |_| {}, || false) {
+                Ok(_) => panic!("unmapped B62 DRCS was published"),
+                Err(error) => error,
+            };
+        let conflict = error
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<crate::ExportConflict>())
+            .expect("structured B62 conflict");
+        assert_eq!(conflict.available_actions[0], "open_drcs_mapping");
+        assert!(conflict.drcs_report_created);
+        assert!(!output.exists());
+        assert!(!output.with_extension("ass.part").exists());
+
+        let report_path = output.with_extension("drcs.json");
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(&report_path).expect("B62 report")).unwrap();
+        let mapping_id = crate::b62_drcs_mapping_key(&crate::resource_sha256(resource), 0xe000);
+        assert_eq!(report["glyphs"][0]["mapping_id"], mapping_id);
+
+        let mut options = ConversionOptions {
+            drcs_report: true,
+            drcs_mode: DrcsMode::UseUserMapping,
+            ..Default::default()
+        };
+        options
+            .ttml_drcs_replacements
+            .insert(mapping_id, "映".into());
+        let result = convert_with_options_and_cancel(&input, &output, options, |_| {}, || false)
+            .expect("mapped B62 retry");
+        assert_eq!(result.summary.captions, 1);
+        let ass = fs::read_to_string(&output).expect("mapped ASS");
+        assert!(ass.contains('映'));
+        assert!(!ass.contains('\u{e000}'));
+        fs::remove_dir_all(directory).expect("cleanup native mapping fixture");
+    }
+
+    #[test]
     fn caption_callback_copies_document_and_resources_before_returning() {
         let mut state = CallbackState::default();
         let mut document = b"<tt/>".to_vec();

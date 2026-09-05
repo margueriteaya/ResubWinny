@@ -128,37 +128,33 @@ pub(crate) fn glyph_pixel(
     (byte >> shift) & mask
 }
 
-pub(crate) fn write_drcs_assets(
+pub(crate) fn write_drcs_asset(
     directory: &Path,
-    scene: &native_b24::CaptionScene,
+    glyph: &native_b24::DrcsGlyph,
     known: &mut HashSet<String>,
 ) -> io::Result<bool> {
-    let mut wrote = false;
-    for glyph in &scene.drcs_glyphs {
-        let key = drcs_asset_key(glyph);
-        if !known.insert(key.clone()) {
-            continue;
-        }
-        fs::create_dir_all(directory)?;
-        let data_path = directory.join(format!("drcs-{key}.bin"));
-        let info_path = directory.join(format!("drcs-{key}.json"));
-        fs::write(data_path, &glyph.pixels)?;
-        fs::write(
-            info_path,
-            serde_json::to_vec_pretty(&serde_json::json!({
-                "drcs_code": glyph.drcs_code,
-                "width": glyph.width,
-                "height": glyph.height,
-                "depth": glyph.depth,
-                "depth_bits": glyph.depth_bits,
-                "alternative_codepoint": glyph.alternative_codepoint,
-                "alternative_text": glyph.alternative_text,
-                "pixel_encoding": "libaribcaption raw pixels",
-            }))?,
-        )?;
-        wrote = true;
+    let key = drcs_asset_key(glyph);
+    if !known.insert(key.clone()) {
+        return Ok(false);
     }
-    Ok(wrote)
+    fs::create_dir_all(directory)?;
+    let data_path = directory.join(format!("drcs-{key}.bin"));
+    let info_path = directory.join(format!("drcs-{key}.json"));
+    fs::write(data_path, &glyph.pixels)?;
+    fs::write(
+        info_path,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "drcs_code": glyph.drcs_code,
+            "width": glyph.width,
+            "height": glyph.height,
+            "depth": glyph.depth,
+            "depth_bits": glyph.depth_bits,
+            "alternative_codepoint": glyph.alternative_codepoint,
+            "alternative_text": glyph.alternative_text,
+            "pixel_encoding": "libaribcaption raw pixels",
+        }))?,
+    )?;
+    Ok(true)
 }
 
 pub(crate) fn drcs_asset_key(glyph: &native_b24::DrcsGlyph) -> String {
@@ -179,6 +175,70 @@ pub(crate) struct DrcsReportGlyph {
     alternative_codepoint: u32,
     alternative_text: String,
     asset: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct B62DrcsReportGlyph {
+    pub(crate) mapping_id: String,
+    pub(crate) source_codepoint: u32,
+    pub(crate) resource: std::sync::Arc<TlvSubtitleResource>,
+}
+
+pub(crate) fn write_b62_drcs_report(
+    output: &Path,
+    source: &Path,
+    glyphs: &BTreeMap<String, B62DrcsReportGlyph>,
+    overwrite: bool,
+) -> io::Result<Option<PathBuf>> {
+    let report = output.with_extension("drcs.json");
+    if glyphs.is_empty() {
+        return Ok(None);
+    }
+    if report.exists() && !overwrite {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "DRCS report already exists",
+        ));
+    }
+    let directory = output.with_extension("drcs");
+    fs::create_dir_all(&directory)?;
+    let records = glyphs
+        .values()
+        .map(|glyph| {
+            let digest = resource_sha256(&glyph.resource.bytes);
+            let format = bounded_resource_format(&glyph.resource.bytes);
+            let extension = format.format_hint.unwrap_or("bin");
+            let asset = directory.join(format!("b62-{digest}.{extension}"));
+            if !asset.exists() {
+                let temporary = asset.with_extension(format!("{extension}.part"));
+                fs::write(&temporary, &glyph.resource.bytes)?;
+                publish_file(&temporary, &asset, false)?;
+            }
+            Ok(serde_json::json!({
+                "kind": "b62_font",
+                "mapping_id": glyph.mapping_id,
+                "source_codepoint": glyph.source_codepoint,
+                "resource_index": glyph.resource.index,
+                "resource_format": format.format_hint,
+                "asset": asset,
+                "alternative_text": "",
+            }))
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+    let temporary = report.with_extension("json.part");
+    fs::write(
+        &temporary,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "type": "arib_caption_drcs_report",
+            "version": 2,
+            "source": source,
+            "asset_directory": directory,
+            "glyph_count": records.len(),
+            "glyphs": records,
+        }))?,
+    )?;
+    publish_file(&temporary, &report, overwrite)?;
+    Ok(Some(report))
 }
 
 pub(crate) fn write_drcs_report(
@@ -231,4 +291,68 @@ pub(crate) fn write_drcs_report(
     )?;
     publish_file(&temporary, &report, overwrite)?;
     Ok(Some(report))
+}
+
+#[cfg(test)]
+mod b62_report_tests {
+    use super::*;
+
+    #[test]
+    fn writes_scoped_b62_ids_and_deduplicated_resource_assets() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("arib-b62-report-{stamp}"));
+        fs::create_dir_all(&directory).expect("temporary directory");
+        let output = directory.join("captions.ass");
+        let bytes = b"wOF2\0\x01\0\0\0\0\0\x30\0\x01font".to_vec();
+        let digest = resource_sha256(&bytes);
+        let mapping_id = b62_drcs_mapping_key(&digest, 0xe000);
+        let mut glyphs = BTreeMap::new();
+        glyphs.insert(
+            mapping_id.clone(),
+            B62DrcsReportGlyph {
+                mapping_id: mapping_id.clone(),
+                source_codepoint: 0xe000,
+                resource: std::sync::Arc::new(TlvSubtitleResource {
+                    index: 1,
+                    data_type: 1,
+                    bytes: bytes.clone(),
+                }),
+            },
+        );
+
+        let report = write_b62_drcs_report(&output, Path::new("source.tlv"), &glyphs, true)
+            .expect("B62 report")
+            .expect("report path");
+        let value: serde_json::Value =
+            serde_json::from_slice(&fs::read(&report).expect("report bytes")).unwrap();
+        assert_eq!(value["version"], 2);
+        assert_eq!(value["glyphs"][0]["mapping_id"], mapping_id);
+        let asset = PathBuf::from(value["glyphs"][0]["asset"].as_str().unwrap());
+        assert_eq!(fs::read(asset).unwrap(), bytes);
+        fs::remove_dir_all(directory).expect("cleanup B62 report");
+    }
+
+    #[test]
+    fn empty_b62_report_does_not_remove_a_previous_completed_report() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("arib-b62-empty-report-{stamp}"));
+        fs::create_dir_all(&directory).expect("temporary directory");
+        let output = directory.join("captions.ass");
+        let report = output.with_extension("drcs.json");
+        fs::write(&report, b"previous report").expect("previous report");
+
+        assert!(
+            write_b62_drcs_report(&output, Path::new("source.tlv"), &BTreeMap::new(), true,)
+                .expect("empty report")
+                .is_none()
+        );
+        assert_eq!(fs::read(&report).unwrap(), b"previous report");
+        fs::remove_dir_all(directory).expect("cleanup empty report");
+    }
 }
