@@ -290,6 +290,26 @@ fn writes_a_region_that_contains_only_unresolved_drcs() {
     write_ass_interval(&mut writer, &interval, &ConversionOptions::default()).expect("write scene");
     writer.flush().expect("flush");
     assert!(fs::read_to_string(&output).expect("read").contains("\\p1"));
+    for count in [1, 2] {
+        for preserve_drcs in [true, false] {
+            let options = ConversionOptions {
+                preserve_position: false,
+                preserve_drcs,
+                ..Default::default()
+            };
+            let mut writer = BufWriter::new(File::create(&output).expect("output"));
+            write_ass_interval_group(&mut writer, &vec![interval.clone(); count], &options)
+                .expect("unpositioned glyphs");
+            writer.flush().expect("flush");
+            let ass = fs::read_to_string(&output).expect("read");
+            assert_eq!(
+                ass.matches("\\p1").count(),
+                if preserve_drcs { count } else { 0 }
+            );
+            assert!(!ass.contains("\\pos("));
+            assert!(!ass.contains('\u{fffc}'));
+        }
+    }
     fs::remove_file(output).expect("cleanup");
 }
 

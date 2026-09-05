@@ -574,6 +574,9 @@ pub(crate) fn write_ass_interval(
     interval: &RegionInterval,
     options: &ConversionOptions,
 ) -> io::Result<()> {
+    if !options.preserve_position {
+        return write_ass_interval_group(writer, std::slice::from_ref(interval), options);
+    }
     if interval.region.is_ruby && !options.preserve_ruby {
         return Ok(());
     }
@@ -684,12 +687,13 @@ pub(crate) fn write_ass_interval_group(
     intervals: &[RegionInterval],
     options: &ConversionOptions,
 ) -> io::Result<()> {
-    if options.preserve_position || intervals.len() <= 1 {
+    if options.preserve_position {
         for interval in intervals {
             write_ass_interval(writer, interval, options)?;
         }
         return Ok(());
     }
+    let mut drawings = std::collections::HashMap::new();
     let mut rows: Vec<(i32, Vec<(&native_b24::CaptionCharacter, String)>)> = Vec::new();
     let mut ordered_intervals = intervals
         .iter()
@@ -698,9 +702,36 @@ pub(crate) fn write_ass_interval_group(
     ordered_intervals.sort_by_key(|interval| (interval.region.y, interval.region.x));
     for interval in ordered_intervals {
         for character in &interval.characters {
-            let text = b24_export_character_text(character, interval, options)
+            let mut text = b24_export_character_text(character, interval, options)
                 .map(|text| export_text(text, options))
                 .unwrap_or_default();
+            if b24_export_character_text(character, interval, options).is_none()
+                && character.kind == 1
+                && options.preserve_drcs
+                && let Some(glyph) = interval
+                    .drcs_glyphs
+                    .iter()
+                    .find(|glyph| glyph.drcs_code == character.drcs_code)
+            {
+                let drawing = drcs_drawing(glyph);
+                if !drawing.is_empty() {
+                    let sx = character.width as f32 * ASS_PLAY_RES_X as f32
+                        / interval.plane_width.max(1) as f32
+                        * 100.0
+                        / glyph.width.max(1) as f32;
+                    let sy = character.height as f32 * ASS_PLAY_RES_Y as f32
+                        / interval.plane_height.max(1) as f32
+                        * 100.0
+                        / glyph.height.max(1) as f32;
+                    drawings.insert(
+                        character as *const _,
+                        format!(
+                            "{{\\fscx{sx:.2}\\fscy{sy:.2}\\p1}}{drawing}{{\\p0\\fscx100\\fscy100}}"
+                        ),
+                    );
+                    text.push('\u{fffc}');
+                }
+            }
             if text.is_empty() {
                 continue;
             }
@@ -764,8 +795,8 @@ pub(crate) fn write_ass_interval_group(
             &mut body,
             &refs,
             options,
-            scale_x,
-            scale_y,
+            (scale_x, scale_y),
+            &drawings,
             &mut active_style,
             &mut active_spacing,
         );
@@ -786,11 +817,12 @@ fn append_unpositioned_b24_body(
     body: &mut String,
     line: &[(&native_b24::CaptionCharacter, &str)],
     options: &ConversionOptions,
-    scale_x: f32,
-    scale_y: f32,
+    scale: (f32, f32),
+    drawings: &std::collections::HashMap<*const native_b24::CaptionCharacter, String>,
     active_style: &mut Option<String>,
     active_spacing: &mut f32,
 ) {
+    let (scale_x, scale_y) = scale;
     for (index, (character, text)) in line.iter().enumerate() {
         let font_size = scale_ass_coordinate(character.height.max(1), scale_y).max(1);
         let next_spacing = (line.get(index + 1).is_some() || text.chars().count() > 1)
@@ -828,7 +860,11 @@ fn append_unpositioned_b24_body(
             body.push_str(&format!("{{{style}\\fsp{active_spacing:.2}}}"));
             *active_style = Some(style);
         }
-        body.push_str(&ass_escape(text));
+        if let Some(drawing) = drawings.get(&(*character as *const _)) {
+            body.push_str(drawing);
+        } else {
+            body.push_str(&ass_escape(text));
+        }
     }
 }
 
