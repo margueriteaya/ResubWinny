@@ -5,6 +5,7 @@
   import { formatMessage, t } from "../../i18n";
   import { assessExports, type FeatureKnowledge, type RuntimeExportConflicts } from "./export-assessment";
   import { featureCountSummary } from "./event-state";
+  import { formatCapabilities } from "./format-capabilities";
 
   type Format = { name: ExportFormat; description: string; icon?: any; color?: string };
   type Feature = keyof ExportPreservation;
@@ -27,8 +28,7 @@
   export let resumeBusy = false;
   export let onResume: () => void = () => {};
   const features: Feature[] = ["position", "color", "ruby", "gaiji", "drcs", "accessibility"];
-  const lossyFormats = new Set<ExportFormat>(["SRT", "WebVTT"]);
-  $: limitations = [...selectedFormats].filter((format) => lossyFormats.has(format));
+  $: limitations = [...selectedFormats].filter((format) => formatCapabilities(format).some((item) => item.level === "unsupported"));
   $: assessment = assessExports(selectedFormats, preservation, featureKnowledge, runtimeConflicts);
   $: assessmentRows = [...selectedFormats].map((format) => ({ format, result: assessment.formats[format] })).filter((item) => item.result);
   $: observedFeatures = features.map((feature) => ({ feature, summary: featureCountSummary(featureKnowledge[feature]) })).filter((item) => item.summary);
