@@ -66,20 +66,42 @@ try {
     if ($process.ExitCode -ne 0) {
         throw "Worker exited with code $($process.ExitCode): $stderr"
     }
+    $completed = $null
+    foreach ($line in $stdout -split "`r?`n") {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        try { $event = $line | ConvertFrom-Json } catch { continue }
+        if ($event.type -eq 'completed') { $completed = $event }
+    }
+    if (-not $completed) {
+        throw 'Worker emitted no completed event for the memory validation.'
+    }
 
     $peakMiB = $peakBytes / 1MB
     $inputGiB = $sourceBytes / 1GB
+    $bytesRead = [int64]$completed.summary.bytes_read
+    $featureComplete = [bool]$completed.summary.features.complete
+    $streamComplete = $bytesRead -eq $sourceBytes -and $featureComplete
     $result = [ordered]@{
         source = $sourcePath
         inputGiB = [math]::Round($inputGiB, 3)
         peakWorkingSetMiB = [math]::Round($peakMiB, 1)
         maximumMiB = $MaxPeakWorkingSetMiB
         peakMiBPerInputGiB = [math]::Round($peakMiB / $inputGiB, 2)
-        passed = $peakMiB -le $MaxPeakWorkingSetMiB
+        bytesRead = $bytesRead
+        pesPackets = [int64]$completed.summary.pes_packets
+        captions = [int64]$completed.summary.captions
+        regions = [int64]$completed.summary.regions
+        characters = [int64]$completed.summary.characters
+        decoderErrors = [int64]$completed.summary.decoder_errors
+        featureComplete = $featureComplete
+        passed = $peakMiB -le $MaxPeakWorkingSetMiB -and $streamComplete
     }
     $result | ConvertTo-Json
     if (-not $result.passed) {
-        throw "Worker peak working set $([math]::Round($peakMiB, 1)) MiB exceeded the $MaxPeakWorkingSetMiB MiB release gate."
+        if ($peakMiB -gt $MaxPeakWorkingSetMiB) {
+            throw "Worker peak working set $([math]::Round($peakMiB, 1)) MiB exceeded the $MaxPeakWorkingSetMiB MiB release gate."
+        }
+        throw "Worker did not complete one full source stream ($bytesRead of $sourceBytes bytes, featureComplete=$featureComplete)."
     }
 } finally {
     if (Test-Path -LiteralPath $validationRoot) {
