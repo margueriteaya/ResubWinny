@@ -249,15 +249,31 @@ mod tests {
         let mut options = ConversionOptions::default();
         assert!(assess_b24_scene(&options, &scene).is_ok());
 
-        options.srt = true;
+        options.webvtt = true;
         let error = assess_b24_scene(&options, &scene).unwrap_err();
         let conflict = error
             .get_ref()
             .and_then(|error| error.downcast_ref::<ExportConflict>())
             .unwrap();
         assert_eq!(conflict.issue_code, "unresolved_drcs_text_target");
-        assert_eq!(conflict.formats, ["SRT"]);
+        assert_eq!(conflict.formats, ["WebVTT"]);
         assert_eq!(conflict.available_actions[0], "open_drcs_mapping");
+
+        options.srt = true;
+        options.ttml = true;
+        options.archive = true;
+        options.raw = true;
+        let error = assess_b24_scene(&options, &scene).unwrap_err();
+        let conflict = error
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<ExportConflict>())
+            .unwrap();
+        assert_eq!(conflict.formats, ["SRT", "WebVTT"]);
+
+        options.srt = false;
+        options.webvtt = false;
+        options.keep_ass = false;
+        assert!(assess_b24_scene(&options, &scene).is_ok());
     }
 
     #[test]
@@ -265,6 +281,7 @@ mod tests {
         let scene = unresolved_drcs_scene();
         let mut options = ConversionOptions {
             srt: true,
+            webvtt: true,
             preserve_drcs: false,
             ..Default::default()
         };
