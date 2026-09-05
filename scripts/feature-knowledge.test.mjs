@@ -3,6 +3,7 @@ import test from 'node:test'
 import { emptyTaskEventState, featureCountSummary, reduceTaskEvent } from '../studio-tauri/src/features/tasks/event-state.ts'
 import { assessExports } from '../studio-tauri/src/features/tasks/export-assessment.ts'
 import { hasCaptionTrack, hasSelectedCaptionTrack, selectedCaptionTrack } from '../studio-tauri/src/features/tasks/export-eligibility.ts'
+import { SettingsPersistenceQueue } from '../studio-tauri/src/features/settings/persistence-queue.ts'
 
 const preservation = { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true }
 
@@ -19,6 +20,44 @@ test('export eligibility requires an explicitly selected caption track', () => {
   assert.equal(hasSelectedCaptionTrack([track], new Set()), false)
   assert.equal(hasSelectedCaptionTrack([track], new Set([track.logicalTrack])), true)
   assert.equal(selectedCaptionTrack([track], new Set([track.logicalTrack])), track)
+})
+
+test('settings persistence serializes rapid changes and commits the latest complete preferences', async () => {
+  let releaseFirst
+  const firstWrite = new Promise((resolve) => { releaseFirst = resolve })
+  const writes = []
+  const queue = new SettingsPersistenceQueue(
+    async (settings) => {
+      writes.push(structuredClone(settings))
+      if (writes.length === 1) await firstWrite
+      return structuredClone(settings)
+    },
+    assert.fail,
+  )
+  const base = {
+    uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', userMode: 'normie',
+    exportPreferences: { formats: ['ASS', 'SRT'], preservation: { ...preservation } },
+    locale: 'system', theme: 'system',
+    workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false },
+    onboardingVersion: 3,
+  }
+  const first = { ...base, userMode: 'nerd' }
+  const latest = {
+    ...first,
+    defaultFormat: 'TTML',
+    exportPreferences: {
+      formats: ['TTML', 'ASS', 'SRT'],
+      preservation: { ...preservation, ruby: false, drcs: false },
+    },
+  }
+
+  const firstResult = queue.persist(first)
+  const latestResult = queue.persist(latest)
+  assert.equal(writes.length, 1)
+  releaseFirst()
+  assert.deepEqual(await firstResult, latest)
+  assert.deepEqual(await latestResult, latest)
+  assert.deepEqual(writes, [first, latest])
 })
 
 test('assessment entries preserve the source-state and user-intent truth table for all formats', () => {

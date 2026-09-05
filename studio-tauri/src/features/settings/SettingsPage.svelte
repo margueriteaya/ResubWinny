@@ -13,14 +13,14 @@
   export let saveCaptionFont: (font: string) => void = () => {}
   export let onSettingsSaved: (settings: AppSettings) => void | Promise<void> = () => {}
   export let onSettingsPreview: (settings: AppSettings) => void | Promise<void> = () => {}
+  export let persistSettings: (settings: AppSettings) => Promise<AppSettings | null> = async (settings) => settings
   export let onError: (reason: unknown) => void = () => {}
   export let onShowOnboarding: () => void = () => {}
   const defaults: AppSettings = { uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', userMode: 'normie', exportPreferences: { formats: ['ASS'], preservation: { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true } }, locale: 'system', theme: 'system', workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false }, onboardingVersion: 0 }
   let preferences: AppSettings = { ...defaults }
   export let panel: Panel = 'general'
   let persistenceState: 'idle' | 'saving' | 'saved' | 'error' = 'idle'
-  let pendingPreferences: AppSettings | null = null
-  let persistenceRunning = false
+  let persistenceRevision = 0
   let savedTimer = 0
   let previewRuntime: PreviewRuntime | null = null
   let installedLocales = availableLocales()
@@ -54,26 +54,17 @@
     savedTimer = window.setTimeout(() => persistenceState = 'idle', 2500)
   }
 
-  async function drainPersistence() {
-    if (persistenceRunning) return
-    persistenceRunning = true
-    while (pendingPreferences) {
-      const candidate = pendingPreferences
-      pendingPreferences = null
-      persistenceState = 'saving'
-      try {
-        const persisted = isDesktopRuntime() ? await backend.updateSettings(candidate) : candidate
-        if (!pendingPreferences) {
-          preferences = persisted
-          await onSettingsSaved({ ...persisted })
-          announceSaved()
-        }
-      } catch (reason) {
-        persistenceState = 'error'
-        onError(reason)
-      }
+  async function persistPreferences(candidate: AppSettings, revision: number) {
+    persistenceState = 'saving'
+    const persisted = await persistSettings(candidate)
+    if (revision !== persistenceRevision) return
+    if (!persisted) {
+      persistenceState = 'error'
+      return
     }
-    persistenceRunning = false
+    preferences = persisted
+    await onSettingsSaved({ ...persisted })
+    announceSaved()
   }
 
   function updatePreferences(next: AppSettings, effect: 'appearance' | 'caption' | 'none' = 'none') {
@@ -81,8 +72,12 @@
     if (effect === 'appearance') applyFont()
     if (effect === 'caption') saveCaptionFont(next.captionFont)
     void Promise.resolve(onSettingsPreview({ ...next })).catch(onError)
-    pendingPreferences = { ...next, workspaceLayout: { ...next.workspaceLayout } }
-    void drainPersistence()
+    const revision = ++persistenceRevision
+    const candidate = { ...next, workspaceLayout: { ...next.workspaceLayout } }
+    void persistPreferences(candidate, revision).catch((reason) => {
+      if (revision === persistenceRevision) persistenceState = 'error'
+      onError(reason)
+    })
   }
 
   function resetCategory() {

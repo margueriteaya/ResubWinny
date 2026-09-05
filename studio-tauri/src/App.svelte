@@ -1053,7 +1053,7 @@
         onOpenHistory={(item) => void openHistory(item)}
         onNavigate={(target) => selectView(target)}
         settings={appSettings}
-        onSettingsChange={(settings) => { const next = { ...settings, defaultFormat: settings.exportPreferences.formats[0] ?? settings.defaultFormat }; appSettings = next; selectedFormats = new Set(next.exportPreferences.formats); preservation = { ...next.exportPreferences.preservation }; void backend.updateSettings(next); }}
+        onSettingsChange={(settings) => { const next = { ...settings, defaultFormat: settings.exportPreferences.formats[0] ?? settings.defaultFormat }; appSettings = next; selectedFormats = new Set(next.exportPreferences.formats); preservation = { ...next.exportPreferences.preservation }; void preferencesSession.persist(next); }}
       />
     {:else if page === "tasks"}
       {#if TaskWorkspaceComponent}
@@ -1166,6 +1166,7 @@
       <svelte:component this={SettingsPageComponent}
         bind:panel={settingsPanel}
         {saveCaptionFont}
+        persistSettings={(settings: AppSettings) => preferencesSession.persist(settings)}
         onSettingsSaved={applyPreferences}
         onSettingsPreview={applyPreferences}
         onError={reportBackendFailure}

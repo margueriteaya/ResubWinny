@@ -1,6 +1,7 @@
 import type { AppSettings } from "../../backend";
 import type { LanguagePack } from "../../i18n";
 import { applyTheme, resolveLocale } from "./preferences";
+import { copySettings, SettingsPersistenceQueue } from "./persistence-queue";
 
 type PreferencesHooks = {
   desktopRuntime: boolean;
@@ -16,7 +17,13 @@ type PreferencesHooks = {
 
 /** Owns application preference application and persistence without becoming a global store. */
 export class PreferencesSession {
-  constructor(private readonly hooks: PreferencesHooks) {}
+  private readonly hooks: PreferencesHooks;
+  private readonly persistence: SettingsPersistenceQueue;
+
+  constructor(hooks: PreferencesHooks) {
+    this.hooks = hooks;
+    this.persistence = new SettingsPersistenceQueue(hooks.updateSettings, hooks.onError);
+  }
 
   async apply(settings: AppSettings, refreshLanguagePacks = false) {
     if (this.hooks.desktopRuntime && refreshLanguagePacks)
@@ -38,9 +45,10 @@ export class PreferencesSession {
     }
   }
 
-  persist(settings: AppSettings) {
-    if (this.hooks.desktopRuntime)
-      void this.hooks.updateSettings(settings).catch(this.hooks.onError);
+  persist(settings: AppSettings): Promise<AppSettings | null> {
+    return this.hooks.desktopRuntime
+      ? this.persistence.persist(settings)
+      : Promise.resolve(copySettings(settings));
   }
 
   async saveCaptionFont(font: string) {
