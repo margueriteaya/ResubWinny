@@ -244,6 +244,70 @@ fn m2ts_untimed_ttml_uses_arrival_clock_and_closes_on_the_next_document() {
 }
 
 #[test]
+fn actual_conflicts_stop_source_reads_and_preserve_existing_finals() {
+    for m2ts in [false, true] {
+        let directory =
+            std::env::temp_dir().join(format!("arib-conflict-read-{}-{m2ts}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let input = directory.join(if m2ts { "source.m2ts" } else { "source.ts" });
+        let output = directory.join("output.ass");
+        let mut fixture = private_pes_ttml_ts_fixture();
+        let following_ttml =
+            b"<?xml version=\"1.0\"?><tt><body><p begin=\"1s\" end=\"2s\">Next</p></body></tt>";
+        // A private-PES TTML document is emitted once the following document's
+        // boundary is known. Two additional starts make the coloured first
+        // document observable near the front of this otherwise large source.
+        fixture.extend(ts_packet(0x0120, true, following_ttml));
+        fixture.extend(ts_packet(0x0120, true, following_ttml));
+        let mut source = if m2ts {
+            m2ts_from_ts_packets(&fixture)
+        } else {
+            fixture
+        };
+        let null = ts_packet(0x1fff, false, &[]);
+        while source.len() < 64 * 1024 * 1024 {
+            if m2ts {
+                source.extend([0; 4]);
+            }
+            source.extend(null);
+        }
+        fs::write(&input, &source).unwrap();
+        drop(source);
+        fs::write(&output, "existing final").unwrap();
+        let (result, reads) = crate::input::measure_reads(&input, || {
+            convert_with_options_and_cancel(
+                &input,
+                &output,
+                ConversionOptions {
+                    srt: true,
+                    overwrite: true,
+                    preserve_position: false,
+                    ..Default::default()
+                },
+                |_| {},
+                || false,
+            )
+        });
+        let error = result.err().expect("material colour must conflict");
+        let conflict = error
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<ExportConflict>()
+            .unwrap();
+        assert_eq!(conflict.feature, "color");
+        assert_eq!(conflict.formats, ["SRT"]);
+        assert_eq!(fs::read_to_string(&output).unwrap(), "existing final");
+        assert!(!output.with_extension("srt").exists());
+        assert!(!output.with_extension("ass.part").exists());
+        assert!(
+            reads.bytes < 32 * 1024 * 1024,
+            "conflict read too far: {reads:?}"
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[test]
 fn inspection_is_bounded_and_multiformat_conversion_reads_source_once() {
     let directory = std::env::temp_dir().join(format!("arib-read-budget-{}", std::process::id()));
     fs::create_dir_all(&directory).unwrap();
