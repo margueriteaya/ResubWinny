@@ -280,6 +280,39 @@ fn preserves_safe_ttml_ruby_and_span_markup_for_ttml_interchange() {
 }
 
 #[test]
+fn dropping_accessibility_or_gaiji_keeps_ttml_ruby_and_inline_colour() {
+    let xml = "<tt><body><p begin='0s' end='1s'>♪<ruby><span tts:ruby='base' tts:color='#ff0000'>漢</span><rt><span tts:ruby='text'>かん</span></rt></ruby><span>終&amp;</span></p></body></tt>";
+    let caption = parse_ttml_captions(xml, 0).pop().expect("caption");
+    for (preserve_gaiji, preserve_accessibility) in [(false, true), (true, false), (false, false)] {
+        let options = ConversionOptions {
+            preserve_gaiji,
+            preserve_accessibility,
+            ..Default::default()
+        };
+        let output = std::env::temp_dir().join(format!(
+            "arib-independent-ruby-{}-{preserve_gaiji}-{preserve_accessibility}.ttml",
+            std::process::id()
+        ));
+        let mut writer = BufWriter::new(File::create(&output).expect("output"));
+        write_ttml_header(&mut writer).unwrap();
+        write_ttml_caption(&mut writer, &caption, &options).unwrap();
+        write_ttml_footer(&mut writer).unwrap();
+        writer.flush().unwrap();
+        let text = fs::read_to_string(&output).unwrap();
+        assert!(
+            text.contains("tts:ruby='text'"),
+            "body={:?} output={text}",
+            caption.rich_body
+        );
+        assert!(text.contains("tts:color='#ff0000'"));
+        assert!(text.contains("かん"));
+        assert!(text.contains("終&amp;"));
+        assert_eq!(text.contains('♪'), preserve_accessibility);
+        fs::remove_file(&output).unwrap();
+    }
+}
+
+#[test]
 fn drops_nested_colour_when_ttml_colour_preservation_is_disabled() {
     let xml = "<tt><body><p begin='0s' end='1s'><ruby><span tts:ruby='base' tts:color='#ffffff'>漢</span><rt><span tts:ruby='text' tts:color='#ff00ff'>かん</span></rt></ruby></p></body></tt>";
     let caption = parse_ttml_captions(xml, 0).pop().expect("caption");

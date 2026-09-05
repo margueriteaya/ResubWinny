@@ -283,11 +283,11 @@ pub(crate) fn write_ttml_caption(
             Default::default()
         },
         style,
-        if options.preserve_ruby && options.preserve_gaiji && options.preserve_accessibility {
+        if options.preserve_ruby {
             caption
                 .rich_body
                 .as_deref()
-                .map(|body| filter_ttml_inline_body(body, options.preserve_color))
+                .and_then(|body| filter_ttml_preserved_body(body, options))
         } else {
             None
         }

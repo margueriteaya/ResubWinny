@@ -252,17 +252,16 @@ fn write_ass_ttml_caption_at(
         .as_deref()
         .and_then(ass_font_size_from_ttml)
         .unwrap_or(42);
-    let mut runs =
-        if options.preserve_ruby && options.preserve_gaiji && options.preserve_accessibility {
-            caption
-                .rich_body
-                .as_deref()
-                .map(|body| filter_ttml_inline_body(body, options.preserve_color))
-                .map(|body| parse_ass_inline_runs(&body, &caption.style))
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+    let mut runs = if options.preserve_ruby {
+        caption
+            .rich_body
+            .as_deref()
+            .and_then(|body| filter_ttml_preserved_body(body, options))
+            .map(|body| parse_ass_inline_runs(&body, &caption.style))
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     if runs.is_empty() {
         runs.push(AssInlineRun {
             text: filtered_text,
@@ -464,6 +463,58 @@ pub(crate) fn filter_ttml_inline_body(body: &str, preserve_color: bool) -> Strin
     }
     output.push_str(remaining);
     output
+}
+
+/// Filter source text while keeping its surrounding inline structure. The
+/// shared material-feature mask spans text nodes, including styled fragments.
+pub(crate) fn filter_ttml_preserved_body(
+    body: &str,
+    options: &ConversionOptions,
+) -> Option<String> {
+    let body = filter_ttml_inline_body(body, options.preserve_color);
+    if options.preserve_gaiji && options.preserve_accessibility {
+        return Some(body);
+    }
+    let prefix = "<body xmlns:tts='http://www.w3.org/ns/ttml#styling' xmlns:ttm='http://www.w3.org/ns/ttml#metadata' xmlns:arib='https://resubwinny.dev/ns/arib'>";
+    let wrapped = format!("{prefix}{body}</body>");
+    let document = roxmltree::Document::parse(&wrapped).ok()?;
+    let nodes = document
+        .descendants()
+        .filter(|node| node.is_text())
+        .collect::<Vec<_>>();
+    let text = nodes
+        .iter()
+        .filter_map(|node| node.text())
+        .collect::<String>();
+    let retained = crate::caption_features::retained_characters(
+        &text,
+        options.preserve_gaiji,
+        options.preserve_accessibility,
+    );
+    let mut cursor = 0;
+    let mut edits = Vec::new();
+    for node in nodes {
+        let filtered = node
+            .text()
+            .unwrap_or_default()
+            .chars()
+            .filter(|_| {
+                let keep = retained[cursor];
+                cursor += 1;
+                keep
+            })
+            .collect::<String>();
+        let range = node.range();
+        edits.push((
+            range.start - prefix.len()..range.end - prefix.len(),
+            xml_escape(&filtered),
+        ));
+    }
+    let mut result = body;
+    for (range, replacement) in edits.into_iter().rev() {
+        result.replace_range(range, &replacement);
+    }
+    Some(result)
 }
 
 fn is_horizontal_ttml(caption: &TtmlCaption) -> bool {
