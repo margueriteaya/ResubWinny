@@ -519,6 +519,7 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
         fs::write(&conflict_output, "existing final must survive").expect("existing final");
         fs::write(&conflict_srt, "existing SRT must survive").expect("existing SRT");
         fs::write(&conflict_webvtt, "existing WebVTT must survive").expect("existing WebVTT");
+        let mut conflict_bytes_read = 0_u64;
         let conflict = match convert_with_options_and_cancel(
             &input_path,
             &conflict_output,
@@ -528,7 +529,7 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
                 overwrite: true,
                 ..ConversionOptions::default()
             },
-            |_| {},
+            |summary| conflict_bytes_read = conflict_bytes_read.max(summary.bytes_read),
             || false,
         ) {
             Ok(_) => panic!("SRT preservation must conflict with material TTML features"),
@@ -550,6 +551,10 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
         assert_eq!(
             fs::read_to_string(&conflict_webvtt).expect("existing WebVTT"),
             "existing WebVTT must survive"
+        );
+        assert!(
+            conflict_bytes_read < fs::metadata(&input_path).expect("input metadata").len(),
+            "actual export conflict must stop before reading the full recording"
         );
         assert!(!conflict_part.exists(), "conflict .part was retained");
 
