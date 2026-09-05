@@ -146,7 +146,11 @@ fn open_directory(directory: &std::path::Path) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
-    match fs::read(settings_path(&app)?) {
+    read_settings_file(&settings_path(&app)?)
+}
+
+fn read_settings_file(path: &std::path::Path) -> Result<AppSettings, String> {
+    match fs::read(path) {
         Ok(bytes) => {
             decode_settings(&bytes).map_err(|error| format!("Could not decode settings: {error}"))
         }
@@ -165,21 +169,29 @@ fn decode_settings(bytes: &[u8]) -> Result<AppSettings, serde_json::Error> {
     Ok(normalize(settings))
 }
 
-#[tauri::command]
-pub fn update_settings(
-    app: AppHandle,
-    state: State<'_, std::sync::Arc<AppState>>,
+fn write_settings_file(
+    path: &std::path::Path,
     settings: AppSettings,
 ) -> Result<AppSettings, String> {
     let settings = normalize(settings);
-    let path = settings_path(&app)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("Could not create settings directory: {error}"))?;
     }
     let bytes = serde_json::to_vec_pretty(&settings)
         .map_err(|error| format!("Could not encode settings: {error}"))?;
-    write_atomic(&path, &bytes).map_err(|error| format!("Could not publish settings: {error}"))?;
+    write_atomic(path, &bytes).map_err(|error| format!("Could not publish settings: {error}"))?;
+    Ok(settings)
+}
+
+#[tauri::command]
+pub fn update_settings(
+    app: AppHandle,
+    state: State<'_, std::sync::Arc<AppState>>,
+    settings: AppSettings,
+) -> Result<AppSettings, String> {
+    let path = settings_path(&app)?;
+    let settings = write_settings_file(&path, settings)?;
     *state
         .caption_font
         .lock()
@@ -190,7 +202,36 @@ pub fn update_settings(
 
 #[cfg(test)]
 mod tests {
-    use super::{AppSettings, decode_settings, normalize};
+    use super::{AppSettings, decode_settings, normalize, read_settings_file, write_settings_file};
+
+    #[test]
+    fn settings_file_roundtrip_restores_mode_formats_and_preservation() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("resubwinny-settings-{stamp}"));
+        let path = directory.join("settings.json");
+        let mut settings = AppSettings {
+            user_mode: "nerd".into(),
+            default_format: "TTML".into(),
+            onboarding_version: 3,
+            ..Default::default()
+        };
+        settings.export_preferences.formats = ["ASS", "TTML", "SRT", "WebVTT", "JSON", "Raw Data"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        settings.export_preferences.preservation.position = false;
+        settings.export_preferences.preservation.ruby = false;
+        settings.export_preferences.preservation.drcs = false;
+
+        let saved = write_settings_file(&path, settings).expect("save settings");
+        let reloaded = read_settings_file(&path).expect("reload settings");
+        assert_eq!(serde_json::to_value(reloaded).unwrap(), serde_json::to_value(saved).unwrap());
+        assert!(!path.with_extension("json.part").exists());
+        std::fs::remove_dir_all(&directory).expect("cleanup settings fixture");
+    }
 
     #[test]
     fn new_install_defaults_to_work_mode_ass_and_independent_preservation() {
