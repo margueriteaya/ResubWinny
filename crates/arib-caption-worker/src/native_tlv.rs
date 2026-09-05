@@ -671,6 +671,48 @@ mod tests {
     }
 
     #[test]
+    fn native_b62_conversion_reads_a_large_source_once() {
+        let document = b"<?xml version=\"1.0\"?><tt xmlns=\"http://www.w3.org/ns/ttml\"><body><div><p begin=\"0s\" end=\"1s\">caption</p></div></body></tt>";
+        let mut source = crate::synthetic::make_b62_tlv_stream(document);
+        source.extend([0x7f, 0xff, 0, 0].repeat(3));
+        let mut padding = vec![0x7f, 0xff, 0xff, 0xff];
+        padding.resize(4 + u16::MAX as usize, 0);
+        while source.len() < 64 * 1024 * 1024 {
+            source.extend(&padding);
+        }
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("arib-native-b62-read-{stamp}"));
+        fs::create_dir_all(&directory).expect("temporary directory");
+        let input = directory.join("source.tlv");
+        let output = directory.join("output.ass");
+        fs::write(&input, &source).expect("large native fixture");
+        let length = source.len() as u64;
+        drop(source);
+
+        let (result, reads) = crate::input::measure_reads(&input, || {
+            convert_with_options_and_cancel(
+                &input,
+                &output,
+                ConversionOptions::default(),
+                |_| {},
+                || false,
+            )
+        });
+
+        let report = result.expect("native B62 conversion");
+        assert_eq!(report.summary.captions, 1);
+        assert!(reads.bytes >= length, "conversion missed input: {reads:?}");
+        assert!(
+            reads.bytes < length + 2 * 1024 * 1024,
+            "native conversion made an extra source pass: {reads:?}"
+        );
+        fs::remove_dir_all(directory).expect("cleanup native fixture");
+    }
+
+    #[test]
     fn caption_callback_copies_document_and_resources_before_returning() {
         let mut state = CallbackState::default();
         let mut document = b"<tt/>".to_vec();
