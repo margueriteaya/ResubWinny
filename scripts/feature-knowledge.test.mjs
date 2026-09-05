@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { emptyTaskEventState, featureCountSummary, reduceTaskEvent } from '../studio-tauri/src/features/tasks/event-state.ts'
 import { assessExports } from '../studio-tauri/src/features/tasks/export-assessment.ts'
-import { hasSelectedCaptionTrack, selectedCaptionTrack } from '../studio-tauri/src/features/tasks/export-eligibility.ts'
+import { hasCaptionTrack, hasSelectedCaptionTrack, selectedCaptionTrack } from '../studio-tauri/src/features/tasks/export-eligibility.ts'
 
 const preservation = { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true }
 
@@ -14,6 +14,8 @@ test('export eligibility requires an explicitly selected caption track', () => {
     logicalTrack: 'service=1:component=48:lang=jpn',
   }
   assert.equal(hasSelectedCaptionTrack([], new Set()), false)
+  assert.equal(hasCaptionTrack([]), false)
+  assert.equal(hasCaptionTrack([track]), true)
   assert.equal(hasSelectedCaptionTrack([track], new Set()), false)
   assert.equal(hasSelectedCaptionTrack([track], new Set([track.logicalTrack])), true)
   assert.equal(selectedCaptionTrack([track], new Set([track.logicalTrack])), track)

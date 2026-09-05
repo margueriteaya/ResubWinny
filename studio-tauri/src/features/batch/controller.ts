@@ -1,5 +1,6 @@
 import { backend, type CheckpointRecord, type DrcsMapping, type ExportFormat, type ExportPreservation, type Inspection, type JobRecord, type Track } from "../../backend";
 import { trackKey } from "../tracks";
+import { hasCaptionTrack } from "../tasks/export-eligibility";
 
 export { trackKey } from "../tracks";
 
@@ -82,8 +83,10 @@ export async function createQueuedJobs(
   preservation: ExportPreservation,
   outputDirectory?: string,
 ): Promise<{ items: BatchItem[]; jobIds: string[] }> {
-  const queued = items.filter((item) => item.status === "Queued");
-  const jobIds = await Promise.all(queued.map(async (item) => {
+  const queued = items.filter(
+    (item) => item.status === "Queued" && hasCaptionTrack(item.inspection.tracks),
+  );
+  const created = await Promise.all(queued.map(async (item) => {
     const selected = item.inspection.tracks.find(
       (track) => trackKey(track) === item.selectedTrackKey,
     ) ?? item.inspection.tracks[0];
@@ -99,12 +102,15 @@ export async function createQueuedJobs(
       formats,
       preservation,
     });
-    return job.jobId;
+    return [item.inspection.path, job.jobId] as const;
   }));
-  let index = 0;
+  const jobBySource = new Map(created);
   return {
-    jobIds,
-    items: items.map((item) => item.status === "Queued" ? { ...item, jobId: jobIds[index++], status: "Queued" } : item),
+    jobIds: created.map(([, jobId]) => jobId),
+    items: items.map((item) => {
+      const jobId = jobBySource.get(item.inspection.path);
+      return jobId ? { ...item, jobId, status: "Queued" } : item;
+    }),
   };
 }
 
@@ -205,7 +211,9 @@ export class BatchQueueController {
       }
       return;
     }
-    const queued = items.filter((item) => item.status === "Queued");
+    const queued = items.filter(
+      (item) => item.status === "Queued" && hasCaptionTrack(item.inspection.tracks),
+    );
     if (!queued.length || this.hooks.running()) return;
     try {
       const existing = queued

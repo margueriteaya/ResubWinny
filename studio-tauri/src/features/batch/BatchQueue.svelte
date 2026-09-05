@@ -21,6 +21,7 @@
   import { t } from "../../i18n";
   import MacCheckbox from "../../components/MacCheckbox.svelte";
   import PopupButton from "../../components/PopupButton.svelte";
+  import { hasCaptionTrack } from "../tasks/export-eligibility";
 
   export let items: BatchItem[] = [];
   export let running = false;
@@ -50,7 +51,11 @@
     );
   const selectedTrackDisplay = (item: BatchItem) => {
     const track = selectedTrackLabel(item);
-    return track ? trackDisplayLabel(track) : t("batch.firstDetectedTrack");
+    return track
+      ? trackDisplayLabel(track)
+      : hasCaptionTrack(item.inspection.tracks)
+        ? t("batch.firstDetectedTrack")
+        : t("tracks.none");
   };
   const statusCode = (status: string) => {
     const normalized = status.trim().toLowerCase().replace(/[ _-]+/g, "");
@@ -73,7 +78,7 @@
     (summary, item) => {
       const status = statusCode(item.status);
       if (status === "running") summary.running += 1;
-      else if (status === "queued") summary.queued += 1;
+      else if (status === "queued" && hasCaptionTrack(item.inspection.tracks)) summary.queued += 1;
       else if (status === "completed") summary.completed += 1;
       return summary;
     },
