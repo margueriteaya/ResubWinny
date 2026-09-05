@@ -471,6 +471,8 @@
     "assessment.needsSettings": "需要修改输出设置",
     "export_conflict": "需要修改输出设置后才能导出当前任务。",
     "assessment.approximated": "{features} 将以兼容方式近似表达",
+    "assessment.rubyApproximation": "Ruby 将以独立的小字字幕近似排版，不保留可编辑的注音关系。",
+    "assessment.gaijiApproximation": "外字将保留为解码后的文字，实际字形取决于播放器使用的字体。",
     "assessment.conditional": "部分源字幕特征尚未确认",
     "assessment.conditionalDrop": "如果源字幕包含{feature}，它们将不会保留。",
     "assessment.conditionalUnsupported": "如果源字幕包含{feature}，{format} 将无法满足保留要求。",

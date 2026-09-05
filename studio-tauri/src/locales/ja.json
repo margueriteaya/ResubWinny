@@ -471,6 +471,8 @@
     "assessment.needsSettings": "出力設定の変更が必要です",
     "export_conflict": "現在のタスクを出力するには、出力設定を変更してください。",
     "assessment.approximated": "{features} は互換表現に置き換えられます",
+    "assessment.rubyApproximation": "ルビは小さな文字の字幕として配置します。親文字との対応関係は、編集可能な情報としては残りません。",
+    "assessment.gaijiApproximation": "外字はデコード後の文字として残します。字形はプレーヤーのフォントによって変わります。",
     "assessment.conditional": "未確認の字幕機能があります",
     "assessment.conditionalDrop": "元の字幕に{feature}が含まれている場合、出力には残りません。",
     "assessment.conditionalUnsupported": "元の字幕に{feature}が含まれている場合、{format} では保持できません。",

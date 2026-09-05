@@ -471,6 +471,8 @@
     "assessment.needsSettings": "Output settings need to be changed",
     "export_conflict": "Output settings need to be changed before this task can be exported.",
     "assessment.approximated": "{features} will use a compatible approximation",
+    "assessment.rubyApproximation": "Ruby is approximated with separate small-text subtitles; editable annotation relationships are not retained.",
+    "assessment.gaijiApproximation": "Special characters are retained as decoded text; their appearance depends on the player's font.",
     "assessment.conditional": "Some source features are not known yet",
     "assessment.conditionalDrop": "If the source contains {feature}, it will not be retained.",
     "assessment.conditionalUnsupported": "If the source contains {feature}, {format} cannot meet the preservation requirement.",
