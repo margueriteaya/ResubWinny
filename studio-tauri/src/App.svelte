@@ -133,7 +133,7 @@
       applyRuntimeReset(resetTaskRuntime());
     },
     inspect: inspectTaskSource,
-    defaultFormat: () => savedPreferences().defaultFormat,
+    preferredFormats: () => [...savedPreferences().exportPreferences.formats],
     message: formatMessage,
     apply: (discovered, setup, jobId) => {
       inspection = discovered;

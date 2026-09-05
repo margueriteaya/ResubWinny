@@ -9,7 +9,7 @@ export type SourceInspectionResult<T> = {
 type SourceSessionHooks = {
   prepare: () => Promise<void>;
   inspect: (path: string) => Promise<Inspection>;
-  defaultFormat: () => string;
+  preferredFormats: () => string[];
   message: (code: string, parameters: Record<string, unknown>) => string;
   apply: (inspection: Inspection, setup: SourceTaskSetup, jobId: string) => void;
   afterApply: () => Promise<void>;
@@ -58,7 +58,7 @@ export class SourceSession {
       if (!result) return;
       const setup = createSourceTaskSetup(
         result.value,
-        this.hooks.defaultFormat(),
+        this.hooks.preferredFormats(),
         this.hooks.message,
       );
       this.hooks.apply(result.value, setup, jobId);

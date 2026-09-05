@@ -63,19 +63,18 @@ export function inspectTaskSource(path: string) {
 
 export function createSourceTaskSetup(
   inspection: Inspection,
-  defaultFormat: string,
+  preferredFormats: readonly string[],
   message: (code: string, parameters: Record<string, unknown>) => string,
 ): SourceTaskSetup {
   const selectedTrack = inspection.tracks[0];
-  const supportedDefault = ["ASS", "TTML", "JSON", "Raw Data"].includes(defaultFormat)
-    ? defaultFormat as ExportFormat
-    : null;
+  const supportedFormats: ExportFormat[] = ["ASS", "TTML", "SRT", "WebVTT", "JSON", "Raw Data"];
+  const selectedFormats = supportedFormats.filter((format) => preferredFormats.includes(format));
   return {
     outputDirectory: inspection.path.replace(/[\\/][^\\/]+$/, ""),
     selectedTrackKeys: selectedTrack
       ? new Set([taskTrackKey(selectedTrack)])
       : new Set(),
-    selectedFormats: supportedDefault ? new Set([supportedDefault]) : null,
+    selectedFormats: selectedFormats.length ? new Set(selectedFormats) : null,
     logs: [
       message("notice.sourceSelected", { name: inspection.name }),
       message("notice.container", { container: inspection.container }),
