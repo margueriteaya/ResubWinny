@@ -8,7 +8,6 @@ use crate::*;
 use std::{
     collections::{BTreeMap, VecDeque},
     ffi::{CStr, c_char, c_void},
-    fs::File,
     io::{self, Read},
     marker::PhantomData,
     path::Path,
