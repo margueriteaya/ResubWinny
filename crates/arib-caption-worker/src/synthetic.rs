@@ -107,6 +107,110 @@ pub fn make_mmtp_packet(
     packet
 }
 
+/// Build a minimal ISDB-S3 TLV stream with one B62 `stpp` subtitle access unit.
+///
+/// This mirrors the pinned libaribtlv protocol fixtures while omitting unrelated
+/// video, audio, application, and layout assets. The document is carried as an
+/// uncompressed UTF-8 subtitle subsample after the MPT that declares its track.
+pub fn make_b62_tlv_stream(document: &[u8]) -> Vec<u8> {
+    assert!(
+        document.len() <= u16::MAX as usize,
+        "TTML document exceeds one synthetic subtitle subsample"
+    );
+
+    let mut subtitle_descriptors = Vec::new();
+    append_descriptor(&mut subtitle_descriptors, 0x8011, &[0x12, 0x30]);
+    append_descriptor(
+        &mut subtitle_descriptors,
+        0x8020,
+        &[
+            0x00, 0x20, 0x30, 0x08, b'j', b'p', b'n', 0x02, 0x2a, 0x10, 0x00, 0x00, 0x00, 0x05,
+            0x00, 0x00, 0x00, 0x64, 0x80, 0x00, 0x00, 0x00, 0x7f,
+        ],
+    );
+    let mut timestamp = Vec::new();
+    append_u32(&mut timestamp, 5);
+    append_u64(&mut timestamp, 100_u64 << 32);
+    append_descriptor(&mut subtitle_descriptors, 0x0001, &timestamp);
+    let mut extended_timestamp = vec![0x03];
+    append_u32(&mut extended_timestamp, 1_000);
+    append_u16(&mut extended_timestamp, 3_000);
+    append_u32(&mut extended_timestamp, 5);
+    extended_timestamp.extend([0, 0, 0, 1, 0, 0]);
+    append_descriptor(&mut subtitle_descriptors, 0x8026, &extended_timestamp);
+    let mut mpt_body = vec![0xfc, 0x02, 0x00, 0x65, 0x00, 0x00, 0x01];
+    append_asset(&mut mpt_body, 0xf330, b"stpp", &subtitle_descriptors);
+    let mut mpt = vec![0x20, 0x08];
+    append_u16(&mut mpt, mpt_body.len());
+    mpt.extend(mpt_body);
+    let mut pa = vec![0x00, 0x00, 0x00];
+    append_u32(&mut pa, 1 + mpt.len());
+    pa.push(0);
+    pa.extend(mpt);
+    let mut signalling_mmtp = vec![0x00, 0x02, 0xff, 0x02];
+    append_u32(&mut signalling_mmtp, 0);
+    append_u32(&mut signalling_mmtp, 1);
+    signalling_mmtp.extend([0, 0]);
+    signalling_mmtp.extend(pa);
+    let signalling = tlv_for_mmtp(1, &signalling_mmtp);
+
+    let mut mfu = vec![0x30, 0x01, 0x00, 0x00, 0x00];
+    append_u16(&mut mfu, document.len());
+    mfu.extend(document);
+    let mut mpu = Vec::new();
+    append_u16(&mut mpu, 6 + 14 + mfu.len());
+    mpu.extend([0x28, 0]);
+    append_u32(&mut mpu, 5);
+    append_u32(&mut mpu, 0);
+    append_u32(&mut mpu, 0);
+    append_u32(&mut mpu, 0);
+    mpu.extend([0, 0]);
+    mpu.extend(mfu);
+    let media_mmtp = make_mmtp_packet(0xf330, 1, 0, &mpu);
+    let media = tlv_for_mmtp(1, &media_mmtp);
+
+    [signalling, media].concat()
+}
+
+fn append_u16(output: &mut Vec<u8>, value: usize) {
+    output.extend((value as u16).to_be_bytes());
+}
+
+fn append_u32(output: &mut Vec<u8>, value: usize) {
+    output.extend((value as u32).to_be_bytes());
+}
+
+fn append_u64(output: &mut Vec<u8>, value: u64) {
+    output.extend(value.to_be_bytes());
+}
+
+fn append_descriptor(output: &mut Vec<u8>, tag: u16, payload: &[u8]) {
+    output.extend(tag.to_be_bytes());
+    output.push(payload.len() as u8);
+    output.extend(payload);
+}
+
+fn append_asset(output: &mut Vec<u8>, packet_id: u16, kind: &[u8; 4], descriptors: &[u8]) {
+    output.push(0);
+    append_u32(output, 0);
+    output.push(2);
+    output.extend(packet_id.to_be_bytes());
+    output.extend(kind);
+    output.extend([0xfe, 1, 0]);
+    output.extend(packet_id.to_be_bytes());
+    append_u16(output, descriptors.len());
+    output.extend(descriptors);
+}
+
+fn tlv_for_mmtp(context_id: u16, mmtp: &[u8]) -> Vec<u8> {
+    let mut payload = vec![(context_id << 4 >> 8) as u8, (context_id << 4) as u8, 0x61];
+    payload.extend(mmtp);
+    let mut packet = vec![0x7f, 0x03];
+    append_u16(&mut packet, payload.len());
+    packet.extend(payload);
+    packet
+}
+
 fn encode_pts(value: crate::time::Pts90k) -> [u8; 5] {
     let value = value.ticks();
     [

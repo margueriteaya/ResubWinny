@@ -643,6 +643,34 @@ mod tests {
     }
 
     #[test]
+    fn synthetic_b62_stream_reaches_the_native_track_and_caption_callbacks() {
+        let document = b"<?xml version=\"1.0\"?><tt xmlns=\"http://www.w3.org/ns/ttml\"><body><div><p begin=\"0s\" end=\"1s\">caption</p></div></body></tt>";
+        let stream = crate::synthetic::make_b62_tlv_stream(document);
+        let mut demuxer = NativeTlvDemuxer::new().expect("libaribtlv demuxer");
+
+        demuxer.push(&stream).expect("synthetic native TLV input");
+        demuxer.flush().expect("flush synthetic TLV input");
+
+        let events = demuxer.drain().collect::<Vec<_>>();
+        let track = events.iter().find_map(|event| match event {
+            NativeTlvEvent::Track(track) => Some(track),
+            _ => None,
+        });
+        let caption = events.iter().find_map(|event| match event {
+            NativeTlvEvent::Caption(caption) => Some(caption),
+            _ => None,
+        });
+        assert_eq!(track.expect("subtitle track").packet_id, 0xf330);
+        assert_eq!(track.expect("subtitle track").component_tag, 0x1230);
+        assert_eq!(
+            caption
+                .unwrap_or_else(|| panic!("caption access unit; events: {events:?}"))
+                .bytes,
+            document
+        );
+    }
+
+    #[test]
     fn caption_callback_copies_document_and_resources_before_returning() {
         let mut state = CallbackState::default();
         let mut document = b"<tt/>".to_vec();
