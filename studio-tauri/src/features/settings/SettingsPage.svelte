@@ -92,7 +92,14 @@
       updatePreferences({ ...preferences, uiFont: defaults.uiFont, captionFont: defaults.captionFont }, 'appearance')
       saveCaptionFont(defaults.captionFont)
     } else if (panel === 'output') {
-      updatePreferences({ ...preferences, defaultFormat: defaults.defaultFormat })
+      updatePreferences({
+        ...preferences,
+        defaultFormat: defaults.defaultFormat,
+        exportPreferences: {
+          formats: [...defaults.exportPreferences.formats],
+          preservation: { ...defaults.exportPreferences.preservation },
+        },
+      })
     }
   }
 
