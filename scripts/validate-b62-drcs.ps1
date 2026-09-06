@@ -154,6 +154,9 @@ try {
     if (-not $completed) {
         throw "B62 mapping did not converge within $MaxMappingPasses passes."
     }
+    if ($conflictPasses -eq 0) {
+        throw 'The validation source contains no unresolved same-MPU B62 DRCS to validate.'
+    }
     if (-not (Test-Path -LiteralPath $publishedPath -PathType Leaf)) {
         throw 'Mapped B62 conversion did not publish the selected SRT artifact.'
     }
