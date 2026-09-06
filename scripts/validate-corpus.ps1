@@ -90,6 +90,10 @@ function Assert-ArchiveCaptionGeometry([string]$Path, [int64]$StartMilliseconds,
 Inspect-Recording 'chijo_digital_test.ts' 'mpeg_ts'
 Inspect-Recording 'bs4k_test.m2ts' 'm2ts'
 Inspect-Recording 'bs4k_test_2.ts' 'mpeg_ts'
+$nativeB62 = Join-Path $fixtureDirectory '8k1.mmts'
+if (Test-Path -LiteralPath $nativeB62 -PathType Leaf) {
+    Inspect-Recording '8k1.mmts' 'tlv'
+}
 
 if ($Long) {
     $validationDirectory = Join-Path ([System.IO.Path]::GetTempPath()) 'resubwinny-corpus-validation'
@@ -129,6 +133,15 @@ if ($Long) {
     $bs4kB24InactiveArchive = [System.IO.Path]::ChangeExtension($bs4kB24InactiveOutput, '.caption.jsonl')
     Assert-File $bs4kB24InactiveArchive
     Assert-ArchiveSummary $bs4kB24InactiveArchive @{ captions = 0; regions = 0; characters = 0; drcs_glyphs = 0 } $false
+    if (Test-Path -LiteralPath $nativeB62 -PathType Leaf) {
+        $nativeB62Output = Join-Path $validationDirectory '8k1.ass'
+        Convert-Recording '8k1.mmts' $nativeB62Output @{
+            '--archive' = $true; '--raw' = $true; '--no-ass' = $true; '--drop-drcs' = $true; '--overwrite' = $true
+        } @{ bytes_read = 364994560; pes_packets = 5; captions = 8; characters = 97; drcs_glyphs = 0; decoder_errors = 10 }
+        $nativeB62Archive = [System.IO.Path]::ChangeExtension($nativeB62Output, '.caption.jsonl')
+        Assert-File $nativeB62Archive
+        Assert-ArchiveSummary $nativeB62Archive @{ captions = 8; characters = 97; drcs_glyphs = 0 } $false
+    }
     Write-Output "long validation artifacts -> $validationDirectory"
 }
 

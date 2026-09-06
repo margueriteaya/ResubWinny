@@ -9,12 +9,12 @@
 ```powershell
 $env:ARIB_FIXTURE_DIR = 'C:\tvrecords_testfile'
 $env:ARIB_LONG_FIXTURE = '1'
-cargo test -p arib-caption-worker decodes_ -- --nocapture
+cargo test -p arib-caption-worker --features libaribtlv decodes_ -- --nocapture
 ```
 
 这些选择加入式检查会流式处理完整输入，并断言以下当前基线。它们不发布源字节、字幕或屏幕截图。
 
-该语料库有意优先采用用户实际可以获得且内容已经验证的录像：地面 MPEG-TS 样本和 192 字节 MPEG-TS/TTML 样本是发布门禁。后者是分组化的 MPEG-TS 录像，不得用作已捕获原生 BS4K TLV 的证据。目前 TLV/MMTP 没有同等的本地发布样本；在取得合法真实捕获之前，其解析器、信令限制和原始证据契约由有界构造测试覆盖。
+该语料库有意优先采用用户实际可以获得且内容已经验证的录像：地面 MPEG-TS 样本和 192 字节 MPEG-TS/TTML 样本是发布门禁。后者是分组化的 MPEG-TS 录像，不得用作原生 BS4K TLV 的证据。本地 `8k1.mmts` 提供一段合法的原生 TLV/MMTP 捕获，用于选择加入式路由回归；由于片段较短，且不含 DRCS、同 MPU 字体资源或复杂 Ruby，它尚不构成完整的原生 B62 发布门禁。缺失的语义继续由有界构造测试覆盖。
 
 公开协议样本可从 worker 的 `synthetic` 模块获得：`make_ts_packet`、`make_pat`、`make_pmt`、`make_pes`、`make_b24_data_group` 和 `make_mmtp_packet` 为解析器测试构造确定性的分组和段边界，而不嵌入广播录像，也不声称具有广播机构特定语义。
 
@@ -32,6 +32,7 @@ $env:ARIB_FIXTURE_DIR = 'C:\tvrecords_testfile'
 | `chijo_digital_test.ts` | ISDB-T MPEG-TS / ARIB STD-B24 | **发布门禁。** 18,579,078,944 个输入字节；13,653 个 PES；2,230 个场景；2,736 个区域；29,892 个字符；61 个 DRCS 字形；0 个解码器错误。NIT 网络名称、当前 EIT 节目元数据和 TDT/TOT 广播时间必须全部存在。 |
 | `bs4k_test.m2ts` | 192 字节录像机 M2TS / 私有 PES / ARIB-TTML | **发布门禁。** 11,517,020,160 个输入字节；330 个 PES；422 条 TTML 字幕；5,051 个字符；0 个解析器错误。同时间区域关联目前会在归档/ASS 输出前记录 31 个结构化 Ruby 绑定，其中包括从 `ささ` 到单个基础字素 `捧` 的绑定。 |
 | `bs4k_test_2.ts` | 188 字节录像机 MPEG-TS / ARIB STD-B24 | **发布门禁。** 3,089,047,552 个输入字节；服务 101 从 ARIB SI 解码为 `NHK　BSP4K`；NIT 网络名称、当前 EIT 节目元数据和 TDT/TOT 广播时间必须全部存在；PID 0x0130 有 2,038 个 PES、118 条字幕、157 个区域、1,661 个字符及 0 个解码器错误；单独公布的 PID 0x0138 没有字幕事件，必须保持为空结果，不得伪造第二条轨道。 |
+| `8k1.mmts` | 原生 ISDB-S3 TLV/MMTP / ARIB STD-B62 | **选择加入式路由回归。** 364,994,560 个输入字节；MPT 公布两个 `stpp` 资产；packet ID `0xF130` 的 5 个连续 MPU 产生 8 条字幕和 97 个字符。检测到显式几何、书写方向、前景与背景颜色及 2 个 ARIB 外字。该片段没有 DRCS、同 MPU 字体资源、复杂 Ruby 或无障碍提示，不能用于这些语义的验收。 |
 | 本地 38.07 GB 巴黎录像（不再分发） | 192 字节 M2TS / 私有 PES / 顺序 ARIB-TTML | **通用路由回归。** 内容探测发现服务 101、PMT `0x0100`、字幕 PID `0x1C00`（`component_tag 0x30`）及独立叠加字幕 PID `0x1C01`（`0x38`）。XML 具有完整 TTML 命名空间，但省略元素计时；无效的全零 PES PTS 会被拒绝，并由可感知回绕的 M2TS 到达时钟在同一 PID 的下一个文档处结束每个文档。完整的默认字幕转换读取 38,065,729,536 字节，并且必须保留 2,715 个字幕区域、28,618 个字符及 0 个解码器错误，输出须按单调顺序持续至 03:11:48。它不得以文件名、服务 ID、节目名称或固定 PID 值作为路由例外。 |
 | 本地 20.12 GiB BS 录像（不再分发） | 188 字节 MPEG-TS / PMT 版本及字幕 PID 转换 | **动态 PMT 回归。** 初始 PMT 仅公开叠加字幕 PID `0x1C12`（`component_tag 0x38`）；后续当前 PMT 添加字幕 PID `0x1201`（`component_tag 0x30`）。检查必须仅报告 `0x1201`。完整转换读取 21,609,477,452 字节，并产生 18,722 个选中 PES、3,825 个场景、6,679 个区域、70,853 个字符、7 个 DRCS 字形及 0 个解码器错误。原始证据必须仅包含 PID `0x1201`。 |
 | 构造的 PMT 版本转换 TS | MPEG-TS / B24 字幕与叠加字幕 | 固定大小发现窗口必须在初始仅叠加字幕的 PMT 之后找到较晚的字幕组件；顺序解码必须仅路由选中的逻辑 `service_id + component_tag`，并拒绝叠加字幕 PES。 |

@@ -12,7 +12,7 @@ long-fixture run always names the corpus it is about to read.
 ```powershell
 $env:ARIB_FIXTURE_DIR = 'C:\tvrecords_testfile'
 $env:ARIB_LONG_FIXTURE = '1'
-cargo test -p arib-caption-worker decodes_ -- --nocapture
+cargo test -p arib-caption-worker --features libaribtlv decodes_ -- --nocapture
 ```
 
 The opt-in checks stream the complete inputs and assert the following current
@@ -22,9 +22,10 @@ The corpus deliberately prioritizes content-verified recordings users can
 realistically obtain: the terrestrial MPEG-TS sample and the 192-byte
 MPEG-TS/TTML sample are the release gates. The latter is a packetised MPEG-TS
 recording and must not be used as evidence that native BS4K TLV was captured.
-TLV/MMTP has no equivalent local release fixture at present; its parser,
-signalling limits, and raw-evidence contract are covered by bounded
-constructed tests until a lawful real capture becomes available.
+The lawful local `8k1.mmts` capture provides an opt-in native TLV/MMTP route
+regression. It is short and contains no DRCS, same-MPU font resources, or
+complex ruby, so it is not yet a complete native B62 release gate. Bounded
+constructed tests continue to cover those missing semantics.
 
 Public protocol fixtures are available from the worker's `synthetic` module:
 `make_ts_packet`, `make_pat`, `make_pmt`, `make_pes`, `make_b24_data_group`, and
@@ -47,6 +48,7 @@ directory. The script never writes outputs into the corpus directory.
 | `chijo_digital_test.ts` | ISDB-T MPEG-TS / ARIB STD-B24 | **Release gate.** 18,579,078,944 input bytes; 13,653 PES; 2,230 scenes; 2,736 regions; 29,892 characters; 61 DRCS glyphs; 0 decoder errors. NIT network name, current EIT programme metadata and TDT/TOT broadcast time must all be present. |
 | `bs4k_test.m2ts` | 192-byte recorder M2TS / private PES / ARIB-TTML | **Release gate.** 11,517,020,160 input bytes; 330 PES; 422 TTML captions; 5,051 characters; 0 parser errors. Same-time region association currently records 31 structured Ruby bindings before archive/ASS output, including `ささ` to the single base grapheme `捧`. |
 | `bs4k_test_2.ts` | 188-byte recorder MPEG-TS / ARIB STD-B24 | **Release gate.** 3,089,047,552 input bytes; service 101 decodes from ARIB SI as `NHK　BSP4K`; NIT network name, current EIT programme metadata and TDT/TOT broadcast time must all be present; PID 0x0130 has 2,038 PES, 118 captions, 157 regions, 1,661 characters and 0 decoder errors; separately advertised PID 0x0138 has no caption event and must remain an empty result rather than a fabricated second track. |
+| `8k1.mmts` | Native ISDB-S3 TLV/MMTP / ARIB STD-B62 | **Opt-in route regression.** 364,994,560 input bytes; the MPT advertises two `stpp` assets; five consecutive MPUs on packet ID `0xF130` produce 8 captions and 97 characters. Explicit geometry, writing direction, foreground and background colours, and two ARIB additional symbols are detected. This segment contains no DRCS, same-MPU font resources, complex ruby, or accessibility cues, so it cannot validate those semantics. |
 | Local 38.07 GB Paris recording (not redistributed) | 192-byte M2TS / private PES / sequential ARIB-TTML | **General-route regression.** Content probing finds service 101, PMT `0x0100`, caption PID `0x1C00` (`component_tag 0x30`) and independent superimpose PID `0x1C01` (`0x38`). The XML has complete TTML namespaces but omits element timing; invalid zero-filled PES PTS is rejected and the wrap-aware M2TS arrival clock closes each document at the next same-PID document. Complete default-caption conversion reads 38,065,729,536 bytes and must retain 2,715 caption regions, 28,618 characters and 0 decoder errors with monotonically ordered output through 03:11:48. It must not use the filename, service ID, programme name or fixed PID values as a routing exception. |
 | Local 20.12 GiB BS recording (not redistributed) | 188-byte MPEG-TS / PMT version and caption-PID transition | **Dynamic-PMT regression.** The initial PMT exposes only superimpose PID `0x1C12` (`component_tag 0x38`); a later current PMT adds caption PID `0x1201` (`component_tag 0x30`). Inspection must report only `0x1201`. Complete conversion reads 21,609,477,452 bytes and yields 18,722 selected PES, 3,825 scenes, 6,679 regions, 70,853 characters, 7 DRCS glyphs and 0 decoder errors. Raw evidence must contain only PID `0x1201`. |
 | Constructed PMT-version transition TS | MPEG-TS / B24 caption versus superimpose | Fixed-size discovery windows must find a later caption component after an initial superimpose-only PMT; sequential decode must route only the selected logical `service_id + component_tag` and reject the superimpose PES. |

@@ -90,3 +90,66 @@ fn decodes_bs4k_b24_recording_tracks_when_enabled() {
     assert_eq!(inactive.characters, 0);
     assert_eq!(inactive.decoder_errors, 0);
 }
+
+#[cfg(feature = "libaribtlv")]
+#[test]
+fn decodes_native_b62_fixture_when_enabled() {
+    if std::env::var("ARIB_LONG_FIXTURE").as_deref() != Ok("1") {
+        return;
+    }
+    let Some(path) = local_fixture_path("8k1.mmts") else {
+        return;
+    };
+    if !path.is_file() {
+        return;
+    }
+
+    let mut captions = Vec::new();
+    let mut payloads = Vec::new();
+    let summary = scan_tlv_ttml(
+        &path,
+        |caption| {
+            captions.push(caption);
+            Ok(())
+        },
+        |_| {},
+        || false,
+        |_, payload| {
+            payloads.push((
+                payload.packet_id,
+                payload.mpu_sequence_number,
+                payload.resources.len(),
+            ));
+            Ok(())
+        },
+        |_| Ok(()),
+    )
+    .expect("decode native B62 fixture");
+
+    assert_eq!(summary.bytes_read, 364_994_560);
+    assert_eq!(summary.pes_packets, 5);
+    assert_eq!(summary.captions, 8);
+    assert_eq!(summary.characters, 97);
+    assert_eq!(summary.decoder_errors, 10);
+    assert_eq!(payloads.len(), 5);
+    assert!(
+        payloads
+            .iter()
+            .all(|(packet_id, _, _)| *packet_id == 0xf130)
+    );
+    assert_eq!(
+        payloads
+            .iter()
+            .filter_map(|(_, sequence, _)| *sequence)
+            .collect::<Vec<_>>(),
+        [322_960, 322_961, 322_962, 322_963, 322_964]
+    );
+    assert!(payloads.iter().all(|(_, _, resources)| *resources == 0));
+    assert!(captions.iter().all(|caption| {
+        caption.source.as_ref().is_some_and(|source| {
+            source.route == "isdb_s3_tlv_libaribtlv_b62"
+                && source.mmpt_packet_id == 0xf130
+                && source.resources_complete
+        })
+    }));
+}
