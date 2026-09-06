@@ -49,6 +49,25 @@ export type TaskEventEffects = {
   refreshResume: boolean;
 };
 
+export function invalidateRuntimeFeatureConflict(
+  conflictsByTrack: Record<string, RuntimeExportConflicts>,
+  feature: keyof import("../../backend").ExportPreservation,
+): Record<string, RuntimeExportConflicts> {
+  let changed = false;
+  const next: Record<string, RuntimeExportConflicts> = {};
+  for (const [track, conflicts] of Object.entries(conflictsByTrack)) {
+    if (!conflicts[feature]) {
+      next[track] = conflicts;
+      continue;
+    }
+    changed = true;
+    const updated = { ...conflicts };
+    delete updated[feature];
+    next[track] = updated;
+  }
+  return changed ? next : conflictsByTrack;
+}
+
 export function reduceTaskEvent(
   current: TaskEventState,
   event: TaskEvent,

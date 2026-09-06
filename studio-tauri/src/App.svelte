@@ -9,6 +9,7 @@
   import { ExportSession } from "./features/tasks/export-session";
   import { TaskEventSession } from "./features/tasks/event-session";
   import type { FeatureKnowledge, RuntimeExportConflicts } from "./features/tasks/export-assessment";
+  import { invalidateRuntimeFeatureConflict } from "./features/tasks/event-state";
   import {
     mediaTimeMs as asMediaTimeMs,
     mediaToProjectTime,
@@ -923,7 +924,12 @@
     id: string,
     text: string,
     action: SavedDrcsMapping["action"],
-  ) => drcsController.save(id, text, action);
+  ) => {
+    drcsController.save(id, text, action);
+    if (action === "character" && text.trim()) {
+      exportConflicts = invalidateRuntimeFeatureConflict(exportConflicts, "drcs");
+    }
+  };
   function selectView(target: typeof page) {
     const generation = navigationSession.navigate(target);
     if (generation == null) return;

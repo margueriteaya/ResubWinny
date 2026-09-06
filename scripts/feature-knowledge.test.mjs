@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { emptyTaskEventState, featureCountSummary, reduceTaskEvent } from '../studio-tauri/src/features/tasks/event-state.ts'
+import { emptyTaskEventState, featureCountSummary, invalidateRuntimeFeatureConflict, reduceTaskEvent } from '../studio-tauri/src/features/tasks/event-state.ts'
 import { assessExports } from '../studio-tauri/src/features/tasks/export-assessment.ts'
 import { hasCaptionTrack, hasSelectedCaptionTrack, selectedCaptionTrack } from '../studio-tauri/src/features/tasks/export-eligibility.ts'
 import { SettingsPersistenceQueue } from '../studio-tauri/src/features/settings/persistence-queue.ts'
@@ -20,6 +20,24 @@ test('format capability summaries use presentation-provided labels', () => {
   const labels = { position: 'Screen position', color: 'Colour', ruby: 'Ruby annotation', drcs: 'DRCS glyphs', gaiji: 'ARIB gaiji', accessibility: 'Accessibility cues' }
   assert.match(capabilitySummary('ASS', (feature) => labels[feature]), /Screen position/)
   assert.match(capabilitySummary('ASS', (feature) => `日本語:${feature}`), /日本語:position/)
+})
+
+test('a usable DRCS mapping invalidates stale DRCS conflicts only', () => {
+  const conflicts = {
+    'source::track-a': {
+      drcs: { formats: ['SRT'], issueCode: 'unresolved_drcs_text_target', availableActions: ['open_drcs_mapping'] },
+      ruby: { formats: ['SRT'], issueCode: 'format_cannot_preserve_feature', availableActions: [] },
+    },
+    'source::track-b': {
+      drcs: { formats: ['WebVTT'], issueCode: 'unresolved_drcs_text_target', availableActions: ['open_drcs_mapping'] },
+    },
+  }
+  const updated = invalidateRuntimeFeatureConflict(conflicts, 'drcs')
+  assert.deepEqual(updated, {
+    'source::track-a': { ruby: conflicts['source::track-a'].ruby },
+    'source::track-b': {},
+  })
+  assert.equal(conflicts['source::track-a'].drcs.issueCode, 'unresolved_drcs_text_target')
 })
 
 test('source detail variants use a stable allowlist and order', () => {
