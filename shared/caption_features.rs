@@ -25,7 +25,7 @@ pub(crate) fn accessibility_ranges(text: &str) -> Vec<Range<usize>> {
         }
     }
     for (open, close) in [('(', ')'), ('（', '）')] {
-        add_bracket_ranges(&chars, open, close, true, &mut ranges);
+        add_leading_bracket_ranges(&chars, open, close, &mut ranges);
     }
     // Narration brackets may be split across regions or consecutive archive
     // records. Their contents are spoken text and must remain, so each
@@ -40,26 +40,27 @@ pub(crate) fn accessibility_ranges(text: &str) -> Vec<Range<usize>> {
     ranges
 }
 
-fn add_bracket_ranges(
+fn add_leading_bracket_ranges(
     chars: &[char],
     open: char,
     close: char,
-    include_contents: bool,
     ranges: &mut Vec<Range<usize>>,
 ) {
-    let mut starts = Vec::new();
+    let mut start = None;
+    let mut only_leading_whitespace = true;
     for (index, character) in chars.iter().enumerate() {
-        if *character == open {
-            starts.push(index);
+        if *character == '\n' || *character == '\r' {
+            start = None;
+            only_leading_whitespace = true;
+        } else if start.is_none() && only_leading_whitespace && *character == open {
+            start = Some(index);
+            only_leading_whitespace = false;
         } else if *character == close
-            && let Some(begin) = starts.pop()
+            && let Some(begin) = start.take()
         {
-            if include_contents {
-                ranges.push(begin..index + 1);
-            } else {
-                ranges.push(begin..begin + 1);
-                ranges.push(index..index + 1);
-            }
+            ranges.push(begin..index + 1);
+        } else if start.is_none() && !character.is_whitespace() {
+            only_leading_whitespace = false;
         }
     }
 }
@@ -128,5 +129,17 @@ mod tests {
         assert_eq!(accessibility_ranges("続き>"), vec![2..3]);
         assert_eq!(filtered_text("＜語り", true, false), "語り");
         assert_eq!(filtered_text("続き＞", true, false), "続き");
+    }
+
+    #[test]
+    fn parentheses_are_accessibility_only_at_a_caption_line_start() {
+        assert_eq!(accessibility_ranges("（シンジ）本文"), vec![0..5]);
+        assert_eq!(accessibility_ranges("  (speaker) text"), vec![2..11]);
+        assert_eq!(accessibility_ranges("本文\n（拍手）"), vec![3..7]);
+        assert!(accessibility_ranges("価格（税込）です").is_empty());
+        assert_eq!(
+            filtered_text("価格（税込）です", true, false),
+            "価格（税込）です"
+        );
     }
 }

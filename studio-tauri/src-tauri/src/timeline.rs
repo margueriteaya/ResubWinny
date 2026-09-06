@@ -1038,6 +1038,18 @@ mod tests {
     }
 
     #[test]
+    fn inline_parentheses_remain_ordinary_caption_text() {
+        let value = serde_json::json!({ "text": "価格（税込）です" });
+        let (_, features, highlights, _) = event_presentation(&value);
+        assert!(!features.iter().any(|feature| feature == "accessibility"));
+        assert!(
+            !highlights
+                .iter()
+                .any(|item| item.feature == "accessibility")
+        );
+    }
+
+    #[test]
     fn music_marker_includes_immediately_following_wave_marks() {
         let value = serde_json::json!({ "text": "♪～〜本文" });
         let (_, _, highlights, _) = event_presentation(&value);
