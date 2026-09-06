@@ -59,12 +59,12 @@
     </span>
     <span class="home-primary-action"><FolderPlus size={16} />{t("home.select")}</span>
   </button>
-  <section class="home-output-preferences" aria-label="输出偏好">
-    <h2>输出格式</h2>
+  <section class="home-output-preferences" aria-label={t("home.outputPreferences")}>
+    <h2>{t("home.outputFormats")}</h2>
     <div class="format-picker">{#each formats as format}<button type="button" class:selected={settings.exportPreferences.formats.includes(format)} onclick={() => toggleFormat(format)}>{format}</button>{/each}</div>
-    <div class="format-notes">{#each settings.exportPreferences.formats as format}<p class="format-note"><b>{format}</b><br /><small>{capabilitySummary(format)}</small></p>{/each}</div>
-    <h2>保留内容</h2>
-    <div class="preservation-picker">{#each preservationKeys as key}<label><input type="checkbox" checked={settings.exportPreferences.preservation[key]} onchange={() => togglePreservation(key)} />{key === "gaiji" ? "外字" : key === "drcs" ? "DRCS" : key === "accessibility" ? "无障碍信息" : key === "ruby" ? "Ruby" : key === "position" ? "位置" : "颜色"}</label>{/each}</div>
+    <div class="format-notes">{#each settings.exportPreferences.formats as format}<p class="format-note"><b>{format}</b><br /><small>{capabilitySummary(format, (feature) => t(`feature.${feature}`))}</small></p>{/each}</div>
+    <h2>{t("home.preserveContent")}</h2>
+    <div class="preservation-picker">{#each preservationKeys as key}<label><input type="checkbox" checked={settings.exportPreferences.preservation[key]} onchange={() => togglePreservation(key)} />{t(`feature.${key}`)}</label>{/each}</div>
   </section>
   <aside class="source-rights-notice">
     <TriangleAlert size={14}/><span>{t("home.rightsNotice")}</span>

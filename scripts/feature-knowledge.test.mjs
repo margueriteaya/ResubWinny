@@ -6,6 +6,7 @@ import { hasCaptionTrack, hasSelectedCaptionTrack, selectedCaptionTrack } from '
 import { SettingsPersistenceQueue } from '../studio-tauri/src/features/settings/persistence-queue.ts'
 import { featureDetailKeys } from '../studio-tauri/src/features/tasks/feature-details.ts'
 import { togglePreferredFormat } from '../studio-tauri/src/features/home/export-preferences.ts'
+import { capabilitySummary } from '../studio-tauri/src/features/tasks/format-capabilities.ts'
 
 const preservation = { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true }
 
@@ -13,6 +14,12 @@ test('home preferences keep the last explicitly selected format', () => {
   assert.deepEqual(togglePreferredFormat(['TTML'], 'TTML'), ['TTML'])
   assert.deepEqual(togglePreferredFormat(['TTML', 'SRT'], 'TTML'), ['SRT'])
   assert.deepEqual(togglePreferredFormat(['TTML'], 'ASS'), ['TTML', 'ASS'])
+})
+
+test('format capability summaries use presentation-provided labels', () => {
+  const labels = { position: 'Screen position', color: 'Colour', ruby: 'Ruby annotation', drcs: 'DRCS glyphs', gaiji: 'ARIB gaiji', accessibility: 'Accessibility cues' }
+  assert.match(capabilitySummary('ASS', (feature) => labels[feature]), /Screen position/)
+  assert.match(capabilitySummary('ASS', (feature) => `日本語:${feature}`), /日本語:position/)
 })
 
 test('source detail variants use a stable allowlist and order', () => {

@@ -7,7 +7,7 @@
     "onboarding.step1Title": "録画を選択", "onboarding.step1Body": "正当に保有する TS、M2TS、TLV ファイルを開きます。", "onboarding.step2Title": "字幕構造を確認", "onboarding.step2Body": "番組、字幕トラック、タイムライン、診断を確認します。", "onboarding.step3Title": "プレビューと書き出し", "onboarding.step3Body": "忠実度または互換性を選び、結果を確認して書き出します。",
     "onboarding.noticeTitle": "使用前にご確認ください", "onboarding.noticeBody": "ResubWinny には録画、メディア探索、ファイル共有、コンテンツ配信の機能はありません。素材の権利状態を自ら判断し、所在地の法律と利用条件を守ってください。", "onboarding.about": "ResubWinny について", "onboarding.complete": "理解して使用を開始", "onboarding.saving": "保存中…", "onboarding.saveFailed": "ガイドの状態を保存できません：{message}", "onboarding.reopen": "使用ガイドをもう一度見る",
     "mode.selectionLabel": "使用モード", "mode.workName": "作業モード", "mode.workDescription": "よく使う項目を選んで自動保存し、ファイルをすばやく読み込んで字幕を書き出します。内部構造を意識せず、作業に集中したいときに適しています。", "mode.nerdName": "マニアモード", "mode.nerdDescription": "録画ファイル内のサービス、字幕トラック、特殊字形、時間構造、放送情報を詳しく表示します。興味のおもむくまま、細部まで確かめたいときに適しています。",
-    "home.rightsNotice": "正当に保有または利用を許可された録画のみを処理してください。", "home.rightsWhy": "なぜ？",
+    "home.rightsNotice": "正当に保有または利用を許可された録画のみを処理してください。", "home.rightsWhy": "なぜ？", "home.outputPreferences": "出力設定", "home.outputFormats": "出力形式", "home.preserveContent": "保持する内容",
     "nav.tasks": "タスク",
     "nav.batch": "マルチタスク処理",
     "nav.drcs": "DRCS 辞書",
