@@ -356,6 +356,7 @@ where
     let mut feature_summary = CaptionFeatureSummary::default();
     let summary = match scan_tlv_ttml(
         path,
+        options.track_id,
         |caption| {
             if options.drcs_report {
                 let current = current_b62_resources.borrow();

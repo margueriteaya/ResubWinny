@@ -19,6 +19,7 @@ pub(crate) fn ntp_delta_ms(value: u64, origin: u64) -> i64 {
 #[cfg(not(feature = "libaribtlv"))]
 pub(crate) fn scan_tlv_ttml<F, P, C, R, A>(
     path: &Path,
+    selected_packet_id: Option<u16>,
     mut on_caption: F,
     mut on_progress: P,
     mut cancelled: C,
@@ -81,6 +82,9 @@ where
             None,
         );
         for payload in captured_payloads {
+            if selected_packet_id.is_some_and(|packet_id| payload.packet_id != packet_id) {
+                continue;
+            }
             on_payload(packet_offset, &payload)?;
             let Some(presentation_ntp) = payload.presentation_ntp else {
                 summary.decoder_errors += 1;

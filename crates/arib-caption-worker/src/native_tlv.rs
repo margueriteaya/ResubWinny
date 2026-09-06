@@ -316,6 +316,7 @@ fn strict_ttml_document(bytes: &[u8]) -> Option<DecodedTtmlDocument> {
 fn process_native_event<F, R>(
     event: NativeTlvEvent,
     tracks: &mut BTreeMap<u64, NativeTlvSubtitleTrack>,
+    selected_packet_id: Option<u16>,
     timeline_origin: &mut Option<RationalTimestamp>,
     summary: &mut B24DecodeSummary,
     on_caption: &mut F,
@@ -349,6 +350,11 @@ where
         summary.decoder_errors += 1;
         return Ok(());
     };
+    // The user-facing TLV track selector is the MPT asset packet id.  Native
+    // decoder track ids are transport callback identities and may differ.
+    if selected_packet_id.is_some_and(|packet_id| track.packet_id != packet_id) {
+        return Ok(());
+    }
     let mpu_sequence_number = unit.mpu_sequence_number;
     let resources: Vec<TlvSubtitleResource> = unit
         .resources
@@ -452,6 +458,7 @@ where
 
 pub(crate) fn scan_tlv_ttml_native<F, P, C, R, A>(
     path: &Path,
+    selected_packet_id: Option<u16>,
     mut on_caption: F,
     mut on_progress: P,
     mut cancelled: C,
@@ -494,6 +501,7 @@ where
             process_native_event(
                 event,
                 &mut tracks,
+                selected_packet_id,
                 &mut timeline_origin,
                 &mut summary,
                 &mut on_caption,
@@ -507,6 +515,7 @@ where
         process_native_event(
             event,
             &mut tracks,
+            selected_packet_id,
             &mut timeline_origin,
             &mut summary,
             &mut on_caption,
@@ -952,6 +961,7 @@ mod tests {
         process_native_event(
             NativeTlvEvent::Caption(unit),
             &mut tracks,
+            None,
             &mut origin,
             &mut summary,
             &mut |caption| {
@@ -972,6 +982,72 @@ mod tests {
         assert_eq!(payloads[0].1.mpu_sequence_number, None);
         assert!(!payloads[0].1.resources_complete);
         assert_eq!(payloads[0].1.bytes, [0xde, 0xad, 0xbe, 0xef]);
+    }
+
+    #[test]
+    fn native_track_selection_filters_by_mpt_packet_id() {
+        let mut tracks = BTreeMap::from([(
+            12,
+            NativeTlvSubtitleTrack {
+                track_id: 12,
+                context_id: 1,
+                packet_id: 0x345,
+                component_tag: 2,
+                language: Some("jpn".to_owned()),
+                tag: 0,
+                info_version: 1,
+                subtitle_type: 0,
+                format: 0,
+                operation_mode: 0,
+                timing_mode: 0,
+                display_mode: 0,
+                resolution: 0,
+                compression_type: 0,
+                start_mpu_sequence_number: None,
+                reference_start_ntp: None,
+                reference_start_time_leap_indicator: 0,
+            },
+        )]);
+        let unit = NativeTlvCaptionUnit {
+            track_id: 12,
+            component_tag: 2,
+            bytes: b"<tt><body/></tt>".to_vec(),
+            pts: (1, 1),
+            input_offset: 99,
+            random_access: false,
+            discontinuity: false,
+            discontinuity_reasons: 0,
+            timing_mode: None,
+            operation_mode: None,
+            display_mode: None,
+            compression_type: Some(0),
+            mpu_sequence_number: Some(1),
+            reference_start_pts: None,
+            resources: Vec::new(),
+        };
+        let mut origin = None;
+        let mut summary = B24DecodeSummary::default();
+        let callback_count = std::cell::Cell::new(0);
+        process_native_event(
+            NativeTlvEvent::Caption(unit),
+            &mut tracks,
+            Some(0x346),
+            &mut origin,
+            &mut summary,
+            &mut |_| {
+                callback_count.set(callback_count.get() + 1);
+                Ok(())
+            },
+            &mut |_, _| {
+                callback_count.set(callback_count.get() + 1);
+                Ok(())
+            },
+        )
+        .expect("filter a different MPT asset");
+
+        assert_eq!(callback_count.get(), 0);
+        assert_eq!(summary.captions, 0);
+        assert_eq!(summary.decoder_errors, 0);
     }
 
     #[test]

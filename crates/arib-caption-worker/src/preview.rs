@@ -138,6 +138,7 @@ pub(crate) fn preview_caption(path: &Path) -> io::Result<Option<CaptionPreview>>
             let mut preview = None;
             let result = scan_tlv_ttml(
                 path,
+                None,
                 |caption| {
                     preview = Some(ttml_preview(&caption));
                     Err(io::Error::new(io::ErrorKind::Interrupted, "preview ready"))

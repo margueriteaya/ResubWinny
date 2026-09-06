@@ -108,6 +108,7 @@ fn decodes_native_b62_fixture_when_enabled() {
     let mut payloads = Vec::new();
     let summary = scan_tlv_ttml(
         &path,
+        Some(0xf130),
         |caption| {
             captions.push(caption);
             Ok(())
@@ -152,4 +153,28 @@ fn decodes_native_b62_fixture_when_enabled() {
                 && source.resources_complete
         })
     }));
+
+    let alternate_callbacks = std::cell::Cell::new(0_u64);
+    let alternate = scan_tlv_ttml(
+        &path,
+        Some(0xf138),
+        |_| {
+            alternate_callbacks.set(alternate_callbacks.get() + 1);
+            Ok(())
+        },
+        |_| {},
+        || false,
+        |_, _| {
+            alternate_callbacks.set(alternate_callbacks.get() + 1);
+            Ok(())
+        },
+        |_| Ok(()),
+    )
+    .expect_err("alternate asset must not reuse captions from packet 0xF130");
+    assert_eq!(alternate_callbacks.get(), 0);
+    assert!(
+        alternate
+            .to_string()
+            .contains("no complete normalized XML TTML captions")
+    );
 }
