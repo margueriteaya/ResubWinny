@@ -3,6 +3,7 @@
   import { t } from "../../i18n";
   import type { AppSettings, ExportFormat, ExportPreservation } from "../../backend";
   import { capabilitySummary } from "../tasks/format-capabilities";
+  import { togglePreferredFormat } from "./export-preferences";
 
   type HistoryItem = {
     name: string;
@@ -29,10 +30,7 @@
     onSettingsChange({ ...settings, exportPreferences: { ...settings.exportPreferences, ...next } });
   }
   function toggleFormat(format: ExportFormat) {
-    const next = new Set(settings.exportPreferences.formats);
-    next.has(format) ? next.delete(format) : next.add(format);
-    if (!next.size) next.add("ASS");
-    updatePreferences({ formats: [...next] });
+    updatePreferences({ formats: togglePreferredFormat(settings.exportPreferences.formats, format) });
   }
   function togglePreservation(key: keyof ExportPreservation) {
     updatePreferences({ preservation: { ...settings.exportPreferences.preservation, [key]: !settings.exportPreferences.preservation[key] } });

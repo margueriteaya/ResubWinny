@@ -5,8 +5,15 @@ import { assessExports } from '../studio-tauri/src/features/tasks/export-assessm
 import { hasCaptionTrack, hasSelectedCaptionTrack, selectedCaptionTrack } from '../studio-tauri/src/features/tasks/export-eligibility.ts'
 import { SettingsPersistenceQueue } from '../studio-tauri/src/features/settings/persistence-queue.ts'
 import { featureDetailKeys } from '../studio-tauri/src/features/tasks/feature-details.ts'
+import { togglePreferredFormat } from '../studio-tauri/src/features/home/export-preferences.ts'
 
 const preservation = { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true }
+
+test('home preferences keep the last explicitly selected format', () => {
+  assert.deepEqual(togglePreferredFormat(['TTML'], 'TTML'), ['TTML'])
+  assert.deepEqual(togglePreferredFormat(['TTML', 'SRT'], 'TTML'), ['SRT'])
+  assert.deepEqual(togglePreferredFormat(['TTML'], 'ASS'), ['TTML', 'ASS'])
+})
 
 test('source detail variants use a stable allowlist and order', () => {
   const fact = {
