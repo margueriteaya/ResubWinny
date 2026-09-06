@@ -31,6 +31,53 @@ fn parses_namespace_prefixed_ttml_elements_by_local_name() {
 }
 
 #[test]
+fn parses_explicit_ttml_accessibility_roles_in_caption_coordinates() {
+    let xml = r#"<tt xmlns='http://www.w3.org/ns/ttml' xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><div>
+      <p begin='0s' end='1s'>  前<br/><span ttm:role='sound music'>ドア音</span> 後  </p>
+    </div></body></tt>"#;
+    let caption = parse_ttml_captions(xml, 0).remove(0);
+
+    assert_eq!(caption.text, "前\nドア音 後");
+    assert_eq!(caption.accessibility_cues.len(), 1);
+    assert_eq!(caption.accessibility_cues[0].start, 2);
+    assert_eq!(caption.accessibility_cues[0].end, 5);
+    assert_eq!(caption.accessibility_cues[0].roles, ["music", "sound"]);
+}
+
+#[test]
+fn ignores_dialog_and_unknown_ttml_roles() {
+    let xml = r#"<tt xmlns='http://www.w3.org/ns/ttml' xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><div>
+      <p begin='0s' end='1s'><span ttm:role='dialog custom'>本文</span></p>
+    </div></body></tt>"#;
+
+    let caption = parse_ttml_captions(xml, 0).remove(0);
+
+    assert!(caption.accessibility_cues.is_empty());
+}
+
+#[test]
+fn merges_nested_ttml_accessibility_roles_without_double_counting() {
+    let xml = r#"<tt xmlns='http://www.w3.org/ns/ttml' xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><div>
+      <p begin='0s' end='1s' ttm:role='description'>説明<span ttm:role='sound'>音</span></p>
+    </div></body></tt>"#;
+
+    let caption = parse_ttml_captions(xml, 0).remove(0);
+
+    assert_eq!(caption.accessibility_cues.len(), 1);
+    assert_eq!(
+        (
+            caption.accessibility_cues[0].start,
+            caption.accessibility_cues[0].end
+        ),
+        (0, 3)
+    );
+    assert_eq!(
+        caption.accessibility_cues[0].roles,
+        ["description", "sound"]
+    );
+}
+
+#[test]
 fn rejects_private_pes_with_zero_filled_fake_pts() {
     let pes = [
         0x00, 0x00, 0x01, 0xbd, 0x00, 0x20, 0x80, 0x80, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -277,6 +324,75 @@ fn preserves_safe_ttml_ruby_and_span_markup_for_ttml_interchange() {
     assert_eq!(binding.base_run_end - binding.base_run_start, 1);
     assert_eq!(binding.placement, RubyPlacement::Above);
     assert_eq!(safe_ttml_inline_body("<script>x</script>"), None);
+}
+
+#[test]
+fn explicit_accessibility_roles_follow_the_preservation_choice() {
+    let caption = parse_ttml_captions(
+        r#"<tt xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><p begin='0s' end='1s'>前<span ttm:role='sound'>ドア音</span>後</p></body></tt>"#,
+        0,
+    )
+    .remove(0);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let directory = std::env::temp_dir().join(format!("arib-ttml-accessibility-{stamp}"));
+    fs::create_dir_all(&directory).expect("temporary directory");
+
+    for preserve_accessibility in [true, false] {
+        let options = ConversionOptions {
+            preserve_accessibility,
+            ..Default::default()
+        };
+        let ass = directory.join(format!("{preserve_accessibility}.ass"));
+        let ttml = directory.join(format!("{preserve_accessibility}.ttml"));
+        let mut ass_writer = BufWriter::new(File::create(&ass).expect("ASS output"));
+        write_ass_header(&mut ass_writer).expect("ASS header");
+        write_ass_ttml_group(&mut ass_writer, std::slice::from_ref(&caption), &options)
+            .expect("ASS caption");
+        ass_writer.flush().expect("ASS flush");
+        let mut ttml_writer = BufWriter::new(File::create(&ttml).expect("TTML output"));
+        write_ttml_header(&mut ttml_writer).expect("TTML header");
+        write_ttml_caption(&mut ttml_writer, &caption, &options).expect("TTML caption");
+        write_ttml_footer(&mut ttml_writer).expect("TTML footer");
+        ttml_writer.flush().expect("TTML flush");
+
+        let ass_text = fs::read_to_string(&ass).expect("ASS text");
+        let ttml_text = fs::read_to_string(&ttml).expect("TTML text");
+        assert_eq!(ass_text.contains("ドア音"), preserve_accessibility);
+        assert_eq!(ttml_text.contains("ドア音"), preserve_accessibility);
+        assert_eq!(
+            ttml_text.contains("ttm:role='sound'"),
+            preserve_accessibility
+        );
+        roxmltree::Document::parse(&ttml_text).expect("valid exported TTML");
+    }
+    fs::remove_dir_all(directory).expect("cleanup accessibility outputs");
+}
+
+#[test]
+fn preserves_paragraph_level_accessibility_role_on_ttml_output() {
+    let caption = parse_ttml_captions(
+        r#"<tt xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><p begin='0s' end='1s' ttm:role='narration'>語り</p></body></tt>"#,
+        0,
+    )
+    .remove(0);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let output = std::env::temp_dir().join(format!("arib-ttml-role-{stamp}.ttml"));
+    let mut writer = BufWriter::new(File::create(&output).expect("TTML output"));
+    write_ttml_header(&mut writer).expect("TTML header");
+    write_ttml_caption(&mut writer, &caption, &ConversionOptions::default()).expect("caption");
+    write_ttml_footer(&mut writer).expect("TTML footer");
+    writer.flush().expect("flush");
+
+    let text = fs::read_to_string(&output).expect("TTML text");
+    assert!(text.contains("ttm:role=\"narration\""), "{text}");
+    roxmltree::Document::parse(&text).expect("valid exported TTML");
+    fs::remove_file(output).expect("cleanup TTML output");
 }
 
 #[test]

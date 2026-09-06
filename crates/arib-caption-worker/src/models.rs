@@ -176,11 +176,30 @@ impl CaptionFeatureSummary {
 
 impl CaptionFeatureSummary {
     fn observe_accessibility(&mut self, evidence: &crate::caption_features::AccessibilityEvidence) {
+        self.observe_accessibility_excluding(evidence, &[]);
+    }
+
+    fn observe_accessibility_excluding(
+        &mut self,
+        evidence: &crate::caption_features::AccessibilityEvidence,
+        excluded_ranges: &[std::ops::Range<usize>],
+    ) {
         if evidence.ranges.is_empty() {
             return;
         }
         self.accessibility = true;
-        self.mark_count("accessibility", evidence.observed_count);
+        let count = evidence
+            .cue_ranges
+            .iter()
+            .filter(|ranges| {
+                !ranges.iter().any(|range| {
+                    excluded_ranges
+                        .iter()
+                        .any(|excluded| range.start < excluded.end && excluded.start < range.end)
+                })
+            })
+            .count();
+        self.mark_count("accessibility", count);
         self.mark_detail_flag("accessibility", "textCue", true);
         self.mark_detail_flag(
             "accessibility",
@@ -359,9 +378,20 @@ impl CaptionFeatureSummary {
             self.mark_count("gaiji", gaiji_count);
             self.mark_detail_flag("gaiji", "aribAdditionalSymbol", true);
         }
-        self.observe_accessibility(&crate::caption_features::accessibility_evidence(
-            &caption.text,
-        ));
+        let semantic_ranges = caption
+            .accessibility_cues
+            .iter()
+            .map(|cue| cue.start..cue.end)
+            .collect::<Vec<_>>();
+        if !semantic_ranges.is_empty() {
+            self.accessibility = true;
+            self.mark_count("accessibility", semantic_ranges.len());
+            self.mark_detail_flag("accessibility", "semanticRole", true);
+        }
+        self.observe_accessibility_excluding(
+            &crate::caption_features::accessibility_evidence(&caption.text),
+            &semantic_ranges,
+        );
     }
 }
 
@@ -698,6 +728,42 @@ mod feature_tests {
     }
 
     #[test]
+    fn ttml_semantic_accessibility_roles_are_source_facts() {
+        let caption = crate::parse_ttml_captions(
+            "<tt xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><p begin='0s' end='1s'><span ttm:role='sound'>ドア音</span></p></body></tt>",
+            0,
+        )
+        .remove(0);
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_ttml(&caption);
+
+        assert!(features.accessibility);
+        assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(
+            features.details("accessibility").unwrap()["semanticRole"],
+            true
+        );
+    }
+
+    #[test]
+    fn semantic_role_and_text_cue_overlap_count_once() {
+        let caption = crate::parse_ttml_captions(
+            "<tt xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><p begin='0s' end='1s'><span ttm:role='music'>♪〜</span>音楽</p></body></tt>",
+            0,
+        )
+        .remove(0);
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_ttml(&caption);
+
+        assert_eq!(features.observed_counts["accessibility"], 1);
+        let details = features.details("accessibility").unwrap();
+        assert_eq!(details["semanticRole"], true);
+        assert_eq!(details["musicCue"], true);
+    }
+
+    #[test]
     fn ttml_default_colors_and_transparent_background_are_not_material() {
         for color in ["white", "#FFF", "#FFFFFF", "#FFFFFFFF"] {
             for background in ["transparent", "#00000000", "#FFFFFF00"] {
@@ -860,9 +926,19 @@ pub(crate) struct TtmlCaption {
     pub(crate) drcs_uses: Vec<TtmlDrcsUse>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) ruby_bindings: Vec<TtmlRubyBinding>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) accessibility_cues: Vec<TtmlAccessibilityCue>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) source_layout: Option<TtmlSourceLayout>,
     pub(crate) source: Option<TtmlCaptionSource>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TtmlAccessibilityCue {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) roles: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

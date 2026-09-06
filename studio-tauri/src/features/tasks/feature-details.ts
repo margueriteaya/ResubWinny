@@ -16,7 +16,8 @@ export type FeatureDetailKey =
   | "textCue"
   | "leadingAnnotation"
   | "musicCue"
-  | "narrationDelimiter";
+  | "narrationDelimiter"
+  | "semanticRole";
 
 const detailKeys: Record<keyof ExportPreservation, readonly FeatureDetailKey[]> = {
   position: ["multipleRegions", "explicitGeometry", "verticalWriting", "explicitDirection", "explicitAlignment"],
@@ -24,7 +25,7 @@ const detailKeys: Record<keyof ExportPreservation, readonly FeatureDetailKey[]> 
   ruby: ["boundAnnotation"],
   drcs: ["resourceBacked"],
   gaiji: ["aribAdditionalSymbol"],
-  accessibility: ["leadingAnnotation", "musicCue", "narrationDelimiter"],
+  accessibility: ["semanticRole", "leadingAnnotation", "musicCue", "narrationDelimiter"],
 };
 
 export function featureDetailKeys(

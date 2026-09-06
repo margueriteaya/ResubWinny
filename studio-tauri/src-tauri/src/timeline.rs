@@ -538,9 +538,15 @@ fn event_presentation(
             });
         }
     }
-    if let Some(text) = value.get("text").and_then(serde_json::Value::as_str) {
-        let text = truncate(text);
+    if let Some(source_text) = value.get("text").and_then(serde_json::Value::as_str) {
+        let text = truncate(source_text);
         add_text_features(&text, &mut features, &mut highlights);
+        add_structured_accessibility_features(
+            value,
+            source_text.chars().count().min(240),
+            &mut features,
+            &mut highlights,
+        );
         if ruby && !text.is_empty() {
             highlights.push(TimelineHighlight {
                 start: 0,
@@ -736,6 +742,49 @@ fn add_accessibility_features(
         highlights.push(TimelineHighlight {
             start: offset + range.start,
             end: offset + range.end,
+            feature: "accessibility".into(),
+        });
+    }
+}
+
+fn add_structured_accessibility_features(
+    value: &serde_json::Value,
+    text_len: usize,
+    features: &mut BTreeSet<String>,
+    highlights: &mut Vec<TimelineHighlight>,
+) {
+    let Some(cues) = value
+        .get("accessibility_cues")
+        .or_else(|| value.get("accessibilityCues"))
+        .and_then(serde_json::Value::as_array)
+    else {
+        return;
+    };
+    for cue in cues {
+        let start = cue
+            .get("start")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok())
+            .unwrap_or(0)
+            .min(text_len);
+        let end = cue
+            .get("end")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok())
+            .unwrap_or(start)
+            .min(text_len);
+        if end <= start {
+            continue;
+        }
+        features.insert("accessibility".into());
+        highlights.retain(|highlight| {
+            highlight.feature != "accessibility"
+                || highlight.end <= start
+                || end <= highlight.start
+        });
+        highlights.push(TimelineHighlight {
+            start,
+            end,
             feature: "accessibility".into(),
         });
     }
@@ -1077,6 +1126,39 @@ mod tests {
                 value: "#00FFFF".into(),
             }]
         );
+    }
+
+    #[test]
+    fn highlights_structured_accessibility_cues_without_text_heuristics() {
+        let value = serde_json::json!({
+            "text": "前ドア音後",
+            "accessibility_cues": [{ "start": 1, "end": 4, "roles": ["sound"] }]
+        });
+
+        let (text, features, highlights, _) = event_presentation(&value);
+
+        assert_eq!(text, "前ドア音後");
+        assert!(features.iter().any(|feature| feature == "accessibility"));
+        assert!(highlights.iter().any(|item| {
+            item.feature == "accessibility" && (item.start, item.end) == (1, 4)
+        }));
+    }
+
+    #[test]
+    fn structured_accessibility_replaces_overlapping_text_highlights() {
+        let value = serde_json::json!({
+            "text": "♪〜音楽",
+            "accessibilityCues": [{ "start": 0, "end": 2, "roles": ["music"] }]
+        });
+
+        let (_, _, highlights, _) = event_presentation(&value);
+        let accessibility = highlights
+            .iter()
+            .filter(|item| item.feature == "accessibility")
+            .collect::<Vec<_>>();
+
+        assert_eq!(accessibility.len(), 1);
+        assert_eq!((accessibility[0].start, accessibility[0].end), (0, 2));
     }
 
     #[test]

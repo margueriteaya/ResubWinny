@@ -14,6 +14,7 @@ pub(crate) fn gaiji_ranges(text: &str) -> Vec<Range<usize>> {
 )]
 pub(crate) struct AccessibilityEvidence {
     pub(crate) ranges: Vec<Range<usize>>,
+    pub(crate) cue_ranges: Vec<Vec<Range<usize>>>,
     pub(crate) observed_count: usize,
     pub(crate) leading_annotation: bool,
     pub(crate) music_cue: bool,
@@ -24,10 +25,13 @@ pub(crate) fn accessibility_ranges(text: &str) -> Vec<Range<usize>> {
     accessibility_evidence(text).ranges
 }
 
+fn single_range_cue(range: Range<usize>) -> Vec<Range<usize>> {
+    std::iter::once(range).collect()
+}
+
 pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
     let chars = text.chars().collect::<Vec<_>>();
-    let mut ranges = Vec::new();
-    let mut music_cue_count = 0;
+    let mut cue_ranges = Vec::new();
     let mut index = 0;
     while index < chars.len() {
         if matches!(chars[index], '♪' | '♬' | '♫' | '♩') {
@@ -35,37 +39,36 @@ pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
             while end < chars.len() && matches!(chars[end], '～' | '〜' | '~') {
                 end += 1;
             }
-            ranges.push(index..end);
-            music_cue_count += 1;
+            cue_ranges.push(single_range_cue(index..end));
             index = end;
         } else {
             index += 1;
         }
     }
-    let music_cue = !ranges.is_empty();
-    let leading_annotation_start = ranges.len();
+    let music_cue = !cue_ranges.is_empty();
+    let leading_annotation_start = cue_ranges.len();
     for (open, close) in [('(', ')'), ('（', '）')] {
-        add_leading_bracket_ranges(&chars, open, close, &mut ranges);
+        add_leading_bracket_ranges(&chars, open, close, &mut cue_ranges);
     }
-    let leading_annotation_count = ranges.len() - leading_annotation_start;
-    let leading_annotation = leading_annotation_count > 0;
+    let leading_annotation = cue_ranges.len() > leading_annotation_start;
     // Narration brackets may be split across regions or consecutive archive
     // records. Classify an opening delimiter only at a line start, its paired
     // close, or an independently observed close at a line end so ordinary
     // inline comparisons remain caption text.
-    let narration_delimiter_start = ranges.len();
-    let narration_cue_count = add_narration_delimiter_ranges(&chars, &mut ranges);
+    let narration_delimiter_start = cue_ranges.len();
+    add_narration_delimiter_ranges(&chars, &mut cue_ranges);
+    let ranges = cue_ranges.iter().flatten().cloned().collect();
     AccessibilityEvidence {
-        narration_delimiter: ranges.len() > narration_delimiter_start,
+        narration_delimiter: cue_ranges.len() > narration_delimiter_start,
         ranges,
-        observed_count: music_cue_count + leading_annotation_count + narration_cue_count,
+        observed_count: cue_ranges.len(),
+        cue_ranges,
         leading_annotation,
         music_cue,
     }
 }
 
-fn add_narration_delimiter_ranges(chars: &[char], ranges: &mut Vec<Range<usize>>) -> usize {
-    let mut cue_count = 0;
+fn add_narration_delimiter_ranges(chars: &[char], cue_ranges: &mut Vec<Vec<Range<usize>>>) {
     let mut line_start = 0;
     while line_start < chars.len() {
         let line_end = chars[line_start..]
@@ -83,26 +86,25 @@ fn add_narration_delimiter_ranges(chars: &[char], ranges: &mut Vec<Range<usize>>
                 _ => None,
             };
             if let Some(close) = close {
-                cue_count += 1;
+                let mut ranges = Vec::with_capacity(2);
                 ranges.push(start..start + 1);
                 if let Some(index) = (start + 1..=end).find(|index| chars[*index] == close) {
                     ranges.push(index..index + 1);
                 }
+                cue_ranges.push(ranges);
             } else if matches!(chars[end], '>' | '＞') {
-                cue_count += 1;
-                ranges.push(end..end + 1);
+                cue_ranges.push(single_range_cue(end..end + 1));
             }
         }
         line_start = line_end + 1;
     }
-    cue_count
 }
 
 fn add_leading_bracket_ranges(
     chars: &[char],
     open: char,
     close: char,
-    ranges: &mut Vec<Range<usize>>,
+    cue_ranges: &mut Vec<Vec<Range<usize>>>,
 ) {
     let mut start = None;
     let mut only_leading_whitespace = true;
@@ -116,7 +118,7 @@ fn add_leading_bracket_ranges(
         } else if *character == close
             && let Some(begin) = start.take()
         {
-            ranges.push(begin..index + 1);
+            cue_ranges.push(single_range_cue(begin..index + 1));
         } else if start.is_none() && !character.is_whitespace() {
             only_leading_whitespace = false;
         }
@@ -152,12 +154,25 @@ pub(crate) fn retained_characters(
     preserve_gaiji: bool,
     preserve_accessibility: bool,
 ) -> Vec<bool> {
+    retained_characters_with_accessibility_ranges(text, preserve_gaiji, preserve_accessibility, &[])
+}
+
+pub(crate) fn retained_characters_with_accessibility_ranges(
+    text: &str,
+    preserve_gaiji: bool,
+    preserve_accessibility: bool,
+    additional_accessibility_ranges: &[Range<usize>],
+) -> Vec<bool> {
     let length = text.chars().count();
     if preserve_gaiji && preserve_accessibility {
         return vec![true; length];
     }
     let gaiji = (!preserve_gaiji).then(|| gaiji_ranges(text));
-    let accessibility = (!preserve_accessibility).then(|| accessibility_ranges(text));
+    let accessibility = (!preserve_accessibility).then(|| {
+        let mut ranges = accessibility_ranges(text);
+        ranges.extend_from_slice(additional_accessibility_ranges);
+        ranges
+    });
     (0..length)
         .map(|index| {
             !gaiji
@@ -240,5 +255,20 @@ mod tests {
         assert!(!ordinary.leading_annotation);
         assert!(!ordinary.music_cue);
         assert!(!ordinary.narration_delimiter);
+    }
+
+    #[test]
+    fn explicit_accessibility_ranges_share_the_export_mask() {
+        let ranges = std::iter::once(1..4).collect::<Vec<_>>();
+        let retained =
+            retained_characters_with_accessibility_ranges("前ドア音後", true, false, &ranges);
+        let filtered = "前ドア音後"
+            .chars()
+            .zip(retained)
+            .filter(|(_, keep)| *keep)
+            .map(|(character, _)| character)
+            .collect::<String>();
+
+        assert_eq!(filtered, "前後");
     }
 }

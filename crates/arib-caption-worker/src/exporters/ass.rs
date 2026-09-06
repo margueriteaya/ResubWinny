@@ -451,8 +451,12 @@ fn write_ass_ttml_caption_at(
 /// for a structural export without colour.  The rich body remains intact for
 /// Ruby and other inline semantics; only the explicitly disabled attributes
 /// are removed before either TTML or ASS consumes it.
-pub(crate) fn filter_ttml_inline_body(body: &str, preserve_color: bool) -> String {
-    if preserve_color {
+pub(crate) fn filter_ttml_inline_body(
+    body: &str,
+    preserve_color: bool,
+    preserve_accessibility: bool,
+) -> String {
+    if preserve_color && preserve_accessibility {
         return body.to_owned();
     }
     let mut output = String::with_capacity(body.len());
@@ -467,7 +471,13 @@ pub(crate) fn filter_ttml_inline_body(body: &str, preserve_color: bool) -> Strin
         let tag = &remaining[start..end];
         if tag.starts_with("<span") {
             let mut filtered = tag.to_owned();
-            for name in ["tts:color", "tts:backgroundColor", "tts:textOutline"] {
+            let attributes = [
+                (!preserve_color).then_some("tts:color"),
+                (!preserve_color).then_some("tts:backgroundColor"),
+                (!preserve_color).then_some("tts:textOutline"),
+                (!preserve_accessibility).then_some("ttm:role"),
+            ];
+            for name in attributes.into_iter().flatten() {
                 loop {
                     let next = remove_xml_attribute(&filtered, name);
                     if next == filtered {
@@ -522,7 +532,78 @@ pub(crate) fn filter_ttml_caption_preserved_body(
     caption: &TtmlCaption,
     options: &ConversionOptions,
 ) -> Option<String> {
-    filter_ttml_preserved_body_with_source(body, &caption.style, caption.source.as_ref(), options)
+    let body = if !options.preserve_accessibility && !caption.accessibility_cues.is_empty() {
+        filter_ttml_caption_accessibility(body, caption)?
+    } else {
+        body.to_owned()
+    };
+    filter_ttml_preserved_body_with_source(&body, &caption.style, caption.source.as_ref(), options)
+}
+
+fn filter_ttml_caption_accessibility(body: &str, caption: &TtmlCaption) -> Option<String> {
+    let prefix = format!(
+        "<body xmlns:tts='http://www.w3.org/ns/ttml#styling' xmlns:ttm='http://www.w3.org/ns/ttml#metadata' xmlns:arib='https://resubwinny.dev/ns/arib' xmlns:arib-tt='{ARIB_TTML_NAMESPACE}'>"
+    );
+    let wrapped = format!("{prefix}{body}</body>");
+    let document = roxmltree::Document::parse(&wrapped).ok()?;
+    let mut text = String::new();
+    let mut cursor = 0_usize;
+    let mut nodes = Vec::new();
+    for node in document.descendants() {
+        if node.is_text() {
+            let value = node.text().unwrap_or_default();
+            nodes.push((node, cursor));
+            text.push_str(value);
+            cursor = cursor.saturating_add(value.chars().count());
+        } else if node.is_element() && node.tag_name().name() == "br" {
+            text.push('\n');
+            cursor = cursor.saturating_add(1);
+        }
+    }
+    let leading = text
+        .chars()
+        .take_while(|character| character.is_whitespace())
+        .count();
+    let offset = if text.trim() == caption.text {
+        leading
+    } else {
+        0
+    };
+    let semantic_ranges = caption
+        .accessibility_cues
+        .iter()
+        .map(|cue| offset.saturating_add(cue.start)..offset.saturating_add(cue.end))
+        .collect::<Vec<_>>();
+    let retained = crate::caption_features::retained_characters_with_accessibility_ranges(
+        &text,
+        true,
+        false,
+        &semantic_ranges,
+    );
+    let mut edits = Vec::new();
+    for (node, start) in nodes {
+        let mut node_cursor = start;
+        let filtered = node
+            .text()
+            .unwrap_or_default()
+            .chars()
+            .filter(|_| {
+                let keep = retained.get(node_cursor).copied().unwrap_or(false);
+                node_cursor = node_cursor.saturating_add(1);
+                keep
+            })
+            .collect::<String>();
+        let range = node.range();
+        edits.push((
+            range.start - prefix.len()..range.end - prefix.len(),
+            xml_escape(&filtered),
+        ));
+    }
+    let mut result = body.to_owned();
+    for (range, replacement) in edits.into_iter().rev() {
+        result.replace_range(range, &replacement);
+    }
+    Some(result)
 }
 
 fn filter_ttml_preserved_body_with_source(
@@ -531,7 +612,8 @@ fn filter_ttml_preserved_body_with_source(
     source: Option<&TtmlCaptionSource>,
     options: &ConversionOptions,
 ) -> Option<String> {
-    let mut body = filter_ttml_inline_body(body, options.preserve_color);
+    let mut body =
+        filter_ttml_inline_body(body, options.preserve_color, options.preserve_accessibility);
     if !options.preserve_ruby {
         let prefix = "<body xmlns:tts='http://www.w3.org/ns/ttml#styling'>";
         let wrapped = format!("{prefix}{body}</body>");

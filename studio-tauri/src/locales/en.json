@@ -484,6 +484,7 @@
     "assessment.detail.leadingAnnotation": "Leading annotation",
     "assessment.detail.musicCue": "Music cue",
     "assessment.detail.narrationDelimiter": "Narration delimiter",
+    "assessment.detail.semanticRole": "Explicit semantic role",
     "assessment.featureCountObserved": "Found {count} {feature} item(s) so far",
     "assessment.featureCountFinal": "{count} {feature} item(s) in total",
     "assessment.needsSettings": "Output settings need to be changed",

@@ -770,6 +770,100 @@ fn ttml_node_plain_text(node: Node<'_, '_>) -> String {
     output.trim().to_owned()
 }
 
+const TTML_METADATA_NAMESPACE: &str = "http://www.w3.org/ns/ttml#metadata";
+
+fn ttml_accessibility_role(role: &str) -> bool {
+    matches!(
+        role,
+        "description" | "kinesic" | "music" | "narration" | "sound"
+    )
+}
+
+fn append_ttml_node_text_and_accessibility_cues(
+    node: Node<'_, '_>,
+    output: &mut String,
+    cursor: &mut usize,
+    cues: &mut Vec<TtmlAccessibilityCue>,
+) {
+    let start = *cursor;
+    match node.node_type() {
+        NodeType::Text => {
+            let text = node.text().unwrap_or_default();
+            output.push_str(text);
+            *cursor += text.chars().count();
+        }
+        NodeType::Element if node.tag_name().name() == "br" => {
+            output.push('\n');
+            *cursor += 1;
+        }
+        _ => {
+            for child in node.children() {
+                append_ttml_node_text_and_accessibility_cues(child, output, cursor, cues);
+            }
+        }
+    }
+    let roles = node
+        .attributes()
+        .find(|attribute| {
+            attribute.name() == "role" && attribute.namespace() == Some(TTML_METADATA_NAMESPACE)
+        })
+        .map(|attribute| {
+            attribute
+                .value()
+                .split_ascii_whitespace()
+                .filter(|role| ttml_accessibility_role(role))
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if !roles.is_empty() && *cursor > start {
+        cues.push(TtmlAccessibilityCue {
+            start,
+            end: *cursor,
+            roles,
+        });
+    }
+}
+
+fn ttml_accessibility_cues(paragraph: Node<'_, '_>) -> Vec<TtmlAccessibilityCue> {
+    let mut raw_text = String::new();
+    let mut cursor = 0;
+    let mut cues = Vec::new();
+    append_ttml_node_text_and_accessibility_cues(paragraph, &mut raw_text, &mut cursor, &mut cues);
+    let leading = raw_text
+        .chars()
+        .take_while(|character| character.is_whitespace())
+        .count();
+    let content_length = raw_text.trim().chars().count();
+    let content_end = leading.saturating_add(content_length);
+    for cue in &mut cues {
+        cue.start = cue.start.max(leading).saturating_sub(leading);
+        cue.end = cue.end.min(content_end).saturating_sub(leading);
+    }
+    cues.retain(|cue| cue.end > cue.start);
+    for cue in &mut cues {
+        cue.roles.sort();
+        cue.roles.dedup();
+    }
+    cues.sort_by(|left, right| {
+        (left.start, left.end, &left.roles).cmp(&(right.start, right.end, &right.roles))
+    });
+    let mut merged: Vec<TtmlAccessibilityCue> = Vec::new();
+    for cue in cues {
+        if let Some(previous) = merged.last_mut()
+            && cue.start < previous.end
+        {
+            previous.end = previous.end.max(cue.end);
+            previous.roles.extend(cue.roles);
+            previous.roles.sort();
+            previous.roles.dedup();
+            continue;
+        }
+        merged.push(cue);
+    }
+    merged
+}
+
 fn ttml_style_definitions_from_document<'input>(
     xml: &'input str,
     document: &Document<'input>,
@@ -847,6 +941,7 @@ pub(crate) fn parse_ttml_captions_until(
             .or(parent_end)
             .or_else(|| document_end_ms.map(|end| end.saturating_sub(base_pts_ms)));
         let text = ttml_node_plain_text(paragraph);
+        let accessibility_cues = ttml_accessibility_cues(paragraph);
         if let (Some(start), Some(end)) = (start, end)
             && !text.is_empty()
             && base_pts_ms.saturating_add(end) > base_pts_ms.saturating_add(start)
@@ -916,6 +1011,7 @@ pub(crate) fn parse_ttml_captions_until(
                 rich_body,
                 drcs_uses,
                 ruby_bindings,
+                accessibility_cues,
                 source_layout: Some(TtmlSourceLayout {
                     plane_width: display_plane.source_width,
                     plane_height: display_plane.source_height,
@@ -1029,6 +1125,7 @@ fn parse_ttml_captions_legacy(
                 rich_body,
                 drcs_uses,
                 ruby_bindings,
+                accessibility_cues: Vec::new(),
                 source_layout: Some(TtmlSourceLayout {
                     plane_width: display_plane.source_width,
                     plane_height: display_plane.source_height,

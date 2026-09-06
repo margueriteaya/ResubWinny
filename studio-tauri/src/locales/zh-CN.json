@@ -484,6 +484,7 @@
     "assessment.detail.leadingAnnotation": "行首注记",
     "assessment.detail.musicCue": "音乐提示",
     "assessment.detail.narrationDelimiter": "旁白分隔符",
+    "assessment.detail.semanticRole": "明确语义角色",
     "assessment.featureCountObserved": "已发现 {count} 个{feature}",
     "assessment.featureCountFinal": "共 {count} 个{feature}",
     "assessment.needsSettings": "需要修改输出设置",

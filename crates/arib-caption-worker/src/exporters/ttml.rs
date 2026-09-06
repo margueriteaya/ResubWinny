@@ -75,7 +75,7 @@ pub(crate) fn ass_letter_spacing_from_ttml(value: &str) -> Option<i32> {
 }
 
 pub(crate) fn write_ttml_header(writer: &mut BufWriter<File>) -> io::Result<()> {
-    writer.write_all(b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<tt xmlns=\"http://www.w3.org/ns/ttml\" xmlns:tts=\"http://www.w3.org/ns/ttml#styling\" xmlns:arib=\"https://resubwinny.dev/ns/arib\" xml:lang=\"ja\">\n  <body>\n    <div>\n")
+    writer.write_all(b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<tt xmlns=\"http://www.w3.org/ns/ttml\" xmlns:tts=\"http://www.w3.org/ns/ttml#styling\" xmlns:ttm=\"http://www.w3.org/ns/ttml#metadata\" xmlns:arib=\"https://resubwinny.dev/ns/arib\" xml:lang=\"ja\">\n  <body>\n    <div>\n")
 }
 
 pub(crate) fn write_ttml_footer(writer: &mut BufWriter<File>) -> io::Result<()> {
@@ -286,9 +286,22 @@ pub(crate) fn write_ttml_caption(
     if ttml_plain_text(&body).is_empty() {
         return Ok(());
     }
+    let accessibility_role = if options.preserve_accessibility
+        && !body.contains("ttm:role")
+        && !body.contains(":role")
+    {
+        caption
+            .accessibility_cues
+            .iter()
+            .find(|cue| cue.start == 0 && cue.end >= caption.text.chars().count())
+            .map(|cue| format!(" ttm:role=\"{}\"", xml_escape(&cue.roles.join(" "))))
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
     writeln!(
         writer,
-        "      <p begin=\"{}\" end=\"{}\"{}{}>{}</p>",
+        "      <p begin=\"{}\" end=\"{}\"{}{}{}>{}</p>",
         ttml_clock(caption.start_ms),
         ttml_clock(caption.end_ms),
         if options.preserve_position {
@@ -297,6 +310,7 @@ pub(crate) fn write_ttml_caption(
             Default::default()
         },
         style,
+        accessibility_role,
         body,
     )
 }

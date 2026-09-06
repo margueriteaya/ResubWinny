@@ -165,6 +165,7 @@ mod tests {
             rich_body: None,
             drcs_uses: Vec::new(),
             ruby_bindings: Vec::new(),
+            accessibility_cues: Vec::new(),
             source_layout: None,
             source: None,
         };

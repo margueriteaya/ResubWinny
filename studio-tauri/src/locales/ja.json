@@ -484,6 +484,7 @@
     "assessment.detail.leadingAnnotation": "行頭の注記",
     "assessment.detail.musicCue": "音楽キュー",
     "assessment.detail.narrationDelimiter": "ナレーション区切り",
+    "assessment.detail.semanticRole": "明示的なセマンティックロール",
     "assessment.featureCountObserved": "{feature}を現時点で {count} 件検出",
     "assessment.featureCountFinal": "{feature}は合計 {count} 件",
     "assessment.needsSettings": "出力設定の変更が必要です",
