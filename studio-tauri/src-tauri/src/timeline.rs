@@ -567,6 +567,7 @@ fn event_presentation(
         );
     };
     let mut text = String::new();
+    let mut character_boundaries = vec![0_usize];
     for character in characters {
         // Timeline labels are intentionally capped. B24 scene snapshots may
         // contain thousands of character objects (plus a large rendered
@@ -585,6 +586,7 @@ fn event_presentation(
         let start = text.chars().count();
         text.push_str(value);
         let end = text.chars().count();
+        character_boundaries.push(end);
         let drcs = character.get("kind").and_then(serde_json::Value::as_u64) == Some(1)
             || character
                 .get("drcs_code")
@@ -633,7 +635,56 @@ fn event_presentation(
     for item in &mut highlights {
         item.end = item.end.min(text_len);
     }
-    add_text_features(&text, &mut features, &mut highlights);
+    add_gaiji_features(&text, &mut features, &mut highlights);
+    let mut classified_region = false;
+    if let Some(regions) = value.get("regions").and_then(serde_json::Value::as_array) {
+        for region in regions {
+            let first = region
+                .get("first_character")
+                .or_else(|| region.get("firstCharacter"))
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok());
+            let count = region
+                .get("character_count")
+                .or_else(|| region.get("characterCount"))
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok());
+            let Some((first, count)) = first.zip(count) else {
+                continue;
+            };
+            let Some(max_character) = character_boundaries.len().checked_sub(1) else {
+                continue;
+            };
+            if first >= max_character {
+                continue;
+            }
+            let end = first.saturating_add(count).min(max_character);
+            let Some((&start_offset, &end_offset)) = character_boundaries
+                .get(first)
+                .zip(character_boundaries.get(end))
+            else {
+                continue;
+            };
+            if end_offset <= start_offset {
+                continue;
+            }
+            let region_text = text
+                .chars()
+                .skip(start_offset)
+                .take(end_offset - start_offset)
+                .collect::<String>();
+            add_accessibility_features(
+                &region_text,
+                start_offset,
+                &mut features,
+                &mut highlights,
+            );
+            classified_region = true;
+        }
+    }
+    if !classified_region {
+        add_accessibility_features(&text, 0, &mut features, &mut highlights);
+    }
     (
         text,
         features.into_iter().collect(),
@@ -655,6 +706,15 @@ fn add_text_features(
     features: &mut BTreeSet<String>,
     highlights: &mut Vec<TimelineHighlight>,
 ) {
+    add_gaiji_features(text, features, highlights);
+    add_accessibility_features(text, 0, features, highlights);
+}
+
+fn add_gaiji_features(
+    text: &str,
+    features: &mut BTreeSet<String>,
+    highlights: &mut Vec<TimelineHighlight>,
+) {
     for range in gaiji_ranges(text) {
         features.insert("gaiji".into());
         highlights.push(TimelineHighlight {
@@ -663,11 +723,19 @@ fn add_text_features(
             feature: "gaiji".into(),
         });
     }
+}
+
+fn add_accessibility_features(
+    text: &str,
+    offset: usize,
+    features: &mut BTreeSet<String>,
+    highlights: &mut Vec<TimelineHighlight>,
+) {
     for range in accessibility_ranges(text) {
         features.insert("accessibility".into());
         highlights.push(TimelineHighlight {
-            start: range.start,
-            end: range.end,
+            start: offset + range.start,
+            end: offset + range.end,
             feature: "accessibility".into(),
         });
     }
@@ -1047,6 +1115,27 @@ mod tests {
                 .iter()
                 .any(|item| item.feature == "accessibility")
         );
+    }
+
+    #[test]
+    fn b24_accessibility_highlights_use_each_region_as_a_text_boundary() {
+        let value = serde_json::json!({
+            "regions": [
+                { "first_character": 0, "character_count": 2 },
+                { "first_character": 2, "character_count": 7 }
+            ],
+            "characters": [
+                { "utf8": "本" }, { "utf8": "文" }, { "utf8": "（" },
+                { "utf8": "シ" }, { "utf8": "ン" }, { "utf8": "ジ" },
+                { "utf8": "）" }, { "utf8": "台" }, { "utf8": "詞" }
+            ]
+        });
+        let (text, features, highlights, _) = event_presentation(&value);
+        assert_eq!(text, "本文（シンジ）台詞");
+        assert!(features.iter().any(|feature| feature == "accessibility"));
+        assert!(highlights.iter().any(|item| {
+            item.feature == "accessibility" && (item.start, item.end) == (2, 7)
+        }));
     }
 
     #[test]

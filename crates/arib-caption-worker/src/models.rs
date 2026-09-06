@@ -247,12 +247,22 @@ impl CaptionFeatureSummary {
             self.mark_count("gaiji", gaiji_count);
             self.mark_detail_flag("gaiji", "aribAdditionalSymbol", true);
         }
-        let text = scene
-            .characters
+        let accessibility_count = scene
+            .regions
             .iter()
-            .map(|character| character.utf8.as_str())
-            .collect::<String>();
-        let accessibility_count = crate::caption_features::accessibility_ranges(&text).len();
+            .filter_map(|region| {
+                let start = region.first_character as usize;
+                let end = start.saturating_add(region.character_count as usize);
+                scene.characters.get(start..end)
+            })
+            .map(|characters| {
+                let text = characters
+                    .iter()
+                    .map(|character| character.utf8.as_str())
+                    .collect::<String>();
+                crate::caption_features::accessibility_ranges(&text).len()
+            })
+            .sum::<usize>();
         if accessibility_count > 0 {
             self.accessibility = true;
             self.mark_count("accessibility", accessibility_count);
@@ -565,6 +575,53 @@ mod feature_tests {
             true
         );
         assert_eq!(features.details("accessibility").unwrap()["textCue"], true);
+    }
+
+    #[test]
+    fn b24_accessibility_respects_independent_region_text_boundaries() {
+        let characters = ["本", "文", "（", "シ", "ン", "ジ", "）", "台", "詞"]
+            .into_iter()
+            .map(|text| {
+                let mut character = b24_character();
+                character.utf8 = text.into();
+                character
+            })
+            .collect();
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![
+                native_b24::CaptionRegion {
+                    x: 0,
+                    y: 0,
+                    width: 960,
+                    height: 270,
+                    is_ruby: false,
+                    first_character: 0,
+                    character_count: 2,
+                },
+                native_b24::CaptionRegion {
+                    x: 0,
+                    y: 270,
+                    width: 960,
+                    height: 270,
+                    is_ruby: false,
+                    first_character: 2,
+                    character_count: 7,
+                },
+            ],
+            characters,
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert!(features.accessibility);
+        assert_eq!(features.observed_counts["accessibility"], 1);
     }
 
     #[test]
