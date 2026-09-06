@@ -6,8 +6,9 @@ fn emit_feature_events(
     summary: &B24DecodeSummary,
     seen: &mut CaptionFeatureSummary,
     complete: bool,
+    options: &ConversionOptions,
 ) {
-    for event in feature_events(summary, seen, complete) {
+    for event in feature_events(summary, seen, complete, options) {
         emit_json(&event);
     }
 }
@@ -16,6 +17,7 @@ fn feature_events(
     summary: &B24DecodeSummary,
     seen: &mut CaptionFeatureSummary,
     complete: bool,
+    options: &ConversionOptions,
 ) -> Vec<serde_json::Value> {
     let logical_track = std::env::var("RESUBWINNY_LOGICAL_TRACK")
         .unwrap_or_else(|_| "logical-track:default".into());
@@ -45,6 +47,7 @@ fn feature_events(
                 "observedCount": summary.features.observed_counts.get(feature).copied().unwrap_or(1),
                 "complete": false
             }));
+            events.extend(observed_assessment_notices(options, feature));
         }
     }
     *seen = summary.features.clone();
@@ -341,7 +344,11 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
         let progress_control = Arc::clone(&control);
         let cancel_control = Arc::clone(&control);
         let mut seen_features = CaptionFeatureSummary::default();
+        let assessment_options = options.clone();
         let requested_drcs_report = options.drcs_report;
+        for notice in initial_assessment_notices(&assessment_options) {
+            emit_json(&notice);
+        }
         emit_stage("decoding");
         let report = if command == "convert-b24" {
             convert_b24_with_options_and_cancel(
@@ -355,7 +362,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                     emit_json(
                         &serde_json::json!({"type": "progress", "bytes_read": summary.bytes_read, "captions": summary.captions, "warnings": summary.decoder_errors}),
                     );
-                    emit_feature_events(summary, &mut seen_features, false);
+                    emit_feature_events(summary, &mut seen_features, false, &assessment_options);
                 },
                 move || cancel_control.wait_if_paused(),
             )
@@ -371,7 +378,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                     emit_json(
                         &serde_json::json!({"type": "progress", "bytes_read": summary.bytes_read, "captions": summary.captions, "warnings": summary.decoder_errors}),
                     );
-                    emit_feature_events(summary, &mut seen_features, false);
+                    emit_feature_events(summary, &mut seen_features, false, &assessment_options);
                 },
                 move || cancel_control.wait_if_paused(),
             )
@@ -418,7 +425,12 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                 return Err(error.into());
             }
         };
-        emit_feature_events(&report.summary, &mut seen_features, true);
+        emit_feature_events(
+            &report.summary,
+            &mut seen_features,
+            true,
+            &assessment_options,
+        );
         if control.cancelled.load(Ordering::Relaxed) {
             emit_json(&serde_json::json!({"type": "cancelled"}));
             return Ok(());
@@ -560,15 +572,19 @@ mod feature_event_tests {
             ..Default::default()
         };
         let mut seen = CaptionFeatureSummary::default();
-        let first = feature_events(&summary, &mut seen, false);
-        assert_eq!(first.len(), 1);
+        let options = ConversionOptions::default();
+        let first = feature_events(&summary, &mut seen, false, &options);
+        assert_eq!(first.len(), 2);
         assert_eq!(first[0]["type"], "feature_observed");
         assert_eq!(first[0]["feature"], "ruby");
         assert_eq!(first[0]["observedCount"], 3);
 
-        assert!(feature_events(&summary, &mut seen, false).is_empty());
+        assert_eq!(first[1]["code"], "format_approximates_feature");
+        assert_eq!(first[1]["parameters"]["format"], "ASS");
 
-        let final_events = feature_events(&summary, &mut seen, true);
+        assert!(feature_events(&summary, &mut seen, false, &options).is_empty());
+
+        let final_events = feature_events(&summary, &mut seen, true, &options);
         assert_eq!(final_events.len(), 6);
         assert!(
             final_events

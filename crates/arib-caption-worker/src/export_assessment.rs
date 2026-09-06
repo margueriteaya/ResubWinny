@@ -53,6 +53,132 @@ fn selected_formats(options: &ConversionOptions) -> Vec<&'static str> {
     formats
 }
 
+fn preservation_enabled(options: &ConversionOptions, feature: &str) -> bool {
+    match feature {
+        "position" => options.preserve_position,
+        "color" => options.preserve_color,
+        "ruby" => options.preserve_ruby,
+        "drcs" => options.preserve_drcs,
+        "gaiji" => options.preserve_gaiji,
+        "accessibility" => options.preserve_accessibility,
+        _ => false,
+    }
+}
+
+fn capability(format: &str, feature: &str) -> &'static str {
+    let capabilities: serde_json::Value = serde_json::from_str(CAPABILITIES)
+        .expect("shared format capability contract must be valid JSON");
+    match capabilities[format][feature].as_str() {
+        Some("preserved") => "preserved",
+        Some("approximated") => "approximated",
+        Some("unsupported") => "unsupported",
+        Some("conditional") => "conditional",
+        _ => unreachable!("verified capability contract has a value for every format feature"),
+    }
+}
+
+pub(crate) fn initial_assessment_notices(options: &ConversionOptions) -> Vec<serde_json::Value> {
+    let mut notices = Vec::new();
+    for format in selected_formats(options) {
+        for feature in [
+            "position",
+            "color",
+            "ruby",
+            "drcs",
+            "gaiji",
+            "accessibility",
+        ] {
+            let enabled = preservation_enabled(options, feature);
+            let level = capability(format, feature);
+            let (code, outcome, event_level, message, actions) = if !enabled {
+                (
+                    "feature_will_be_dropped_if_present",
+                    "conditional",
+                    "info",
+                    format!(
+                        "If the selected track contains {feature}, it will not be written to {format}."
+                    ),
+                    Vec::new(),
+                )
+            } else if level == "unsupported" {
+                (
+                    "format_cannot_preserve_feature",
+                    "conditional",
+                    "warning",
+                    format!(
+                        "{format} cannot preserve {feature} if it is present in the selected track."
+                    ),
+                    vec![
+                        format!("disable_preservation:{feature}"),
+                        "remove_format".into(),
+                        "choose_compatible_format".into(),
+                    ],
+                )
+            } else if level == "conditional" {
+                (
+                    "format_conditionally_preserves_feature",
+                    "conditional",
+                    "warning",
+                    format!(
+                        "Preserving {feature} in {format} depends on resource or mapping availability."
+                    ),
+                    if feature == "drcs" {
+                        vec!["open_drcs_mapping".into()]
+                    } else {
+                        Vec::new()
+                    },
+                )
+            } else {
+                continue;
+            };
+            notices.push(serde_json::json!({
+                "type": "diagnostic",
+                "level": event_level,
+                "code": code,
+                "message": message,
+                "parameters": { "format": format, "feature": feature, "outcome": outcome, "state": "unknown", "actions": actions },
+            }));
+        }
+    }
+    notices
+}
+
+pub(crate) fn observed_assessment_notices(
+    options: &ConversionOptions,
+    feature: &str,
+) -> Vec<serde_json::Value> {
+    if !preservation_enabled(options, feature) {
+        return selected_formats(options)
+            .into_iter()
+            .map(|format| serde_json::json!({
+                "type": "diagnostic",
+                "level": "info",
+                "code": "feature_dropped",
+                "message": format!("{feature} is present and will not be written to {format} by user choice."),
+                "parameters": { "format": format, "feature": feature, "outcome": "dropped", "state": "present", "actions": [] },
+            }))
+            .collect();
+    }
+    selected_formats(options)
+        .into_iter()
+        .filter(|format| capability(format, feature) == "approximated")
+        .map(|format| {
+            let (method, limitations): (&str, Vec<&str>) = match feature {
+                "ruby" => ("separate_small_text_subtitles", vec!["editable_ruby_relationship_not_retained"]),
+                "gaiji" => ("decoded_text", vec!["glyph_depends_on_player_font"]),
+                _ => ("compatible_representation", Vec::new()),
+            };
+            serde_json::json!({
+                "type": "diagnostic",
+                "level": "info",
+                "code": "format_approximates_feature",
+                "message": format!("{format} will preserve {feature} using the {method} approximation."),
+                "parameters": { "format": format, "feature": feature, "outcome": "approximated", "state": "present", "method": method, "limitations": limitations, "actions": [] },
+            })
+        })
+        .collect()
+}
+
 fn unsupported_formats(options: &ConversionOptions, feature: &str) -> Vec<String> {
     let capabilities: serde_json::Value = serde_json::from_str(CAPABILITIES)
         .expect("shared format capability contract must be valid JSON");
@@ -334,6 +460,72 @@ mod tests {
         assert!(assess_facts(&options, &facts).is_ok());
         options.preserve_position = true;
         assert!(assess_facts(&options, &CaptionFeatureSummary::default()).is_ok());
+    }
+
+    #[test]
+    fn initial_notices_are_unknown_and_independent_per_format() {
+        let options = ConversionOptions {
+            srt: true,
+            ..Default::default()
+        };
+        let notices = initial_assessment_notices(&options);
+        let find = |format: &str, feature: &str| {
+            notices.iter().find(|notice| {
+                notice["parameters"]["format"] == format
+                    && notice["parameters"]["feature"] == feature
+            })
+        };
+        assert!(find("ASS", "ruby").is_none());
+        assert_eq!(
+            find("SRT", "ruby").unwrap()["code"],
+            "format_cannot_preserve_feature"
+        );
+        assert_eq!(
+            find("SRT", "ruby").unwrap()["parameters"]["state"],
+            "unknown"
+        );
+        assert_eq!(
+            find("ASS", "drcs").unwrap()["code"],
+            "format_conditionally_preserves_feature"
+        );
+        assert_eq!(
+            find("SRT", "drcs").unwrap()["code"],
+            "format_conditionally_preserves_feature"
+        );
+    }
+
+    #[test]
+    fn initial_drop_and_observed_approximation_use_stable_codes() {
+        let options = ConversionOptions {
+            srt: true,
+            preserve_ruby: false,
+            ..Default::default()
+        };
+        let dropped = initial_assessment_notices(&options)
+            .into_iter()
+            .find(|notice| {
+                notice["parameters"]["format"] == "SRT" && notice["parameters"]["feature"] == "ruby"
+            })
+            .unwrap();
+        assert_eq!(dropped["code"], "feature_will_be_dropped_if_present");
+        assert_eq!(dropped["parameters"]["state"], "unknown");
+        let observed_drop = observed_assessment_notices(&options, "ruby");
+        assert_eq!(observed_drop.len(), 2);
+        assert!(
+            observed_drop
+                .iter()
+                .all(|notice| notice["code"] == "feature_dropped")
+        );
+
+        let enabled = ConversionOptions {
+            srt: true,
+            ..Default::default()
+        };
+        let formats = observed_assessment_notices(&enabled, "ruby")
+            .into_iter()
+            .map(|notice| notice["parameters"]["format"].as_str().unwrap().to_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(formats, ["ASS"]);
     }
 
     #[test]

@@ -398,11 +398,16 @@ pub fn start_export_impl(
                                 .get("parameters")
                                 .and_then(|value| serde_json::from_value(value.clone()).ok())
                                 .unwrap_or_default();
+                            let level = event
+                                .get("level")
+                                .and_then(|value| value.as_str())
+                                .filter(|level| matches!(*level, "info" | "warning"))
+                                .unwrap_or("warning");
                             record_diagnostic_with_parameters(
                                 &app,
                                 &shared_state,
                                 job_id.as_deref(),
-                                "warning",
+                                level,
                                 code,
                                 parameters.clone(),
                                 message,
