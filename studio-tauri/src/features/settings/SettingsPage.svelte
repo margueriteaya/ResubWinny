@@ -18,6 +18,7 @@
   export let onShowOnboarding: () => void = () => {}
   const defaults: AppSettings = { uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', userMode: 'normie', exportPreferences: { formats: ['ASS'], preservation: { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true } }, locale: 'system', theme: 'system', workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false }, onboardingVersion: 0 }
   let preferences: AppSettings = { ...defaults }
+  let preferencesReady = !isDesktopRuntime()
   export let panel: Panel = 'general'
   let persistenceState: 'idle' | 'saving' | 'saved' | 'error' = 'idle'
   let persistenceRevision = 0
@@ -131,7 +132,7 @@
   }
 
   onMount(() => {
-    backend.getSettings().then((settings) => { preferences = settings; applyFont() }).catch(() => applyFont())
+    backend.getSettings().then((settings) => { preferences = settings; preferencesReady = true; applyFont() }).catch((reason) => { persistenceState = 'error'; applyFont(); onError(reason) })
     void refreshLanguagePacks()
     backend.getPreviewRuntime().then((runtime) => previewRuntime = runtime).catch(() => previewRuntime = null)
   })
@@ -157,20 +158,20 @@
       <header><h2>{t('settings.general')}</h2><p>{t('settings.appearanceDescription')}</p></header>
       <section class="settings-group">
         <div class="setting-copy"><h3>{t('settings.language')}</h3><p>{t('settings.languageDescription')}</p></div>
-        <div class="setting-control"><div class="language-row"><PopupButton label={t('settings.language')} value={preferences.locale} options={languageOptions} disabled={languageRefreshBusy} onOpen={refreshLanguagePacks} onChange={(value) => void selectLanguage(value)} /><button class="icon-button liquid-control" data-tooltip={t('settings.openLanguagePackDirectory')} aria-label={t('settings.openLanguagePackDirectory')} onclick={openLanguagePackDirectory}><FolderOpen size={18} /></button></div><p class="control-hint">{t('settings.languagePackFolderDescription')}</p>{#if languageError}<p class="settings-error" role="alert">{languageError}</p>{/if}</div>
+        <div class="setting-control"><div class="language-row"><PopupButton label={t('settings.language')} value={preferences.locale} options={languageOptions} disabled={!preferencesReady || languageRefreshBusy} onOpen={refreshLanguagePacks} onChange={(value) => void selectLanguage(value)} /><button class="icon-button liquid-control" data-tooltip={t('settings.openLanguagePackDirectory')} aria-label={t('settings.openLanguagePackDirectory')} onclick={openLanguagePackDirectory}><FolderOpen size={18} /></button></div><p class="control-hint">{t('settings.languagePackFolderDescription')}</p>{#if languageError}<p class="settings-error" role="alert">{languageError}</p>{/if}</div>
       </section>
-      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.userMode')}</h3><p>{t('settings.userModeDescription')}</p></div><div class="setting-control"><MacSegmentedControl ariaLabel={t('mode.selectionLabel')} value={preferences.userMode} options={[{value:'normie',label:t('mode.workName')},{value:'nerd',label:t('mode.nerdName')}]} onChange={(value) => updatePreferences({...preferences, userMode: value as AppSettings['userMode']})} /></div></section>
+      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.userMode')}</h3><p>{t('settings.userModeDescription')}</p></div><div class="setting-control"><MacSegmentedControl ariaLabel={t('mode.selectionLabel')} value={preferences.userMode} options={[{value:'normie',label:t('mode.workName')},{value:'nerd',label:t('mode.nerdName')}]} disabled={!preferencesReady} onChange={(value) => updatePreferences({...preferences, userMode: value as AppSettings['userMode']})} /></div></section>
       <section class="settings-group">
         <div class="setting-copy"><h3>{t('settings.theme')}</h3><p>{t('settings.themeDescription')}</p></div>
-        <div class="setting-control theme-control"><MacSegmentedControl ariaLabel={t('settings.theme')} value={preferences.theme} options={[{value:'system',label:t('settings.themeSystem')},{value:'light',label:t('settings.themeLight')},{value:'dark',label:t('settings.themeDark')}]} onChange={(value) => updatePreferences({...preferences, theme: value as AppSettings['theme']}, 'appearance')} /></div>
+        <div class="setting-control theme-control"><MacSegmentedControl ariaLabel={t('settings.theme')} value={preferences.theme} options={[{value:'system',label:t('settings.themeSystem')},{value:'light',label:t('settings.themeLight')},{value:'dark',label:t('settings.themeDark')}]} disabled={!preferencesReady} onChange={(value) => updatePreferences({...preferences, theme: value as AppSettings['theme']}, 'appearance')} /></div>
       </section>
     {:else if panel === 'typography'}
       <header><h2>{t('settings.typographyTitle')}</h2><p>{t('settings.typographyDescription')}</p></header>
-      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.uiFallback')}</h3><p>{t('settings.uiFallbackDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.interfaceProfile')} value={preferences.uiFont} options={[{value:'system',label:t('settings.systemFallback')},{value:'cjk',label:t('settings.cjkFallback')},{value:'arib',label:t('settings.aribFirst')}]} onChange={(value) => updatePreferences({...preferences, uiFont: value as AppSettings['uiFont']}, 'appearance')} /><div class="font-preview">日本語字幕 · 简体中文 · 繁體中文 · 한국어 · English<br /><small>{t('settings.fallbackPreview', 'Fallback preview — missing glyphs are never silently replaced by a generic icon.')}</small></div></div></section>
-      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.captionFont')}</h3><p>{t('settings.captionFontDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.captionFont')} value={preferences.captionFont} options={[{value:'arib',label:t('settings.aribBundled', 'Rounded M+ 1m for ARIB (bundled)')},{value:'system',label:t('settings.systemFallbackShort', 'System fallback')}]} onChange={(value) => updatePreferences({...preferences, captionFont: value as AppSettings['captionFont']}, 'caption')} /><div class="caption-sample"><span>ニュースをお伝えします</span><b>{t('settings.aribPreview', 'ARIB / DRCS-aware preview')}</b></div></div></section>
+      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.uiFallback')}</h3><p>{t('settings.uiFallbackDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.interfaceProfile')} value={preferences.uiFont} options={[{value:'system',label:t('settings.systemFallback')},{value:'cjk',label:t('settings.cjkFallback')},{value:'arib',label:t('settings.aribFirst')}]} disabled={!preferencesReady} onChange={(value) => updatePreferences({...preferences, uiFont: value as AppSettings['uiFont']}, 'appearance')} /><div class="font-preview">日本語字幕 · 简体中文 · 繁體中文 · 한국어 · English<br /><small>{t('settings.fallbackPreview', 'Fallback preview — missing glyphs are never silently replaced by a generic icon.')}</small></div></div></section>
+      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.captionFont')}</h3><p>{t('settings.captionFontDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.captionFont')} value={preferences.captionFont} options={[{value:'arib',label:t('settings.aribBundled', 'Rounded M+ 1m for ARIB (bundled)')},{value:'system',label:t('settings.systemFallbackShort', 'System fallback')}]} disabled={!preferencesReady} onChange={(value) => updatePreferences({...preferences, captionFont: value as AppSettings['captionFont']}, 'caption')} /><div class="caption-sample"><span>ニュースをお伝えします</span><b>{t('settings.aribPreview', 'ARIB / DRCS-aware preview')}</b></div></div></section>
     {:else if panel === 'output'}
       <header><h2>{t('settings.output')}</h2><p>{t('settings.outputDescription')}</p></header>
-      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.defaultFormat')}</h3><p>{t('settings.faithfulDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.defaultFormat')} value={preferences.defaultFormat} options={['ASS','TTML','SRT','WebVTT','JSON','Raw Data'].map((value) => ({value,label:value}))} onChange={(value) => updatePreferences({...preferences, defaultFormat: value as AppSettings['defaultFormat']})} /></div></section>
+      <section class="settings-group"><div class="setting-copy"><h3>{t('settings.defaultFormat')}</h3><p>{t('settings.faithfulDescription')}</p></div><div class="setting-control"><PopupButton label={t('settings.defaultFormat')} value={preferences.defaultFormat} options={['ASS','TTML','SRT','WebVTT','JSON','Raw Data'].map((value) => ({value,label:value}))} disabled={!preferencesReady} onChange={(value) => updatePreferences({...preferences, defaultFormat: value as AppSettings['defaultFormat']})} /></div></section>
     {:else if panel === 'playback'}
       <header><h2>{t('settings.playbackAndRuntime')}</h2><p>{t('settings.playerDescription')}</p></header>
       <section class="settings-group runtime-group"><div class="setting-copy"><h3>{t('settings.runtimeStatus')}</h3><p>{t('settings.previewControlsDescription')}</p></div><div class="setting-control">
@@ -188,7 +189,7 @@
     {/key}
     <footer>
       <span class:error={persistenceState === 'error'} aria-live="polite">{persistenceState === 'saving' ? t('settings.saving') : persistenceState === 'saved' ? t('settings.saved') : persistenceState === 'error' ? t('settings.saveFailed') : ''}</span>
-      {#if panel !== 'playback' && panel !== 'about' && panel !== 'licenses'}<button class="reset liquid-control" onclick={resetCategory}><RotateCcw size={17} /> {t('settings.resetCategory')}</button>{/if}
+      {#if panel !== 'playback' && panel !== 'about' && panel !== 'licenses'}<button class="reset liquid-control" disabled={!preferencesReady} onclick={resetCategory}><RotateCcw size={17} /> {t('settings.resetCategory')}</button>{/if}
     </footer>
   </section>
 </section>
