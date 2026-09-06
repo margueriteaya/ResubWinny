@@ -6,7 +6,10 @@ use std::collections::HashSet;
 use std::{fs, path::PathBuf, process::Command};
 use tauri::AppHandle;
 
-fn append_tlv_caption_tracks(inspection: &crate::models::WorkerInspection, tracks: &mut Vec<Track>) {
+fn append_tlv_caption_tracks(
+    inspection: &crate::models::WorkerInspection,
+    tracks: &mut Vec<Track>,
+) {
     for (index, track) in inspection
         .tracks
         .iter()

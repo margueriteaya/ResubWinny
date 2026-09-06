@@ -43,7 +43,7 @@ export type PreviewRenderDiagnostics = {
   lastError: string | null
 }
 export type JobState = 'Created' | 'Inspecting' | 'Ready' | 'Queued' | 'Starting' | 'Running' | 'Pausing' | 'Paused' | 'Resuming' | 'Cancelling' | 'Cancelled' | 'Completed' | 'Failed' | 'Interrupted'
-export type JobRecord = { jobId: string; source: string; output: string; archive: boolean; raw: boolean; trackId?: number; drcsReport: boolean; drcsMappings: DrcsMapping[]; exportSelection: { formats: ExportFormat[]; preservation: ExportPreservation }; state: JobState; createdAt: number; updatedAt: number }
+export type JobRecord = { jobId: string; source: string; output: string; archive: boolean; raw: boolean; trackId?: number; logicalTrack?: string; drcsReport: boolean; drcsMappings: DrcsMapping[]; exportSelection: { formats: ExportFormat[]; preservation: ExportPreservation }; state: JobState; createdAt: number; updatedAt: number }
 export type DiagnosticRecord = { timestamp: number; severity: string; code: string; parameters: Record<string, unknown>; message: string }
 export type ArtifactRecord = { kind: string; path: string; temporaryPath: string; status: string; existedBeforeStart: boolean }
 export type CheckpointRecord = { jobId: string; source: string; output: string; bytesRead: number; captions: number; warnings: number; strategy: string; updatedAt: number }

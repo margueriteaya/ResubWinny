@@ -679,12 +679,7 @@ fn event_presentation(
                 .skip(start_offset)
                 .take(end_offset - start_offset)
                 .collect::<String>();
-            add_accessibility_features(
-                &region_text,
-                start_offset,
-                &mut features,
-                &mut highlights,
-            );
+            add_accessibility_features(&region_text, start_offset, &mut features, &mut highlights);
             classified_region = true;
         }
     }
@@ -778,9 +773,7 @@ fn add_structured_accessibility_features(
         }
         features.insert("accessibility".into());
         highlights.retain(|highlight| {
-            highlight.feature != "accessibility"
-                || highlight.end <= start
-                || end <= highlight.start
+            highlight.feature != "accessibility" || highlight.end <= start || end <= highlight.start
         });
         highlights.push(TimelineHighlight {
             start,
@@ -1139,9 +1132,11 @@ mod tests {
 
         assert_eq!(text, "前ドア音後");
         assert!(features.iter().any(|feature| feature == "accessibility"));
-        assert!(highlights.iter().any(|item| {
-            item.feature == "accessibility" && (item.start, item.end) == (1, 4)
-        }));
+        assert!(
+            highlights.iter().any(|item| {
+                item.feature == "accessibility" && (item.start, item.end) == (1, 4)
+            })
+        );
     }
 
     #[test]
@@ -1215,9 +1210,11 @@ mod tests {
         let (text, features, highlights, _) = event_presentation(&value);
         assert_eq!(text, "本文（シンジ）台詞");
         assert!(features.iter().any(|feature| feature == "accessibility"));
-        assert!(highlights.iter().any(|item| {
-            item.feature == "accessibility" && (item.start, item.end) == (2, 7)
-        }));
+        assert!(
+            highlights.iter().any(|item| {
+                item.feature == "accessibility" && (item.start, item.end) == (2, 7)
+            })
+        );
     }
 
     #[test]
