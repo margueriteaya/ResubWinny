@@ -166,6 +166,7 @@ pub(crate) fn observed_assessment_notices(
             let (method, limitations): (&str, Vec<&str>) = match feature {
                 "ruby" => ("separate_small_text_subtitles", vec!["editable_ruby_relationship_not_retained"]),
                 "gaiji" => ("decoded_text", vec!["glyph_depends_on_player_font"]),
+                "accessibility" => ("plain_text_cues", vec!["semantic_role_not_retained"]),
                 _ => ("compatible_representation", Vec::new()),
             };
             serde_json::json!({
@@ -526,6 +527,26 @@ mod tests {
             .map(|notice| notice["parameters"]["format"].as_str().unwrap().to_owned())
             .collect::<Vec<_>>();
         assert_eq!(formats, ["ASS"]);
+    }
+
+    #[test]
+    fn text_outputs_report_accessibility_role_approximation() {
+        let options = ConversionOptions {
+            srt: true,
+            webvtt: true,
+            ..Default::default()
+        };
+        let notices = observed_assessment_notices(&options, "accessibility");
+        let formats = notices
+            .iter()
+            .map(|notice| notice["parameters"]["format"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(formats, ["ASS", "SRT", "WebVTT"]);
+        assert!(notices.iter().all(|notice| {
+            notice["parameters"]["method"] == "plain_text_cues"
+                && notice["parameters"]["limitations"]
+                    == serde_json::json!(["semantic_role_not_retained"])
+        }));
     }
 
     #[test]

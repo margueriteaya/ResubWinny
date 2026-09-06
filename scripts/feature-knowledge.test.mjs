@@ -109,10 +109,10 @@ test('settings persistence serializes rapid changes and commits the latest compl
 
 test('assessment entries preserve the source-state and user-intent truth table for all formats', () => {
   const expected = {
-    ASS: ['preserved', 'preserved', 'approximated', 'conditional', 'preserved', 'preserved'],
+    ASS: ['preserved', 'preserved', 'approximated', 'conditional', 'preserved', 'approximated'],
     TTML: ['preserved', 'preserved', 'preserved', 'conditional', 'approximated', 'preserved'],
-    SRT: ['unsupported', 'unsupported', 'unsupported', 'conditional', 'approximated', 'preserved'],
-    WebVTT: ['unsupported', 'unsupported', 'unsupported', 'conditional', 'approximated', 'preserved'],
+    SRT: ['unsupported', 'unsupported', 'unsupported', 'conditional', 'approximated', 'approximated'],
+    WebVTT: ['unsupported', 'unsupported', 'unsupported', 'conditional', 'approximated', 'approximated'],
     JSON: Array(6).fill('preserved'),
     'Raw Data': Array(6).fill('preserved'),
   }
