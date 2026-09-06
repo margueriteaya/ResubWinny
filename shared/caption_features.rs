@@ -14,6 +14,7 @@ pub(crate) fn gaiji_ranges(text: &str) -> Vec<Range<usize>> {
 )]
 pub(crate) struct AccessibilityEvidence {
     pub(crate) ranges: Vec<Range<usize>>,
+    pub(crate) observed_count: usize,
     pub(crate) leading_annotation: bool,
     pub(crate) music_cue: bool,
     pub(crate) narration_delimiter: bool,
@@ -26,6 +27,7 @@ pub(crate) fn accessibility_ranges(text: &str) -> Vec<Range<usize>> {
 pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
     let chars = text.chars().collect::<Vec<_>>();
     let mut ranges = Vec::new();
+    let mut music_cue_count = 0;
     let mut index = 0;
     while index < chars.len() {
         if matches!(chars[index], '♪' | '♬' | '♫' | '♩') {
@@ -34,6 +36,7 @@ pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
                 end += 1;
             }
             ranges.push(index..end);
+            music_cue_count += 1;
             index = end;
         } else {
             index += 1;
@@ -44,22 +47,25 @@ pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
     for (open, close) in [('(', ')'), ('（', '）')] {
         add_leading_bracket_ranges(&chars, open, close, &mut ranges);
     }
-    let leading_annotation = ranges.len() > leading_annotation_start;
+    let leading_annotation_count = ranges.len() - leading_annotation_start;
+    let leading_annotation = leading_annotation_count > 0;
     // Narration brackets may be split across regions or consecutive archive
     // records. Classify an opening delimiter only at a line start, its paired
     // close, or an independently observed close at a line end so ordinary
     // inline comparisons remain caption text.
     let narration_delimiter_start = ranges.len();
-    add_narration_delimiter_ranges(&chars, &mut ranges);
+    let narration_cue_count = add_narration_delimiter_ranges(&chars, &mut ranges);
     AccessibilityEvidence {
         narration_delimiter: ranges.len() > narration_delimiter_start,
         ranges,
+        observed_count: music_cue_count + leading_annotation_count + narration_cue_count,
         leading_annotation,
         music_cue,
     }
 }
 
-fn add_narration_delimiter_ranges(chars: &[char], ranges: &mut Vec<Range<usize>>) {
+fn add_narration_delimiter_ranges(chars: &[char], ranges: &mut Vec<Range<usize>>) -> usize {
+    let mut cue_count = 0;
     let mut line_start = 0;
     while line_start < chars.len() {
         let line_end = chars[line_start..]
@@ -77,16 +83,19 @@ fn add_narration_delimiter_ranges(chars: &[char], ranges: &mut Vec<Range<usize>>
                 _ => None,
             };
             if let Some(close) = close {
+                cue_count += 1;
                 ranges.push(start..start + 1);
                 if let Some(index) = (start + 1..=end).find(|index| chars[*index] == close) {
                     ranges.push(index..index + 1);
                 }
             } else if matches!(chars[end], '>' | '＞') {
+                cue_count += 1;
                 ranges.push(end..end + 1);
             }
         }
         line_start = line_end + 1;
     }
+    cue_count
 }
 
 fn add_leading_bracket_ranges(
@@ -218,6 +227,8 @@ mod tests {
         assert!(evidence.leading_annotation);
         assert!(evidence.music_cue);
         assert!(evidence.narration_delimiter);
+        assert_eq!(evidence.observed_count, 3);
+        assert_eq!(evidence.ranges.len(), 4);
         assert_eq!(
             evidence.ranges,
             accessibility_ranges("（話者）本文\n♪〜音楽\n＜語り＞")
@@ -225,6 +236,7 @@ mod tests {
 
         let ordinary = accessibility_evidence("価格（税込）です");
         assert!(ordinary.ranges.is_empty());
+        assert_eq!(ordinary.observed_count, 0);
         assert!(!ordinary.leading_annotation);
         assert!(!ordinary.music_cue);
         assert!(!ordinary.narration_delimiter);

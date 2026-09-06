@@ -180,7 +180,7 @@ impl CaptionFeatureSummary {
             return;
         }
         self.accessibility = true;
-        self.mark_count("accessibility", evidence.ranges.len());
+        self.mark_count("accessibility", evidence.observed_count);
         self.mark_detail_flag("accessibility", "textCue", true);
         self.mark_detail_flag(
             "accessibility",
@@ -631,6 +631,45 @@ mod feature_tests {
         assert_eq!(features.observed_counts["accessibility"], 1);
         assert_eq!(
             features.details("accessibility").unwrap()["leadingAnnotation"],
+            true
+        );
+    }
+
+    #[test]
+    fn paired_narration_delimiters_count_as_one_accessibility_cue() {
+        let characters = ["＜", "語", "り", "＞"]
+            .into_iter()
+            .map(|text| {
+                let mut character = b24_character();
+                character.utf8 = text.into();
+                character
+            })
+            .collect();
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![native_b24::CaptionRegion {
+                x: 0,
+                y: 0,
+                width: 960,
+                height: 540,
+                is_ruby: false,
+                first_character: 0,
+                character_count: 4,
+            }],
+            characters,
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(
+            features.details("accessibility").unwrap()["narrationDelimiter"],
             true
         );
     }
