@@ -4,8 +4,18 @@ import { emptyTaskEventState, featureCountSummary, reduceTaskEvent } from '../st
 import { assessExports } from '../studio-tauri/src/features/tasks/export-assessment.ts'
 import { hasCaptionTrack, hasSelectedCaptionTrack, selectedCaptionTrack } from '../studio-tauri/src/features/tasks/export-eligibility.ts'
 import { SettingsPersistenceQueue } from '../studio-tauri/src/features/settings/persistence-queue.ts'
+import { featureDetailKeys } from '../studio-tauri/src/features/tasks/feature-details.ts'
 
 const preservation = { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true }
+
+test('source detail variants use a stable allowlist and order', () => {
+  const fact = {
+    state: 'present',
+    complete: false,
+    details: { explicitGeometry: true, verticalWriting: true, pid: 256, unsupportedFutureValue: true },
+  }
+  assert.deepEqual(featureDetailKeys('position', fact), ['explicitGeometry', 'verticalWriting'])
+})
 
 test('export eligibility requires an explicitly selected caption track', () => {
   const track = {

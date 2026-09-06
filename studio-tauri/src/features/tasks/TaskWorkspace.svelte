@@ -172,7 +172,7 @@
     {/if}
     <div class="workspace-pane output-pane">
       <header class="pane-header"><b>{t("workspace.outputSettings")}</b><button class="pane-toggle liquid-control" onclick={toggleOutput} data-tooltip={outputIsCollapsed ? t("workspace.showOutput") : t("workspace.hideOutput")} aria-label={outputIsCollapsed ? t("workspace.showOutput") : t("workspace.hideOutput")}>{#if outputIsCollapsed}<PanelRightOpen size={16} />{:else}<PanelRightClose size={16} />{/if}</button></header>
-      {#if !outputIsCollapsed}<TaskOutputPanel {inspection} {formats} {selectedFormats} {preservation} {featureKnowledge} {runtimeConflicts} {error} {isExporting} {exportPending} hasSelectedTrack={Boolean(selectedTrack)} {canResume} {resumeBusy} {onToggleFormat} {onTogglePreservation} {onOpenDrcsMapping} onStartExport={onStartExport} {onResume} bind:outputDirectory {onChooseOutputDirectory} />{/if}
+      {#if !outputIsCollapsed}<TaskOutputPanel {inspection} {userMode} {formats} {selectedFormats} {preservation} {featureKnowledge} {runtimeConflicts} {error} {isExporting} {exportPending} hasSelectedTrack={Boolean(selectedTrack)} {canResume} {resumeBusy} {onToggleFormat} {onTogglePreservation} {onOpenDrcsMapping} onStartExport={onStartExport} {onResume} bind:outputDirectory {onChooseOutputDirectory} />{/if}
     </div>
   </div>
 {:else}
