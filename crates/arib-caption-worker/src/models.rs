@@ -108,6 +108,8 @@ pub struct CaptionFeatureSummary {
     pub accessibility: bool,
     #[serde(default)]
     pub observed_counts: std::collections::BTreeMap<String, u64>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub feature_details: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(default)]
     pub complete: bool,
 }
@@ -152,42 +154,88 @@ impl CaptionFeatureSummary {
             *self.observed_counts.entry(feature.to_string()).or_default() += count as u64;
         }
     }
+
+    fn mark_detail_flag(&mut self, feature: &str, detail: &str, present: bool) {
+        if !present {
+            return;
+        }
+        let details = self
+            .feature_details
+            .entry(feature.to_owned())
+            .or_insert_with(|| serde_json::json!({}));
+        details
+            .as_object_mut()
+            .expect("feature details are always JSON objects")
+            .insert(detail.to_owned(), serde_json::Value::Bool(true));
+    }
+
+    pub(crate) fn details(&self, feature: &str) -> Option<&serde_json::Value> {
+        self.feature_details.get(feature)
+    }
 }
 
 impl CaptionFeatureSummary {
     pub(crate) fn observe_b24_scene(&mut self, scene: &native_b24::CaptionScene) {
-        if scene.regions.len() > 1
-            || scene.regions.iter().any(|region| {
-                region.x != 0
-                    || region.y != 0
-                    || region.width != scene.plane_width
-                    || region.height != scene.plane_height
-            })
-        {
+        let multiple_regions = scene.regions.len() > 1;
+        let explicit_geometry = scene.regions.iter().any(|region| {
+            region.x != 0
+                || region.y != 0
+                || region.width != scene.plane_width
+                || region.height != scene.plane_height
+        });
+        if multiple_regions || explicit_geometry {
             self.position = true;
             self.mark("position", true);
+            self.mark_detail_flag("position", "multipleRegions", multiple_regions);
+            self.mark_detail_flag("position", "explicitGeometry", explicit_geometry);
         }
-        if scene.characters.iter().any(|character| {
-            character.text_color & 0x00ff_ffff != 0x00ff_ffff
-                || character.back_color & 0x00ff_ffff != 0
-                || character.stroke_color & 0x00ff_ffff != 0
-        }) {
+        let foreground = scene
+            .characters
+            .iter()
+            .any(|character| character.text_color & 0x00ff_ffff != 0x00ff_ffff);
+        let background = scene
+            .characters
+            .iter()
+            .any(|character| character.back_color & 0x00ff_ffff != 0);
+        let stroke = scene
+            .characters
+            .iter()
+            .any(|character| character.stroke_color & 0x00ff_ffff != 0);
+        if foreground || background || stroke {
             self.color = true;
             self.mark("color", true);
+            self.mark_detail_flag("color", "foreground", foreground);
+            self.mark_detail_flag("color", "background", background);
+            self.mark_detail_flag("color", "stroke", stroke);
         }
         if scene.regions.iter().any(|region| region.is_ruby) {
             self.ruby = true;
             self.mark("ruby", true);
+            self.mark_detail_flag("ruby", "boundAnnotation", true);
         }
-        if scene.regions.iter().any(|region| {
-            let start = region.first_character as usize;
-            let end = start.saturating_add(region.character_count as usize);
-            scene.characters.get(start..end).is_some_and(|characters| {
-                characters.iter().any(|character| character.drcs_code != 0)
+        let referenced_drcs_codes = scene
+            .regions
+            .iter()
+            .filter_map(|region| {
+                let start = region.first_character as usize;
+                let end = start.saturating_add(region.character_count as usize);
+                scene.characters.get(start..end)
             })
-        }) {
+            .flatten()
+            .filter_map(|character| (character.drcs_code != 0).then_some(character.drcs_code))
+            .collect::<std::collections::BTreeSet<_>>();
+        if !referenced_drcs_codes.is_empty() {
             self.drcs = true;
             self.mark("drcs", true);
+            self.mark_detail_flag("drcs", "referenced", true);
+            self.mark_detail_flag(
+                "drcs",
+                "resourceBacked",
+                scene
+                    .drcs_glyphs
+                    .iter()
+                    .any(|glyph| referenced_drcs_codes.contains(&glyph.drcs_code)),
+            );
         }
         let gaiji_count = scene
             .characters
@@ -197,6 +245,7 @@ impl CaptionFeatureSummary {
         if gaiji_count > 0 {
             self.gaiji = true;
             self.mark_count("gaiji", gaiji_count);
+            self.mark_detail_flag("gaiji", "aribAdditionalSymbol", true);
         }
         let text = scene
             .characters
@@ -207,6 +256,7 @@ impl CaptionFeatureSummary {
         if accessibility_count > 0 {
             self.accessibility = true;
             self.mark_count("accessibility", accessibility_count);
+            self.mark_detail_flag("accessibility", "textCue", true);
         }
     }
 
@@ -214,35 +264,63 @@ impl CaptionFeatureSummary {
         if !caption.ruby_bindings.is_empty() {
             self.ruby = true;
             self.mark("ruby", true);
+            self.mark_detail_flag("ruby", "boundAnnotation", true);
         }
-        if caption
+        let explicit_geometry = caption
             .source_layout
             .as_ref()
-            .is_some_and(|layout| layout.explicit_origin || layout.explicit_extent)
+            .is_some_and(|layout| layout.explicit_origin || layout.explicit_extent);
+        let vertical_writing = caption
+            .style
+            .writing_mode
+            .as_deref()
+            .is_some_and(|mode| matches!(mode, "vertical-rl" | "vertical-lr"));
+        let explicit_direction = caption.style.direction.is_some();
+        let explicit_alignment =
+            caption.style.text_align.is_some() || caption.style.display_align.is_some();
+        if explicit_geometry
             || caption.style.writing_mode.is_some()
-            || caption.style.direction.is_some()
-            || caption.style.text_align.is_some()
-            || caption.style.display_align.is_some()
+            || explicit_direction
+            || explicit_alignment
         {
             self.position = true;
             self.mark("position", true);
+            self.mark_detail_flag("position", "explicitGeometry", explicit_geometry);
+            self.mark_detail_flag("position", "verticalWriting", vertical_writing);
+            self.mark_detail_flag("position", "explicitDirection", explicit_direction);
+            self.mark_detail_flag("position", "explicitAlignment", explicit_alignment);
         }
         let inline_runs = caption
             .rich_body
             .as_deref()
             .map(|body| crate::parse_ttml_inline_runs(body, &caption.style))
             .unwrap_or_default();
-        if ttml_style_has_material_color(&caption.style)
-            || inline_runs.iter().any(|run| {
-                ttml_style_has_material_color(&run.style)
-                    || run
-                        .ruby_style
-                        .as_ref()
-                        .is_some_and(ttml_style_has_material_color)
-            })
-        {
+        let styles = std::iter::once(&caption.style)
+            .chain(inline_runs.iter().map(|run| &run.style))
+            .chain(inline_runs.iter().filter_map(|run| run.ruby_style.as_ref()));
+        let mut foreground = false;
+        let mut background = false;
+        let mut stroke = false;
+        for style in styles {
+            foreground |= style
+                .color
+                .as_deref()
+                .is_some_and(ttml_foreground_is_material);
+            background |= style
+                .background_color
+                .as_deref()
+                .is_some_and(ttml_background_is_material);
+            stroke |= style
+                .text_outline
+                .as_deref()
+                .is_some_and(ttml_outline_is_material);
+        }
+        if foreground || background || stroke {
             self.color = true;
             self.mark("color", true);
+            self.mark_detail_flag("color", "foreground", foreground);
+            self.mark_detail_flag("color", "background", background);
+            self.mark_detail_flag("color", "stroke", stroke);
         }
         let drcs_count = ttml_font_resource_character_count(
             &caption.text,
@@ -252,34 +330,23 @@ impl CaptionFeatureSummary {
         if drcs_count > 0 {
             self.drcs = true;
             self.mark_count("drcs", drcs_count);
+            self.mark_detail_flag("drcs", "referenced", true);
+            self.mark_detail_flag("drcs", "resourceBacked", true);
         }
         let gaiji_count = crate::caption_features::gaiji_ranges(&caption.text).len();
         if gaiji_count > 0 {
             self.gaiji = true;
             self.mark_count("gaiji", gaiji_count);
+            self.mark_detail_flag("gaiji", "aribAdditionalSymbol", true);
         }
         let accessibility_count =
             crate::caption_features::accessibility_ranges(&caption.text).len();
         if accessibility_count > 0 {
             self.accessibility = true;
             self.mark_count("accessibility", accessibility_count);
+            self.mark_detail_flag("accessibility", "textCue", true);
         }
     }
-}
-
-fn ttml_style_has_material_color(style: &TtmlCaptionStyle) -> bool {
-    style
-        .color
-        .as_deref()
-        .is_some_and(ttml_foreground_is_material)
-        || style
-            .background_color
-            .as_deref()
-            .is_some_and(ttml_background_is_material)
-        || style
-            .text_outline
-            .as_deref()
-            .is_some_and(ttml_outline_is_material)
 }
 
 fn compact_ttml_color(value: &str) -> String {
@@ -405,6 +472,13 @@ mod feature_tests {
         assert!(features.drcs);
         assert!(features.position);
         assert!(features.color);
+        assert_eq!(features.details("ruby").unwrap()["boundAnnotation"], true);
+        assert_eq!(features.details("drcs").unwrap()["referenced"], true);
+        assert_eq!(
+            features.details("position").unwrap()["explicitGeometry"],
+            true
+        );
+        assert_eq!(features.details("color").unwrap()["foreground"], true);
     }
 
     #[test]
@@ -435,6 +509,7 @@ mod feature_tests {
         assert!(!features.drcs);
         assert!(!features.position);
         assert!(!features.color);
+        assert!(features.feature_details.is_empty());
         assert_eq!(features.state("ruby"), FeatureState::Unknown);
         features.complete = true;
         assert_eq!(features.state("ruby"), FeatureState::Absent);
@@ -485,6 +560,11 @@ mod feature_tests {
         assert!(features.accessibility);
         assert_eq!(features.observed_counts["gaiji"], 1);
         assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(
+            features.details("gaiji").unwrap()["aribAdditionalSymbol"],
+            true
+        );
+        assert_eq!(features.details("accessibility").unwrap()["textCue"], true);
     }
 
     #[test]
@@ -502,6 +582,11 @@ mod feature_tests {
         assert!(features.accessibility);
         assert_eq!(features.observed_counts["gaiji"], 1);
         assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(
+            features.details("gaiji").unwrap()["aribAdditionalSymbol"],
+            true
+        );
+        assert_eq!(features.details("accessibility").unwrap()["textCue"], true);
     }
 
     #[test]
@@ -543,6 +628,10 @@ mod feature_tests {
         let mut explicit_features = CaptionFeatureSummary::default();
         explicit_features.observe_ttml(&explicit);
         assert!(explicit_features.position);
+        assert_eq!(
+            explicit_features.details("position").unwrap()["explicitGeometry"],
+            true
+        );
     }
 
     #[test]
@@ -553,7 +642,23 @@ mod feature_tests {
             let mut features = CaptionFeatureSummary::default();
             features.observe_ttml(&caption);
             assert!(features.position, "{attribute} should be material layout");
+            assert_eq!(
+                features.details("position").unwrap()["explicitAlignment"],
+                true
+            );
         }
+
+        let vertical = crate::parse_ttml_captions(
+            "<tt><body><p begin='0s' end='1s' tts:writingMode='tbrl'>本文</p></body></tt>",
+            0,
+        )
+        .remove(0);
+        let mut vertical_features = CaptionFeatureSummary::default();
+        vertical_features.observe_ttml(&vertical);
+        assert_eq!(
+            vertical_features.details("position").unwrap()["verticalWriting"],
+            true
+        );
 
         for body in [
             "<p begin='0s' end='1s' tts:textOutline='2px #000000'>本文</p>",
@@ -564,11 +669,17 @@ mod feature_tests {
             let mut features = CaptionFeatureSummary::default();
             features.observe_ttml(&caption);
             assert!(features.color, "{body} should be material color");
+            let detail = if body.contains("textOutline") {
+                "stroke"
+            } else {
+                "foreground"
+            };
+            assert_eq!(features.details("color").unwrap()[detail], true);
         }
     }
 
     #[test]
-    fn ttml_drcs_mapping_uses_require_a_resource_backed_drcs_character() {
+    fn ttml_drcs_feature_includes_used_resource_fonts() {
         let ordinary = crate::parse_ttml_captions(
             r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><p begin='0s' end='1s' arib-tt:font-face='subt://9'>字</p></body></tt>"#,
             0,
@@ -577,6 +688,14 @@ mod feature_tests {
         let mut ordinary_features = CaptionFeatureSummary::default();
         ordinary_features.observe_ttml(&ordinary);
         assert!(ordinary_features.drcs);
+        assert_eq!(
+            ordinary_features.details("drcs").unwrap()["referenced"],
+            true
+        );
+        assert_eq!(
+            ordinary_features.details("drcs").unwrap()["resourceBacked"],
+            true
+        );
         assert!(ordinary.drcs_uses.is_empty());
 
         let referenced = crate::parse_ttml_captions(
@@ -590,6 +709,8 @@ mod feature_tests {
         features.observe_ttml(&referenced);
         assert!(features.drcs);
         assert_eq!(features.observed_counts["drcs"], 1);
+        assert_eq!(features.details("drcs").unwrap()["referenced"], true);
+        assert_eq!(features.details("drcs").unwrap()["resourceBacked"], true);
         assert_eq!(referenced.drcs_uses[0].source_codepoint, 0xe000);
         assert_eq!(referenced.drcs_uses[0].resource_index, 9);
 

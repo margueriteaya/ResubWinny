@@ -45,6 +45,7 @@ fn feature_events(
                 "feature": feature,
                 "logicalTrack": logical_track,
                 "observedCount": summary.features.observed_counts.get(feature).copied().unwrap_or(1),
+                "details": summary.features.details(feature).cloned().unwrap_or_else(|| serde_json::json!({})),
                 "complete": false
             }));
             events.extend(observed_assessment_notices(options, feature));
@@ -59,6 +60,7 @@ fn feature_events(
                 "logicalTrack": logical_track,
                 "state": summary.features.state(feature),
                 "observedCount": summary.features.observed_counts.get(feature).copied().unwrap_or(0),
+                "details": summary.features.details(feature).cloned().unwrap_or_else(|| serde_json::json!({})),
                 "complete": true
             }));
         }
@@ -567,6 +569,11 @@ mod feature_event_tests {
             features: CaptionFeatureSummary {
                 ruby: true,
                 observed_counts: [("ruby".into(), 3)].into(),
+                feature_details: [(
+                    "ruby".into(),
+                    serde_json::json!({ "boundAnnotation": true }),
+                )]
+                .into(),
                 ..Default::default()
             },
             ..Default::default()
@@ -578,6 +585,7 @@ mod feature_event_tests {
         assert_eq!(first[0]["type"], "feature_observed");
         assert_eq!(first[0]["feature"], "ruby");
         assert_eq!(first[0]["observedCount"], 3);
+        assert_eq!(first[0]["details"]["boundAnnotation"], true);
 
         assert_eq!(first[1]["code"], "format_approximates_feature");
         assert_eq!(first[1]["parameters"]["format"], "ASS");
@@ -598,5 +606,10 @@ mod feature_event_tests {
                 .count(),
             1
         );
+        let ruby_summary = final_events
+            .iter()
+            .find(|event| event["feature"] == "ruby")
+            .unwrap();
+        assert_eq!(ruby_summary["details"]["boundAnnotation"], true);
     }
 }

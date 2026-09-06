@@ -153,6 +153,27 @@ test('PID evidence changes do not split one logical track', () => {
   state = reduce(state, event('feature_observed', track, 'ruby', { observedCount: 2, details: { pid: 512 } }))
   assert.deepEqual(Object.keys(state.featureKnowledge), [`recording.ts::${track}`])
   assert.equal(state.featureKnowledge[`recording.ts::${track}`].ruby.observedCount, 2)
+  assert.deepEqual(state.featureKnowledge[`recording.ts::${track}`].ruby.details, { pid: 512 })
+})
+
+test('feature details merge monotonically from observation through EOF', () => {
+  const track = 'logical-track'
+  let state = reduce(emptyTaskEventState(), event('feature_observed', track, 'position', {
+    observedCount: 1,
+    details: { explicitGeometry: true },
+  }))
+  state = reduce(state, event('feature_summary', track, 'position', {
+    state: 'present',
+    observedCount: 2,
+    complete: true,
+    details: { verticalWriting: true },
+  }))
+  assert.deepEqual(state.featureKnowledge['recording.ts::logical-track'].position, {
+    state: 'present',
+    observedCount: 2,
+    complete: true,
+    details: { explicitGeometry: true, verticalWriting: true },
+  })
 })
 
 test('feature state is monotonic and absent requires a complete summary', () => {
