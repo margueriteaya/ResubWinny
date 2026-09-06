@@ -158,6 +158,8 @@
     "tracks.m2tsTtmlDetail": "192-byte MPEG-TS data route; scans for ARIB-TTML captions",
     "tracks.superimpose": "Superimpose text {0}",
     "tracks.superimposeDetail": "Broadcast superimpose service; kept separate from captions and exported only when selected",
+    "tracks.tlvMmtpStpp": "MMT caption asset {0}",
+    "tracks.tlvMmtpStppDetail": "stpp caption asset declared by the MPT; the displayed MMTP packet ID selects the export track",
     "batch.add": "Add Files",
     "batch.queueRunning": "Tasks Running",
     "batch.startQueue": "Start All Tasks",

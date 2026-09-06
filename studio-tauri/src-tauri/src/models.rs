@@ -574,6 +574,15 @@ pub struct WorkerInspection {
     pub service: String,
     #[serde(default)]
     pub broadcast: BroadcastMetadata,
+    #[serde(default)]
+    pub tracks: Vec<WorkerInspectionTrack>,
+}
+#[derive(Deserialize)]
+pub struct WorkerInspectionTrack {
+    #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub track_id: Option<u16>,
 }
 #[derive(Deserialize)]
 pub struct WorkerB24Track {

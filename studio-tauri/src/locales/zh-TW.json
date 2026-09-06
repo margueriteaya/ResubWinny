@@ -157,6 +157,8 @@
     "tracks.m2tsTtmlDetail": "192-byte MPEG-TS 資料路線；掃描 ARIB-TTML 字幕",
     "tracks.superimpose": "疊加文字 {0}",
     "tracks.superimposeDetail": "廣播疊加文字服務；與正式字幕軌分開處理，需手動選擇後匯出",
+    "tracks.tlvMmtpStpp": "MMT 字幕資產 {0}",
+    "tracks.tlvMmtpStppDetail": "MPT 宣告的 stpp 字幕資產；依顯示的 MMTP packet ID 選擇匯出軌道",
     "batch.add": "添加檔案",
     "batch.queueRunning": "任務處理中",
     "batch.startQueue": "開始所有任務",

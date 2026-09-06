@@ -6,6 +6,30 @@ use std::collections::HashSet;
 use std::{fs, path::PathBuf, process::Command};
 use tauri::AppHandle;
 
+fn append_tlv_caption_tracks(inspection: &crate::models::WorkerInspection, tracks: &mut Vec<Track>) {
+    for (index, track) in inspection
+        .tracks
+        .iter()
+        .filter(|track| track.kind.as_deref() == Some("stpp"))
+        .enumerate()
+    {
+        let Some(track_id) = track.track_id else {
+            continue;
+        };
+        tracks.push(Track {
+            label: format!("tlv_mmtp_stpp:{}", index + 1),
+            detail: "track.tlv_mmtp_stpp".into(),
+            pid: Some(format!("MMTP 0x{track_id:04X}")),
+            kind: "tlv_mmtp_stpp".into(),
+            ordinal: index + 1,
+            service_id: None,
+            language: None,
+            service_name: None,
+            logical_track: format!("tlv-mmtp:asset=stpp:packet={track_id:04x}"),
+        });
+    }
+}
+
 #[tauri::command]
 pub fn inspect_source(app: AppHandle, path: String) -> Result<Inspection, String> {
     let source = PathBuf::from(&path);
@@ -113,6 +137,7 @@ pub fn inspect_source(app: AppHandle, path: String) -> Result<Inspection, String
             });
         }
     }
+    append_tlv_caption_tracks(&probe.inspection, &mut tracks);
     Ok(Inspection {
         name: source
             .file_name()
@@ -129,4 +154,34 @@ pub fn inspect_source(app: AppHandle, path: String) -> Result<Inspection, String
         tracks,
         broadcast: probe.inspection.broadcast,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::WorkerInspection;
+
+    #[test]
+    fn exposes_each_stpp_asset_as_a_separate_selectable_track() {
+        let inspection: WorkerInspection = serde_json::from_value(serde_json::json!({
+            "route_code": "tlv_mmtp_experimental",
+            "route": "TLV",
+            "service": "MMT",
+            "tracks": [
+                { "kind": "hev1", "track_id": 0xf100 },
+                { "kind": "stpp", "track_id": 0xf130 },
+                { "kind": "stpp", "track_id": 0xf138 }
+            ]
+        }))
+        .expect("worker inspection contract");
+        let mut tracks = Vec::new();
+
+        append_tlv_caption_tracks(&inspection, &mut tracks);
+
+        assert_eq!(tracks.len(), 2);
+        assert_eq!(tracks[0].pid.as_deref(), Some("MMTP 0xF130"));
+        assert_eq!(tracks[1].pid.as_deref(), Some("MMTP 0xF138"));
+        assert_ne!(tracks[0].logical_track, tracks[1].logical_track);
+        assert!(tracks.iter().all(|track| track.kind == "tlv_mmtp_stpp"));
+    }
 }

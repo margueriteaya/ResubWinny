@@ -157,6 +157,8 @@
     "tracks.m2tsTtmlDetail": "192-byte MPEG-TS data route。ARIB-TTML 字幕を走査します",
     "tracks.superimpose": "スーパー文字 {0}",
     "tracks.superimposeDetail": "放送のスーパー文字サービスです。字幕トラックとは分離され、選択した場合のみ書き出します",
+    "tracks.tlvMmtpStpp": "MMT 字幕アセット {0}",
+    "tracks.tlvMmtpStppDetail": "MPT で通知された stpp 字幕アセットです。表示された MMTP パケット ID で書き出すトラックを選びます",
     "batch.add": "ファイル追加",
     "batch.queueRunning": "タスクを処理中",
     "batch.startQueue": "すべてのタスクを開始",

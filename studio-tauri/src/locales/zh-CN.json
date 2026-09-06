@@ -157,6 +157,8 @@
     "tracks.m2tsTtmlDetail": "192-byte MPEG-TS 数据路线；扫描 ARIB-TTML 字幕",
     "tracks.superimpose": "叠加文字 {0}",
     "tracks.superimposeDetail": "广播叠加文字服务；与正式字幕轨道分别处理，需手动选择后导出",
+    "tracks.tlvMmtpStpp": "MMT 字幕资产 {0}",
+    "tracks.tlvMmtpStppDetail": "MPT 声明的 stpp 字幕资产；按所示 MMTP packet ID 选择导出轨道",
     "batch.add": "添加文件",
     "batch.queueRunning": "任务处理中",
     "batch.startQueue": "开始全部任务",

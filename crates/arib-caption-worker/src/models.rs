@@ -64,6 +64,10 @@ impl DataTracks {
 pub(crate) struct CaptionTrackInspection {
     pub(crate) label: String,
     pub(crate) detail: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) track_id: Option<u16>,
 }
 
 #[derive(Debug, Serialize, Clone)]
