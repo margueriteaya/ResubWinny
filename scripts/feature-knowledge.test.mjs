@@ -15,6 +15,11 @@ test('source detail variants use a stable allowlist and order', () => {
     details: { explicitGeometry: true, verticalWriting: true, pid: 256, unsupportedFutureValue: true },
   }
   assert.deepEqual(featureDetailKeys('position', fact), ['explicitGeometry', 'verticalWriting'])
+  assert.deepEqual(featureDetailKeys('accessibility', {
+    state: 'present',
+    complete: false,
+    details: { textCue: true, narrationDelimiter: true, leadingAnnotation: true, musicCue: true, pid: 256 },
+  }), ['leadingAnnotation', 'musicCue', 'narrationDelimiter'])
 })
 
 test('export eligibility requires an explicitly selected caption track', () => {

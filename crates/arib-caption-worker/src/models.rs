@@ -175,6 +175,26 @@ impl CaptionFeatureSummary {
 }
 
 impl CaptionFeatureSummary {
+    fn observe_accessibility(&mut self, evidence: &crate::caption_features::AccessibilityEvidence) {
+        if evidence.ranges.is_empty() {
+            return;
+        }
+        self.accessibility = true;
+        self.mark_count("accessibility", evidence.ranges.len());
+        self.mark_detail_flag("accessibility", "textCue", true);
+        self.mark_detail_flag(
+            "accessibility",
+            "leadingAnnotation",
+            evidence.leading_annotation,
+        );
+        self.mark_detail_flag("accessibility", "musicCue", evidence.music_cue);
+        self.mark_detail_flag(
+            "accessibility",
+            "narrationDelimiter",
+            evidence.narration_delimiter,
+        );
+    }
+
     pub(crate) fn observe_b24_scene(&mut self, scene: &native_b24::CaptionScene) {
         let multiple_regions = scene.regions.len() > 1;
         let explicit_geometry = scene.regions.iter().any(|region| {
@@ -247,26 +267,16 @@ impl CaptionFeatureSummary {
             self.mark_count("gaiji", gaiji_count);
             self.mark_detail_flag("gaiji", "aribAdditionalSymbol", true);
         }
-        let accessibility_count = scene
-            .regions
-            .iter()
-            .filter_map(|region| {
-                let start = region.first_character as usize;
-                let end = start.saturating_add(region.character_count as usize);
-                scene.characters.get(start..end)
-            })
-            .map(|characters| {
-                let text = characters
-                    .iter()
-                    .map(|character| character.utf8.as_str())
-                    .collect::<String>();
-                crate::caption_features::accessibility_ranges(&text).len()
-            })
-            .sum::<usize>();
-        if accessibility_count > 0 {
-            self.accessibility = true;
-            self.mark_count("accessibility", accessibility_count);
-            self.mark_detail_flag("accessibility", "textCue", true);
+        for characters in scene.regions.iter().filter_map(|region| {
+            let start = region.first_character as usize;
+            let end = start.saturating_add(region.character_count as usize);
+            scene.characters.get(start..end)
+        }) {
+            let text = characters
+                .iter()
+                .map(|character| character.utf8.as_str())
+                .collect::<String>();
+            self.observe_accessibility(&crate::caption_features::accessibility_evidence(&text));
         }
     }
 
@@ -349,13 +359,9 @@ impl CaptionFeatureSummary {
             self.mark_count("gaiji", gaiji_count);
             self.mark_detail_flag("gaiji", "aribAdditionalSymbol", true);
         }
-        let accessibility_count =
-            crate::caption_features::accessibility_ranges(&caption.text).len();
-        if accessibility_count > 0 {
-            self.accessibility = true;
-            self.mark_count("accessibility", accessibility_count);
-            self.mark_detail_flag("accessibility", "textCue", true);
-        }
+        self.observe_accessibility(&crate::caption_features::accessibility_evidence(
+            &caption.text,
+        ));
     }
 }
 
@@ -575,6 +581,7 @@ mod feature_tests {
             true
         );
         assert_eq!(features.details("accessibility").unwrap()["textCue"], true);
+        assert_eq!(features.details("accessibility").unwrap()["musicCue"], true);
     }
 
     #[test]
@@ -622,6 +629,10 @@ mod feature_tests {
 
         assert!(features.accessibility);
         assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(
+            features.details("accessibility").unwrap()["leadingAnnotation"],
+            true
+        );
     }
 
     #[test]
@@ -644,6 +655,7 @@ mod feature_tests {
             true
         );
         assert_eq!(features.details("accessibility").unwrap()["textCue"], true);
+        assert_eq!(features.details("accessibility").unwrap()["musicCue"], true);
     }
 
     #[test]
