@@ -28,16 +28,41 @@ pub(crate) fn accessibility_ranges(text: &str) -> Vec<Range<usize>> {
         add_leading_bracket_ranges(&chars, open, close, &mut ranges);
     }
     // Narration brackets may be split across regions or consecutive archive
-    // records. Their contents are spoken text and must remain, so each
-    // delimiter is independently classifiable without its matching partner.
-    ranges.extend(
-        chars
-            .iter()
-            .enumerate()
-            .filter(|(_, character)| matches!(character, '<' | '>' | '＜' | '＞'))
-            .map(|(index, _)| index..index + 1),
-    );
+    // records. Classify an opening delimiter only at a line start, its paired
+    // close, or an independently observed close at a line end so ordinary
+    // inline comparisons remain caption text.
+    add_narration_delimiter_ranges(&chars, &mut ranges);
     ranges
+}
+
+fn add_narration_delimiter_ranges(chars: &[char], ranges: &mut Vec<Range<usize>>) {
+    let mut line_start = 0;
+    while line_start < chars.len() {
+        let line_end = chars[line_start..]
+            .iter()
+            .position(|character| matches!(character, '\n' | '\r'))
+            .map_or(chars.len(), |offset| line_start + offset);
+        let content_start = (line_start..line_end).find(|index| !chars[*index].is_whitespace());
+        let content_end = (line_start..line_end)
+            .rev()
+            .find(|index| !chars[*index].is_whitespace());
+        if let (Some(start), Some(end)) = (content_start, content_end) {
+            let close = match chars[start] {
+                '<' => Some('>'),
+                '＜' => Some('＞'),
+                _ => None,
+            };
+            if let Some(close) = close {
+                ranges.push(start..start + 1);
+                if let Some(index) = (start + 1..=end).find(|index| chars[*index] == close) {
+                    ranges.push(index..index + 1);
+                }
+            } else if matches!(chars[end], '>' | '＞') {
+                ranges.push(end..end + 1);
+            }
+        }
+        line_start = line_end + 1;
+    }
 }
 
 fn add_leading_bracket_ranges(
@@ -127,8 +152,27 @@ mod tests {
     fn narration_delimiters_do_not_require_their_partner_in_one_text_segment() {
         assert_eq!(accessibility_ranges("<語り"), vec![0..1]);
         assert_eq!(accessibility_ranges("続き>"), vec![2..3]);
+        assert_eq!(accessibility_ranges("本文\n ＜語り"), vec![4..5]);
+        assert_eq!(accessibility_ranges("続き＞  \n本文"), vec![2..3]);
         assert_eq!(filtered_text("＜語り", true, false), "語り");
         assert_eq!(filtered_text("続き＞", true, false), "続き");
+    }
+
+    #[test]
+    fn inline_angle_brackets_remain_ordinary_caption_text() {
+        for text in ["1＜2", "価格<税込>です", "A > B"] {
+            assert!(accessibility_ranges(text).is_empty());
+            assert_eq!(filtered_text(text, true, false), text);
+        }
+    }
+
+    #[test]
+    fn line_start_narration_pair_marks_only_its_delimiters() {
+        assert_eq!(
+            accessibility_ranges("<ついに！>語りは残す"),
+            vec![0..1, 5..6]
+        );
+        assert_eq!(accessibility_ranges(" ＜説明＞本文"), vec![1..2, 4..5]);
     }
 
     #[test]
