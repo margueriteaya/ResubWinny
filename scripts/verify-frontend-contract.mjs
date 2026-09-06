@@ -22,6 +22,10 @@ const allowedTauriImports = new Set([
   'backend/events.ts',
   'shell/desktop.ts',
 ])
+const localizedModeSurfaces = new Set([
+  'features/onboarding/OnboardingPage.svelte',
+  'features/settings/SettingsPage.svelte',
+])
 const violations = []
 const exportFormats = ['ASS', 'TTML', 'SRT', 'WebVTT', 'JSON', 'Raw Data']
 const preservationFeatures = ['position', 'color', 'ruby', 'drcs', 'gaiji', 'accessibility']
@@ -67,6 +71,9 @@ for (const path of sourceFiles) {
   }
   if (/\b(?:invoke|listen)\s*\(/.test(text) && !allowedTauriImports.has(localPath)) {
     violations.push(`${localPath} calls invoke/listen outside the backend boundary`)
+  }
+  if (localizedModeSurfaces.has(localPath) && /(?:工作模式|狂热模式|使用模式)/.test(text)) {
+    violations.push(`${localPath} hard-codes public mode copy instead of using locale keys`)
   }
   for (const match of text.matchAll(/\bt\(\s*['"]([^'"]+)['"]/g)) {
     if (!referenceKeys.has(match[1])) violations.push(`${localPath} uses unknown locale key ${match[1]}`)

@@ -85,9 +85,9 @@
       <li><span><FileSearch size={18}/></span><div><b>{t("onboarding.step2Title")}</b><p>{t("onboarding.step2Body")}</p></div></li>
       <li><span><Archive size={18}/></span><div><b>{t("onboarding.step3Title")}</b><p>{t("onboarding.step3Body")}</p></div></li>
     </ol>
-    <section class="mode-choice sequence-steps" aria-label="使用模式">
-      <button type="button" class:selected={userMode === "normie"} onclick={() => userMode = "normie"}><b>工作模式</b><span>选择常用项并自动保存，快速载入文件并输出字幕。适合不求了解内部结构，潜心工作的时候。</span></button>
-      <button type="button" class:selected={userMode === "nerd"} onclick={() => userMode = "nerd"}><b>狂热模式</b><span>展开查看录制文件中的服务、字幕轨道、特殊字形、时间结构和广播信息。适合充满兴趣到想把每个细节都看明白的时候。</span></button>
+    <section class="mode-choice sequence-steps" aria-label={t("mode.selectionLabel")}>
+      <button type="button" class:selected={userMode === "normie"} onclick={() => userMode = "normie"}><b>{t("mode.workName")}</b><span>{t("mode.workDescription")}</span></button>
+      <button type="button" class:selected={userMode === "nerd"} onclick={() => userMode = "nerd"}><b>{t("mode.nerdName")}</b><span>{t("mode.nerdDescription")}</span></button>
     </section>
     <aside class="use-notice sequence-notice" aria-labelledby="use-notice-title">
       <TriangleAlert size={19}/><div><b id="use-notice-title">{t("onboarding.noticeTitle")}</b><p>{t("onboarding.noticeBody")}</p></div>
