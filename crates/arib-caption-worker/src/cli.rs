@@ -564,6 +564,44 @@ mod feature_event_tests {
     use super::*;
 
     #[test]
+    fn drcs_source_observations_do_not_claim_target_resolution() {
+        let mut summary = B24DecodeSummary {
+            features: CaptionFeatureSummary {
+                drcs: true,
+                observed_counts: [("drcs".into(), 1)].into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let options = ConversionOptions::default();
+        let mut seen = CaptionFeatureSummary::default();
+        let first = feature_events(&summary, &mut seen, false, &options);
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0]["type"], "feature_observed");
+        for count in 2..1000 {
+            summary
+                .features
+                .observed_counts
+                .insert("drcs".into(), count);
+            assert!(feature_events(&summary, &mut seen, false, &options).is_empty());
+        }
+        let final_events = feature_events(&summary, &mut seen, true, &options);
+        assert_eq!(final_events.len(), 6);
+        assert!(
+            final_events
+                .iter()
+                .all(|event| event["type"] == "feature_summary")
+        );
+        let drcs = final_events
+            .iter()
+            .find(|event| event["feature"] == "drcs")
+            .unwrap();
+        assert_eq!(drcs["observedCount"], 999);
+        assert_eq!(drcs["complete"], true);
+        assert_eq!(drcs["state"], "present");
+    }
+
+    #[test]
     fn feature_events_are_first_observation_and_eof_only() {
         let summary = B24DecodeSummary {
             features: CaptionFeatureSummary {
