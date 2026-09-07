@@ -38,6 +38,14 @@ test('a usable DRCS mapping invalidates stale DRCS conflicts only', () => {
     'source::track-b': {},
   })
   assert.equal(conflicts['source::track-a'].drcs.issueCode, 'unresolved_drcs_text_target')
+  const knowledge = { drcs: { state: 'present', observedCount: 2, complete: true } }
+  const before = assessExports(['SRT'], preservation, knowledge, conflicts['source::track-a'])
+  assert.equal(before.hasConflict, true)
+  const after = assessExports(['SRT'], preservation, knowledge, updated['source::track-a'])
+  assert.equal(after.hasConflict, false)
+  assert.equal(after.formats.SRT.approximated.length, 0)
+  assert.ok(after.formats.SRT.conditional.some((item) => item.feature === 'drcs'))
+  assert.deepEqual(knowledge.drcs, { state: 'present', observedCount: 2, complete: true })
 })
 
 test('source detail variants use a stable allowlist and order', () => {
