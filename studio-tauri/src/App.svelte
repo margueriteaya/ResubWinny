@@ -387,7 +387,6 @@
     const formats = [...nextFormats];
     const next = {
       ...appSettings,
-      defaultFormat: formats[0] ?? appSettings.defaultFormat,
       exportPreferences: { formats, preservation: { ...nextPreservation } },
     };
     appSettings = next;
@@ -1059,7 +1058,7 @@
         onOpenHistory={(item) => void openHistory(item)}
         onNavigate={(target) => selectView(target)}
         settings={appSettings}
-        onSettingsChange={(settings) => { const next = { ...settings, defaultFormat: settings.exportPreferences.formats[0] ?? settings.defaultFormat }; appSettings = next; selectedFormats = new Set(next.exportPreferences.formats); preservation = { ...next.exportPreferences.preservation }; void preferencesSession.persist(next); }}
+        onSettingsChange={(settings) => { appSettings = settings; selectedFormats = new Set(settings.exportPreferences.formats); preservation = { ...settings.exportPreferences.preservation }; void preferencesSession.persist(settings); }}
       />
     {:else if page === "tasks"}
       {#if TaskWorkspaceComponent}
