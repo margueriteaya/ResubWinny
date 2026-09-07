@@ -617,7 +617,7 @@ fn unpositioned_b24_group_orders_fragments_by_source_rows_and_writes_one_cue() {
 fn export_feature_filter_removes_the_same_character_ranges_as_the_event_inspector() {
     let filtered =
         crate::caption_features::filtered_text("(寛太)説明⚟➡♬〜本文<語り>", false, false);
-    assert_eq!(filtered, "説明本文<語り");
+    assert_eq!(filtered, "説明本文<語り>");
 }
 
 #[test]

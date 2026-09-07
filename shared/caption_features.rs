@@ -53,8 +53,7 @@ pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
     let leading_annotation = cue_ranges.len() > leading_annotation_start;
     // Narration brackets may be split across regions or consecutive archive
     // records. Classify an opening delimiter only at a line start, its paired
-    // close, or an independently observed close at a line end so ordinary
-    // inline comparisons remain caption text.
+    // close. An isolated closing bracket is not evidence of narration.
     let narration_delimiter_start = cue_ranges.len();
     add_narration_delimiter_ranges(&chars, &mut cue_ranges);
     let ranges = cue_ranges.iter().flatten().cloned().collect();
@@ -92,8 +91,6 @@ fn add_narration_delimiter_ranges(chars: &[char], cue_ranges: &mut Vec<Vec<Range
                     ranges.push(index..index + 1);
                 }
                 cue_ranges.push(ranges);
-            } else if matches!(chars[end], '>' | '＞') {
-                cue_ranges.push(single_range_cue(end..end + 1));
             }
         }
         line_start = line_end + 1;
@@ -199,16 +196,16 @@ mod tests {
     #[test]
     fn narration_delimiters_do_not_require_their_partner_in_one_text_segment() {
         assert_eq!(accessibility_ranges("<語り"), vec![0..1]);
-        assert_eq!(accessibility_ranges("続き>"), vec![2..3]);
+        assert!(accessibility_ranges("続き>").is_empty());
         assert_eq!(accessibility_ranges("本文\n ＜語り"), vec![4..5]);
-        assert_eq!(accessibility_ranges("続き＞  \n本文"), vec![2..3]);
+        assert!(accessibility_ranges("続き＞  \n本文").is_empty());
         assert_eq!(filtered_text("＜語り", true, false), "語り");
-        assert_eq!(filtered_text("続き＞", true, false), "続き");
+        assert_eq!(filtered_text("続き＞", true, false), "続き＞");
     }
 
     #[test]
     fn inline_angle_brackets_remain_ordinary_caption_text() {
-        for text in ["1＜2", "価格<税込>です", "A > B"] {
+        for text in ["1＜2", "価格<税込>です", "A > B", "演算子 >", "比較 ＞"] {
             assert!(accessibility_ranges(text).is_empty());
             assert_eq!(filtered_text(text, true, false), text);
         }
