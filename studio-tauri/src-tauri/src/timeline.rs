@@ -1230,7 +1230,7 @@ mod tests {
     }
 
     #[test]
-    fn standalone_wave_is_not_accessibility_and_split_narration_delimiters_are() {
+    fn standalone_wave_and_unpaired_brackets_are_not_accessibility() {
         let (_, features, highlights, _) =
             event_presentation(&serde_json::json!({ "text": "語調〜" }));
         assert!(!features.iter().any(|feature| feature == "accessibility"));
@@ -1240,11 +1240,10 @@ mod tests {
                 .any(|item| item.feature == "accessibility")
         );
 
-        for (text, expected) in [("<語り", (0, 1)), ("続き>", (2, 3))] {
-            let (_, _, highlights, _) = event_presentation(&serde_json::json!({ "text": text }));
-            assert!(highlights.iter().any(|item| {
-                item.feature == "accessibility" && (item.start, item.end) == expected
-            }));
+        for text in ["<語り", "続き>", "＜語り", "続き＞"] {
+            let (_, features, highlights, _) = event_presentation(&serde_json::json!({ "text": text }));
+            assert!(!features.iter().any(|feature| feature == "accessibility"));
+            assert!(!highlights.iter().any(|item| item.feature == "accessibility"));
         }
     }
 
