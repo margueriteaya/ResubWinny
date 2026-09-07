@@ -51,9 +51,8 @@ pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
         add_leading_bracket_ranges(&chars, open, close, &mut cue_ranges);
     }
     let leading_annotation = cue_ranges.len() > leading_annotation_start;
-    // Narration brackets may be split across regions or consecutive archive
-    // records. Classify an opening delimiter only at a line start, its paired
-    // close. An isolated closing bracket is not evidence of narration.
+    // Only paired delimiters are candidates. An isolated bracket does not
+    // establish narration, even at a line boundary.
     let narration_delimiter_start = cue_ranges.len();
     add_narration_delimiter_ranges(&chars, &mut cue_ranges);
     let ranges = cue_ranges.iter().flatten().cloned().collect();
@@ -86,11 +85,11 @@ fn add_narration_delimiter_ranges(chars: &[char], cue_ranges: &mut Vec<Vec<Range
             };
             if let Some(close) = close {
                 let mut ranges = Vec::with_capacity(2);
-                ranges.push(start..start + 1);
                 if let Some(index) = (start + 1..=end).find(|index| chars[*index] == close) {
+                    ranges.push(start..start + 1);
                     ranges.push(index..index + 1);
+                    cue_ranges.push(ranges);
                 }
-                cue_ranges.push(ranges);
             }
         }
         line_start = line_end + 1;
@@ -194,12 +193,12 @@ mod tests {
     }
 
     #[test]
-    fn narration_delimiters_do_not_require_their_partner_in_one_text_segment() {
-        assert_eq!(accessibility_ranges("<語り"), vec![0..1]);
+    fn isolated_delimiters_remain_source_text() {
+        assert!(accessibility_ranges("<語り").is_empty());
         assert!(accessibility_ranges("続き>").is_empty());
-        assert_eq!(accessibility_ranges("本文\n ＜語り"), vec![4..5]);
+        assert!(accessibility_ranges("本文\n ＜語り").is_empty());
         assert!(accessibility_ranges("続き＞  \n本文").is_empty());
-        assert_eq!(filtered_text("＜語り", true, false), "語り");
+        assert_eq!(filtered_text("＜語り", true, false), "＜語り");
         assert_eq!(filtered_text("続き＞", true, false), "続き＞");
     }
 
