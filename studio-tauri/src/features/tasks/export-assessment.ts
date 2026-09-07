@@ -40,9 +40,8 @@ export function assessExports(formats: Iterable<ExportFormat>, preservation: Exp
           };
           assessment.conflicts.push(issue);
           result.hasConflict = true;
-        } else if (state === "present") {
-          assessment.approximated.push(entry("format_approximates_feature"));
         } else {
+          // Source presence (including EOF) does not prove mapping or fallback availability.
           assessment.conditional.push({ code: "format_conditionally_preserves_feature", feature, severity: "warning", parameters: { format, feature }, actions: [] });
         }
         continue;

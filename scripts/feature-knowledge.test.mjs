@@ -126,7 +126,7 @@ test('assessment entries preserve the source-state and user-intent truth table f
           const entries = Object.values(groups).flat()
           const level = levels[index]
           let bucket
-          if (state === 'present') bucket = !enabled ? 'dropped' : level === 'unsupported' ? 'conflicts' : level === 'conditional' ? 'approximated' : level
+          if (state === 'present') bucket = !enabled ? 'dropped' : level === 'unsupported' ? 'conflicts' : level
           if (state === 'unknown' && enabled && ['unsupported', 'conditional'].includes(level)) bucket = 'conditional'
           if (state === 'unknown' && !enabled) bucket = 'conditional'
           assert.equal(entries.length, bucket ? 1 : 0, `${format}/${feature}/${state}/${enabled}`)
@@ -279,11 +279,13 @@ test('runtime export conflicts preserve an already complete feature summary', ()
   })
 })
 
-test('conditional DRCS converges to approximation or a format-specific runtime conflict', () => {
+test('DRCS stays conditional until target-specific resolution is known', () => {
   const knowledge = { drcs: { state: 'present', observedCount: 1, complete: false } }
   const allowed = assessExports(['ASS', 'SRT'], preservation, knowledge)
-  assert.deepEqual(allowed.formats.ASS.approximated.map((item) => item.feature), ['drcs'])
-  assert.deepEqual(allowed.formats.SRT.approximated.map((item) => item.feature), ['drcs'])
+  for (const format of ['ASS', 'SRT']) {
+    assert.equal(allowed.formats[format].approximated.length, 0)
+    assert.ok(allowed.formats[format].conditional.some((item) => item.feature === 'drcs'))
+  }
   assert.equal(allowed.hasConflict, false)
 
   const conflict = assessExports(['ASS', 'SRT'], preservation, knowledge, {
@@ -293,7 +295,14 @@ test('conditional DRCS converges to approximation or a format-specific runtime c
       availableActions: ['open_drcs_mapping'],
     },
   })
-  assert.deepEqual(conflict.formats.ASS.approximated.map((item) => item.feature), ['drcs'])
+  assert.equal(conflict.formats.ASS.approximated.length, 0)
+  assert.ok(conflict.formats.ASS.conditional.some((item) => item.feature === 'drcs'))
   assert.equal(conflict.formats.SRT.conflicts[0].code, 'unresolved_drcs_text_target')
   assert.equal(conflict.hasConflict, true)
+  const complete = assessExports(['SRT'], preservation, { drcs: { ...knowledge.drcs, complete: true } })
+  assert.ok(complete.formats.SRT.conditional.some((item) => item.feature === 'drcs'))
+  assert.equal(complete.formats.SRT.approximated.length, 0)
+  const dropped = assessExports(['SRT'], { ...preservation, drcs: false }, knowledge)
+  assert.deepEqual(dropped.formats.SRT.dropped.map((item) => item.feature), ['drcs'])
+  assert.equal(dropped.hasConflict, false)
 })
