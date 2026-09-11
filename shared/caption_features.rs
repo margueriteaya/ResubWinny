@@ -19,6 +19,10 @@ pub(crate) struct AccessibilityEvidence {
     pub(crate) leading_annotation: bool,
     pub(crate) music_cue: bool,
     pub(crate) narration_delimiter: bool,
+    pub(crate) speaker_cue: bool,
+    pub(crate) continuation_cue: bool,
+    pub(crate) phone_cue: bool,
+    pub(crate) offscreen_cue: bool,
 }
 
 pub(crate) fn accessibility_ranges(text: &str) -> Vec<Range<usize>> {
@@ -41,16 +45,27 @@ pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
             }
             cue_ranges.push(single_range_cue(index..end));
             index = end;
+        } else if matches!(chars[index], '➡' | '☎' | '⚟') {
+            cue_ranges.push(single_range_cue(index..index + 1));
+            index += 1;
         } else {
             index += 1;
         }
     }
-    let music_cue = !cue_ranges.is_empty();
+    let music_cue = chars
+        .iter()
+        .any(|character| matches!(character, '♪' | '♬' | '♫' | '♩'));
+    let continuation_cue = chars.contains(&'➡');
+    let phone_cue = chars.contains(&'☎');
+    let offscreen_cue = chars.contains(&'⚟');
     let leading_annotation_start = cue_ranges.len();
     for (open, close) in [('(', ')'), ('（', '）')] {
         add_leading_bracket_ranges(&chars, open, close, &mut cue_ranges);
     }
     let leading_annotation = cue_ranges.len() > leading_annotation_start;
+    let speaker_cue_start = cue_ranges.len();
+    add_leading_speaker_cue_ranges(&chars, &mut cue_ranges);
+    let speaker_cue = cue_ranges.len() > speaker_cue_start;
     // Only paired delimiters are candidates. An isolated bracket does not
     // establish narration, even at a line boundary.
     let narration_delimiter_start = cue_ranges.len();
@@ -63,6 +78,64 @@ pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
         cue_ranges,
         leading_annotation,
         music_cue,
+        speaker_cue,
+        continuation_cue,
+        phone_cue,
+        offscreen_cue,
+    }
+}
+
+fn add_leading_speaker_cue_ranges(chars: &[char], cue_ranges: &mut Vec<Vec<Range<usize>>>) {
+    let mut line_start = 0;
+    while line_start < chars.len() {
+        let line_end = chars[line_start..]
+            .iter()
+            .position(|character| matches!(character, '\n' | '\r'))
+            .map_or(chars.len(), |offset| line_start + offset);
+        let Some(start) = (line_start..line_end).find(|index| !chars[*index].is_whitespace())
+        else {
+            line_start = line_end + 1;
+            continue;
+        };
+        let Some(marker) = (start..line_end).find(|index| chars[*index] == '≫') else {
+            line_start = line_end + 1;
+            continue;
+        };
+        let has_label = marker > start && chars[start..marker].iter().any(|c| !c.is_whitespace());
+        let has_dialogue = chars[marker + 1..line_end]
+            .iter()
+            .any(|character| !character.is_whitespace());
+        let label_has_range_or_sentence_syntax = chars[start..marker].iter().any(|character| {
+            matches!(
+                character,
+                '≪' | '《'
+                    | '》'
+                    | '「'
+                    | '」'
+                    | '『'
+                    | '』'
+                    | '｢'
+                    | '｣'
+                    | '<'
+                    | '>'
+                    | '＜'
+                    | '＞'
+                    | '。'
+                    | '！'
+                    | '？'
+                    | '!'
+                    | '?'
+                    | '♪'
+                    | '♬'
+                    | '♫'
+                    | '♩'
+                    | '➡'
+            )
+        });
+        if has_label && has_dialogue && !label_has_range_or_sentence_syntax {
+            cue_ranges.push(single_range_cue(start..marker + 1));
+        }
+        line_start = line_end + 1;
     }
 }
 
@@ -233,16 +306,17 @@ mod tests {
 
     #[test]
     fn accessibility_evidence_keeps_text_patterns_distinct() {
-        let evidence = accessibility_evidence("（話者）本文\n♪〜音楽\n＜語り＞");
+        let evidence = accessibility_evidence("（話者）本文\n橋本≫進行\n♪〜音楽\n＜語り＞");
 
         assert!(evidence.leading_annotation);
         assert!(evidence.music_cue);
         assert!(evidence.narration_delimiter);
-        assert_eq!(evidence.observed_count, 3);
-        assert_eq!(evidence.ranges.len(), 4);
+        assert!(evidence.speaker_cue);
+        assert_eq!(evidence.observed_count, 4);
+        assert_eq!(evidence.ranges.len(), 5);
         assert_eq!(
             evidence.ranges,
-            accessibility_ranges("（話者）本文\n♪〜音楽\n＜語り＞")
+            accessibility_ranges("（話者）本文\n橋本≫進行\n♪〜音楽\n＜語り＞")
         );
 
         let ordinary = accessibility_evidence("価格（税込）です");
@@ -251,6 +325,55 @@ mod tests {
         assert!(!ordinary.leading_annotation);
         assert!(!ordinary.music_cue);
         assert!(!ordinary.narration_delimiter);
+        assert!(!ordinary.speaker_cue);
+        assert!(!ordinary.continuation_cue);
+        assert!(!ordinary.phone_cue);
+        assert!(!ordinary.offscreen_cue);
+    }
+
+    #[test]
+    fn broadcast_sound_and_continuation_marks_are_accessibility_cues() {
+        let evidence = accessibility_evidence("⚟画面外☎電話の声 本文➡");
+        assert_eq!(evidence.ranges, vec![0..1, 4..5, 12..13]);
+        assert_eq!(evidence.observed_count, 3);
+        assert!(evidence.offscreen_cue);
+        assert!(evidence.phone_cue);
+        assert!(evidence.continuation_cue);
+        assert_eq!(
+            filtered_text("⚟画面外☎電話の声 本文➡", true, false),
+            "画面外電話の声 本文"
+        );
+    }
+
+    #[test]
+    fn leading_name_and_double_angle_are_a_removable_speaker_cue() {
+        assert_eq!(
+            accessibility_ranges("橋本≫いよいよ始まりました"),
+            vec![0..3]
+        );
+        assert_eq!(accessibility_ranges("  有吉≫「紅白」！"), vec![2..5]);
+        assert_eq!(
+            filtered_text("伊藤≫では、そろそろいきましょうか。", true, false),
+            "では、そろそろいきましょうか。"
+        );
+    }
+
+    #[test]
+    fn double_angle_range_closures_are_not_speaker_cues() {
+        for text in [
+            "≪いっしょに、未来を描いていこう。≫",
+            "続く世界｣をつくりたい。≫",
+        ] {
+            assert!(accessibility_ranges(text).is_empty());
+            assert_eq!(filtered_text(text, true, false), text);
+        }
+        let nested = accessibility_evidence("(女性A)≪どのオレにする？≫");
+        assert!(!nested.speaker_cue);
+        assert_eq!(nested.ranges, vec![0..5]);
+        assert_eq!(
+            filtered_text("(女性A)≪どのオレにする？≫", true, false),
+            "≪どのオレにする？≫"
+        );
     }
 
     #[test]

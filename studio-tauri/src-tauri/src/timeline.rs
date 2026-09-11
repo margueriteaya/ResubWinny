@@ -572,6 +572,9 @@ fn event_presentation(
             colors.into_iter().collect(),
         );
     };
+    let has_source_coordinates = characters.iter().any(|character| {
+        character.get("source_ku").is_some() || character.get("sourceKu").is_some()
+    });
     let mut text = String::new();
     let mut character_boundaries = vec![0_usize];
     for character in characters {
@@ -599,17 +602,25 @@ fn event_presentation(
                 .or_else(|| character.get("drcsCode"))
                 .and_then(serde_json::Value::as_u64)
                 .is_some_and(|code| code != 0);
-        let displayed_gaiji = value.chars().any(is_arib_additional_symbol);
-        let source_gaiji = character
-            .get("pua_codepoint")
-            .or_else(|| character.get("puaCodepoint"))
-            .and_then(serde_json::Value::as_u64)
-            .and_then(|codepoint| u32::try_from(codepoint).ok())
-            .is_some_and(is_arib_additional_symbol_codepoint);
-        // Unicode symbols are classified once after the complete text is
-        // assembled. Source PUA evidence is needed only when that display
-        // character no longer identifies the additional-symbol row.
-        let gaiji = source_gaiji && !displayed_gaiji;
+        let gaiji = if has_source_coordinates {
+            character
+                .get("source_ku")
+                .or_else(|| character.get("sourceKu"))
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|ku| u32::try_from(ku).ok())
+                .is_some_and(crate::arib_symbols::is_arib_additional_symbol_ku)
+        } else {
+            let displayed_gaiji = value.chars().any(is_arib_additional_symbol);
+            let source_gaiji = character
+                .get("pua_codepoint")
+                .or_else(|| character.get("puaCodepoint"))
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|codepoint| u32::try_from(codepoint).ok())
+                .is_some_and(is_arib_additional_symbol_codepoint);
+            // Old archives do not contain source coordinates. Their Unicode
+            // symbols are classified once after the complete text is built.
+            source_gaiji && !displayed_gaiji
+        };
         let text_color = character
             .get("text_color")
             .or_else(|| character.get("textColor"))
@@ -641,7 +652,9 @@ fn event_presentation(
     for item in &mut highlights {
         item.end = item.end.min(text_len);
     }
-    add_gaiji_features(&text, &mut features, &mut highlights);
+    if !has_source_coordinates {
+        add_gaiji_features(&text, &mut features, &mut highlights);
+    }
     let mut classified_region = false;
     if let Some(regions) = value.get("regions").and_then(serde_json::Value::as_array) {
         for region in regions {
@@ -1241,9 +1254,14 @@ mod tests {
         );
 
         for text in ["<語り", "続き>", "＜語り", "続き＞"] {
-            let (_, features, highlights, _) = event_presentation(&serde_json::json!({ "text": text }));
+            let (_, features, highlights, _) =
+                event_presentation(&serde_json::json!({ "text": text }));
             assert!(!features.iter().any(|feature| feature == "accessibility"));
-            assert!(!highlights.iter().any(|item| item.feature == "accessibility"));
+            assert!(
+                !highlights
+                    .iter()
+                    .any(|item| item.feature == "accessibility")
+            );
         }
     }
 
@@ -1287,5 +1305,25 @@ mod tests {
             .map(|item| (item.start, item.end))
             .collect::<Vec<_>>();
         assert_eq!(ranges, vec![(0, 1), (1, 2)]);
+    }
+
+    #[test]
+    fn b24_gaiji_highlights_use_original_arib_rows_when_available() {
+        let value = serde_json::json!({
+            "characters": [
+                { "utf8": "➡", "pua_codepoint": 0xE28F_u64, "source_ku": 85, "source_ten": 1 },
+                { "utf8": "X", "pua_codepoint": 0, "source_ku": 90, "source_ten": 1 },
+                { "utf8": "♬", "pua_codepoint": 0, "source_ku": 93, "source_ten": 90 }
+            ]
+        });
+        let (text, features, highlights, _) = event_presentation(&value);
+        assert_eq!(text, "➡X♬");
+        assert!(features.iter().any(|feature| feature == "gaiji"));
+        let ranges = highlights
+            .iter()
+            .filter(|item| item.feature == "gaiji")
+            .map(|item| (item.start, item.end))
+            .collect::<Vec<_>>();
+        assert_eq!(ranges, vec![(1, 2), (2, 3)]);
     }
 }

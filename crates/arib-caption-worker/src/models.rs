@@ -211,6 +211,14 @@ impl CaptionFeatureSummary {
             evidence.leading_annotation,
         );
         self.mark_detail_flag("accessibility", "musicCue", evidence.music_cue);
+        self.mark_detail_flag("accessibility", "speakerCue", evidence.speaker_cue);
+        self.mark_detail_flag(
+            "accessibility",
+            "continuationCue",
+            evidence.continuation_cue,
+        );
+        self.mark_detail_flag("accessibility", "phoneCue", evidence.phone_cue);
+        self.mark_detail_flag("accessibility", "offscreenCue", evidence.offscreen_cue);
         self.mark_detail_flag(
             "accessibility",
             "narrationDelimiter",
@@ -460,8 +468,7 @@ fn ttml_outline_is_material(value: &str) -> bool {
 }
 
 pub(crate) fn b24_character_is_gaiji_source(character: &native_b24::CaptionCharacter) -> bool {
-    character.pua_codepoint != 0
-        && crate::arib_symbols::is_arib_additional_symbol_codepoint(character.pua_codepoint)
+    crate::arib_symbols::is_arib_additional_symbol_ku(character.source_ku)
 }
 
 #[cfg(test)]
@@ -473,6 +480,9 @@ mod feature_tests {
             kind: 0,
             codepoint: '字' as u32,
             pua_codepoint: 0,
+            source_graphic_set: 0,
+            source_ku: 0,
+            source_ten: 0,
             drcs_code: 0,
             x: 0,
             y: 0,
@@ -582,7 +592,9 @@ mod feature_tests {
     #[test]
     fn b24_gaiji_and_accessibility_use_shared_material_classifiers() {
         let mut character = b24_character();
-        character.pua_codepoint = '➡' as u32;
+        character.source_graphic_set = 16;
+        character.source_ku = 90;
+        character.source_ten = 1;
         character.utf8 = "♪".into();
         let scene = native_b24::CaptionScene {
             pts_ms: 0,
@@ -722,13 +734,17 @@ mod feature_tests {
         assert!(features.gaiji);
         assert!(features.accessibility);
         assert_eq!(features.observed_counts["gaiji"], 1);
-        assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(features.observed_counts["accessibility"], 2);
         assert_eq!(
             features.details("gaiji").unwrap()["aribAdditionalSymbol"],
             true
         );
         assert_eq!(features.details("accessibility").unwrap()["textCue"], true);
         assert_eq!(features.details("accessibility").unwrap()["musicCue"], true);
+        assert_eq!(
+            features.details("accessibility").unwrap()["continuationCue"],
+            true
+        );
     }
 
     #[test]

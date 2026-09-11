@@ -1251,7 +1251,7 @@ bool DecoderImpl::HandleGLGR(const uint8_t* data, size_t remain_bytes, size_t* b
             }
         }
 
-        PushCharacter(ucs4, pua);
+        PushCharacter(ucs4, pua, static_cast<uint32_t>(entry->graphics_set), ku + 1, ten + 1);
         MoveRelativeActivePos(1, 0);
     } else if (entry->graphics_set == GraphicSet::kAlphanumeric ||
                entry->graphics_set == GraphicSet::kProportionalAlphanumeric) {
@@ -1333,11 +1333,17 @@ bool DecoderImpl::HandleUTF8(const uint8_t* data, size_t remain_bytes, size_t* b
     return true;
 }
 
-void DecoderImpl::PushCharacter(uint32_t ucs4, uint32_t pua) {
+void DecoderImpl::PushCharacter(uint32_t ucs4, uint32_t pua,
+                                uint32_t source_graphic_set,
+                                uint32_t source_ku,
+                                uint32_t source_ten) {
     CaptionChar caption_char;
     caption_char.type = CaptionCharType::kText;
     caption_char.codepoint = ucs4;
     caption_char.pua_codepoint = pua;
+    caption_char.source_graphic_set = source_graphic_set;
+    caption_char.source_ku = source_ku;
+    caption_char.source_ten = source_ten;
 
     size_t u8count = utf::UTF8AppendCodePoint(caption_char.u8str, ucs4);
     caption_char.u8str[u8count] = '\0';

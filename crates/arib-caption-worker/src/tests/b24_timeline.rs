@@ -73,6 +73,42 @@ fn native_b24_decoder_initializes() {
 }
 
 #[test]
+fn native_b24_decoder_preserves_original_ku_ten() {
+    // libaribcaption's upstream sample contains two-byte JIS characters and an
+    // ARIB additional symbol. Keep the bytes here so the Rust/C bridge layout
+    // and the decoder provenance are covered by the same test.
+    let data = [
+        0x80, 0xff, 0xf0, 0x04, 0x00, 0x00, 0x00, 0x4e, 0x3f, 0x00, 0x00, 0x4a, 0x1f, 0x20, 0x00,
+        0x00, 0x01, 0x0c, 0x1f, 0x20, 0x00, 0x00, 0x3f, 0x9b, 0x37, 0x20, 0x53, 0x9b, 0x31, 0x37,
+        0x30, 0x3b, 0x33, 0x30, 0x20, 0x5f, 0x9b, 0x36, 0x32, 0x30, 0x3b, 0x34, 0x38, 0x30, 0x20,
+        0x56, 0x1d, 0x61, 0x9b, 0x33, 0x36, 0x3b, 0x33, 0x36, 0x20, 0x57, 0x9b, 0x34, 0x20, 0x58,
+        0x9b, 0x32, 0x34, 0x20, 0x59, 0x8a, 0x87, 0x90, 0x20, 0x44, 0x90, 0x51, 0x9b, 0x31, 0x37,
+        0x30, 0x3b, 0x35, 0x30, 0x39, 0x20, 0x61, 0x7d, 0x7a, 0x21, 0x41, 0x4f, 0xf1,
+    ];
+
+    let mut decoder = native_b24::NativeB24Decoder::new().expect("native decoder");
+    let result = decoder.feed(&data, 0);
+    assert_eq!(result.status, 2);
+    let scene = result.scene.expect("decoded caption scene");
+    let sourced = scene
+        .characters
+        .iter()
+        .filter(|character| character.source_ku != 0)
+        .collect::<Vec<_>>();
+    assert!(!sourced.is_empty(), "two-byte source positions were lost");
+    assert!(sourced.iter().all(|character| {
+        (1..=94).contains(&character.source_ku) && (1..=94).contains(&character.source_ten)
+    }));
+    assert!(
+        sourced.iter().any(|character| character.utf8 == "♬"
+            && character.pua_codepoint == 0
+            && character.source_ku == 93
+            && character.source_ten == 90),
+        "the sample's ♬ lost its ARIB 93-90 source position"
+    );
+}
+
+#[test]
 fn parses_b24_payload_and_pts() {
     let pes = [
         0, 0, 1, 0xbd, 0, 0, 0x80, 0x80, 5, 0x21, 0, 5, 0xbf, 0x21, 0x80,
@@ -105,6 +141,9 @@ fn scene_with_text_regions(pts_ms: i64, regions: &[(i32, i32, &str)]) -> native_
                     kind: 0,
                     codepoint: character as u32,
                     pua_codepoint: 0,
+                    source_graphic_set: 0,
+                    source_ku: 0,
+                    source_ten: 0,
                     drcs_code: 0,
                     x: *x + index as i32 * 20,
                     y: *y,
@@ -255,6 +294,9 @@ fn writes_a_region_that_contains_only_unresolved_drcs() {
             kind: 1,
             codepoint: 0,
             pua_codepoint: 0,
+            source_graphic_set: 0,
+            source_ku: 0,
+            source_ten: 0,
             drcs_code: 1,
             x: 100,
             y: 100,
@@ -338,6 +380,9 @@ fn exports_drcs_alternative_text_for_positioned_and_grouped_text_targets() {
             kind: 1,
             codepoint: 0,
             pua_codepoint: 0,
+            source_graphic_set: 0,
+            source_ku: 0,
+            source_ten: 0,
             drcs_code: 1,
             x: 100,
             y: 100,
@@ -418,6 +463,9 @@ fn ass_export_groups_editable_ruby_text_and_keeps_inline_styles() {
                 kind: 0,
                 codepoint: 'か' as u32,
                 pua_codepoint: 0,
+                source_graphic_set: 0,
+                source_ku: 0,
+                source_ten: 0,
                 drcs_code: 0,
                 x: 312,
                 y: 401,
@@ -438,6 +486,9 @@ fn ass_export_groups_editable_ruby_text_and_keeps_inline_styles() {
                 kind: 0,
                 codepoint: 'ん' as u32,
                 pua_codepoint: 0,
+                source_graphic_set: 0,
+                source_ku: 0,
+                source_ten: 0,
                 drcs_code: 0,
                 x: 334,
                 y: 401,
@@ -489,6 +540,9 @@ fn ass_export_splits_discontinuous_b24_positions() {
         kind: 0,
         codepoint: text.chars().next().unwrap() as u32,
         pua_codepoint: 0,
+        source_graphic_set: 0,
+        source_ku: 0,
+        source_ten: 0,
         drcs_code: 0,
         x,
         y: 200,
@@ -569,6 +623,9 @@ fn unpositioned_b24_group_orders_fragments_by_source_rows_and_writes_one_cue() {
                 kind: 0,
                 codepoint: character as u32,
                 pua_codepoint: 0,
+                source_graphic_set: 0,
+                source_ku: 0,
+                source_ten: 0,
                 drcs_code: 0,
                 x: x + index as i32 * 40,
                 y,
@@ -616,25 +673,29 @@ fn unpositioned_b24_group_orders_fragments_by_source_rows_and_writes_one_cue() {
 #[test]
 fn export_feature_filter_removes_the_same_character_ranges_as_the_event_inspector() {
     let filtered =
-        crate::caption_features::filtered_text("(寛太)説明⚟➡♬〜本文<語り>", false, false);
+        crate::caption_features::filtered_text("(寛太)橋本≫説明⚟➡♬〜本文<語り>", false, false);
     assert_eq!(filtered, "説明本文<語り>");
 }
 
 #[test]
-fn b24_gaiji_filter_uses_the_arib_symbol_row_instead_of_every_pua_source() {
+fn b24_gaiji_filter_uses_the_original_arib_row_instead_of_pua() {
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
     let output = std::env::temp_dir().join(format!("resubwinny-b24-pua-{stamp}.ass"));
-    let mut ordinary = scene_intervals(&scene_with_text_regions(0, &[(100, 100, "常")]))
+    let mut ordinary = scene_intervals(&scene_with_text_regions(0, &[(100, 100, "➡")]))
         .pop()
         .expect("ordinary interval");
     ordinary.characters[0].pua_codepoint = 0xE000;
+    ordinary.characters[0].source_ku = 85;
+    ordinary.characters[0].source_ten = 1;
     let mut symbol = scene_intervals(&scene_with_text_regions(1_000, &[(100, 100, "X")]))
         .pop()
         .expect("symbol interval");
-    symbol.characters[0].pua_codepoint = 0xE28F;
+    symbol.characters[0].pua_codepoint = 0;
+    symbol.characters[0].source_ku = 90;
+    symbol.characters[0].source_ten = 1;
     let options = ConversionOptions {
         preserve_gaiji: false,
         ..ConversionOptions::default()
@@ -644,7 +705,7 @@ fn b24_gaiji_filter_uses_the_arib_symbol_row_instead_of_every_pua_source() {
     write_ass_interval(&mut writer, &symbol, &options).expect("symbol output");
     writer.flush().expect("flush");
     let ass = fs::read_to_string(&output).expect("read ASS");
-    assert!(ass.contains('常'));
+    assert!(ass.contains('➡'));
     assert!(!ass.contains('X'));
     fs::remove_file(output).expect("cleanup");
 }
@@ -655,6 +716,9 @@ fn b24_ruby_above_and_below_use_the_same_visual_gap() {
         kind: 0,
         codepoint: text.chars().next().unwrap() as u32,
         pua_codepoint: 0,
+        source_graphic_set: 0,
+        source_ku: 0,
+        source_ten: 0,
         drcs_code: 0,
         x,
         y,
@@ -793,6 +857,9 @@ fn b24_multi_character_ruby_centres_on_the_base_layout_axis_without_moving_it() 
         kind: 0,
         codepoint: text.chars().next().unwrap() as u32,
         pua_codepoint: 0,
+        source_graphic_set: 0,
+        source_ku: 0,
+        source_ten: 0,
         drcs_code: 0,
         x,
         y,
@@ -948,6 +1015,9 @@ fn b24_ruby_grid_does_not_claim_the_following_overlapping_cell() {
         kind: 0,
         codepoint: text.chars().next().unwrap() as u32,
         pua_codepoint: 0,
+        source_graphic_set: 0,
+        source_ku: 0,
+        source_ten: 0,
         drcs_code: 0,
         x,
         y,
@@ -1041,6 +1111,9 @@ fn b24_ruby_target_recovery_handles_mixed_full_and_half_width_cells() {
         kind: 0,
         codepoint: text.chars().next().unwrap() as u32,
         pua_codepoint: 0,
+        source_graphic_set: 0,
+        source_ku: 0,
+        source_ten: 0,
         drcs_code: 0,
         x,
         y: 449,

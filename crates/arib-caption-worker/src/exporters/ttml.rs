@@ -144,7 +144,7 @@ pub(crate) fn interval_ttml_text(interval: &RegionInterval, options: &Conversion
         .collect::<String>();
     let mut retained = crate::caption_features::retained_characters(
         &combined,
-        options.preserve_gaiji,
+        true,
         options.preserve_accessibility,
     );
     if !options.preserve_gaiji {

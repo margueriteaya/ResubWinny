@@ -16,10 +16,6 @@ pub(crate) use evidence::*;
 pub(crate) use text::*;
 pub(crate) use ttml::*;
 
-pub(crate) fn keep_text(value: &str, options: &ConversionOptions) -> bool {
-    !export_text(value, options).is_empty()
-}
-
 pub(crate) fn export_text(value: &str, options: &ConversionOptions) -> String {
     crate::caption_features::filtered_text(
         value,

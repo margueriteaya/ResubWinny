@@ -849,7 +849,10 @@ pub(crate) fn write_ass_interval(
             continue;
         }
         let text = b24_export_character_text(character, interval, options);
-        let Some(text) = text.filter(|text| keep_text(text, options)) else {
+        let Some(text) = text.filter(|text| {
+            !crate::caption_features::filtered_text(text, true, options.preserve_accessibility)
+                .is_empty()
+        }) else {
             write_filtered_ass_character_line(
                 writer,
                 interval,
@@ -1009,7 +1012,7 @@ pub(crate) fn write_ass_interval_group(
             .collect::<String>();
         let retained = crate::caption_features::retained_characters(
             &combined,
-            options.preserve_gaiji,
+            true,
             options.preserve_accessibility,
         );
         let mut cursor = 0_usize;
@@ -1160,7 +1163,7 @@ fn write_filtered_ass_character_line(
     let combined = line.iter().map(|(_, text)| *text).collect::<String>();
     let retained = crate::caption_features::retained_characters(
         &combined,
-        options.preserve_gaiji,
+        true,
         options.preserve_accessibility,
     );
     let mut cursor = 0_usize;
@@ -1428,7 +1431,12 @@ fn b24_character_has_ass_text(
         return false;
     }
     if !character.utf8.is_empty() {
-        return keep_text(&character.utf8, options);
+        return !crate::caption_features::filtered_text(
+            &character.utf8,
+            true,
+            options.preserve_accessibility,
+        )
+        .is_empty();
     }
     options.preserve_drcs
         && character.kind == 1
@@ -1436,7 +1444,10 @@ fn b24_character_has_ass_text(
         && options
             .drcs_replacements
             .get(&character.drcs_code)
-            .is_some_and(|text| keep_text(text, options))
+            .is_some_and(|text| {
+                !crate::caption_features::filtered_text(text, true, options.preserve_accessibility)
+                    .is_empty()
+            })
 }
 
 fn scale_ass_coordinate(value: i32, scale: f32) -> i32 {

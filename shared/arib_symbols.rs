@@ -8,6 +8,7 @@ const GAIJI_TABLE_SOURCE: &str =
 const ROW_WIDTH: usize = 94;
 const ADDITIONAL_SYMBOL_START: usize = 5 * ROW_WIDTH;
 const ADDITIONAL_SYMBOL_LEN: usize = 5 * ROW_WIDTH;
+const ADDITIONAL_SYMBOL_KU: std::ops::RangeInclusive<u32> = 90..=94;
 
 static ADDITIONAL_SYMBOLS: OnceLock<BTreeSet<u32>> = OnceLock::new();
 
@@ -17,6 +18,10 @@ pub(crate) fn is_arib_additional_symbol(character: char) -> bool {
 
 pub(crate) fn is_arib_additional_symbol_codepoint(codepoint: u32) -> bool {
     additional_symbols().contains(&codepoint) && !is_daily_japanese_text(codepoint)
+}
+
+pub(crate) fn is_arib_additional_symbol_ku(ku: u32) -> bool {
+    ADDITIONAL_SYMBOL_KU.contains(&ku)
 }
 
 fn is_daily_japanese_text(codepoint: u32) -> bool {
@@ -81,5 +86,8 @@ mod tests {
         assert!(!is_arib_additional_symbol('年'));
         assert!(!is_arib_additional_symbol('カ'));
         assert!(!is_arib_additional_symbol('→'));
+        assert!(!is_arib_additional_symbol_ku(86));
+        assert!(is_arib_additional_symbol_ku(90));
+        assert!(is_arib_additional_symbol_ku(94));
     }
 }
