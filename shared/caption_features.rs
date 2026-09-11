@@ -25,8 +25,15 @@ pub(crate) struct AccessibilityEvidence {
     pub(crate) offscreen_cue: bool,
 }
 
+pub(crate) struct CaptionSemantics {
+    pub(crate) text_accessibility: AccessibilityEvidence,
+    pub(crate) declared_accessibility_ranges: Vec<Range<usize>>,
+    pub(crate) removable_accessibility_ranges: Vec<Range<usize>>,
+}
+
+#[allow(dead_code, reason = "convenience view of the shared semantic result")]
 pub(crate) fn accessibility_ranges(text: &str) -> Vec<Range<usize>> {
-    accessibility_evidence(text).ranges
+    caption_semantics(text, &[]).removable_accessibility_ranges
 }
 
 fn single_range_cue(range: Range<usize>) -> Vec<Range<usize>> {
@@ -70,7 +77,8 @@ pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
     // establish narration, even at a line boundary.
     let narration_delimiter_start = cue_ranges.len();
     add_narration_delimiter_ranges(&chars, &mut cue_ranges);
-    let ranges = cue_ranges.iter().flatten().cloned().collect();
+    let mut ranges = cue_ranges.iter().flatten().cloned().collect();
+    normalize_ranges(&mut ranges);
     AccessibilityEvidence {
         narration_delimiter: cue_ranges.len() > narration_delimiter_start,
         ranges,
@@ -83,6 +91,44 @@ pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
         phone_cue,
         offscreen_cue,
     }
+}
+
+pub(crate) fn caption_semantics(
+    text: &str,
+    declared_accessibility_ranges: &[Range<usize>],
+) -> CaptionSemantics {
+    let length = text.chars().count();
+    let mut declared = declared_accessibility_ranges
+        .iter()
+        .map(|range| range.start.min(length)..range.end.min(length))
+        .filter(|range| range.end > range.start)
+        .collect::<Vec<_>>();
+    normalize_ranges(&mut declared);
+
+    let text_accessibility = accessibility_evidence(text);
+    let mut removable = declared.clone();
+    removable.extend(text_accessibility.ranges.iter().cloned());
+    normalize_ranges(&mut removable);
+    CaptionSemantics {
+        text_accessibility,
+        declared_accessibility_ranges: declared,
+        removable_accessibility_ranges: removable,
+    }
+}
+
+fn normalize_ranges(ranges: &mut Vec<Range<usize>>) {
+    ranges.sort_by_key(|range| (range.start, range.end));
+    let mut normalized: Vec<Range<usize>> = Vec::with_capacity(ranges.len());
+    for range in ranges.drain(..) {
+        if let Some(previous) = normalized.last_mut()
+            && range.start < previous.end
+        {
+            previous.end = previous.end.max(range.end);
+        } else {
+            normalized.push(range);
+        }
+    }
+    *ranges = normalized;
 }
 
 fn add_leading_speaker_cue_ranges(chars: &[char], cue_ranges: &mut Vec<Vec<Range<usize>>>) {
@@ -238,9 +284,7 @@ pub(crate) fn retained_characters_with_accessibility_ranges(
     }
     let gaiji = (!preserve_gaiji).then(|| gaiji_ranges(text));
     let accessibility = (!preserve_accessibility).then(|| {
-        let mut ranges = accessibility_ranges(text);
-        ranges.extend_from_slice(additional_accessibility_ranges);
-        ranges
+        caption_semantics(text, additional_accessibility_ranges).removable_accessibility_ranges
     });
     (0..length)
         .map(|index| {
@@ -389,5 +433,23 @@ mod tests {
             .collect::<String>();
 
         assert_eq!(filtered, "前後");
+    }
+
+    #[test]
+    fn declared_and_text_cues_form_one_broadcast_semantic_result() {
+        let semantics = caption_semantics("♪〜前ドア音後➡", &[3..6, 99..100]);
+        assert!(semantics.text_accessibility.music_cue);
+        assert!(semantics.text_accessibility.continuation_cue);
+        assert_eq!(semantics.declared_accessibility_ranges, vec![3..6]);
+        assert_eq!(
+            semantics.removable_accessibility_ranges,
+            vec![0..2, 3..6, 7..8]
+        );
+
+        let adjacent_roles = caption_semantics("前後", &[0..1, 1..2]);
+        assert_eq!(
+            adjacent_roles.declared_accessibility_ranges,
+            vec![0..1, 1..2]
+        );
     }
 }

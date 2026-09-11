@@ -179,8 +179,19 @@ impl CaptionFeatureSummary {
 }
 
 impl CaptionFeatureSummary {
-    fn observe_accessibility(&mut self, evidence: &crate::caption_features::AccessibilityEvidence) {
-        self.observe_accessibility_excluding(evidence, &[]);
+    fn observe_semantics(&mut self, semantics: &crate::caption_features::CaptionSemantics) {
+        if !semantics.declared_accessibility_ranges.is_empty() {
+            self.accessibility = true;
+            self.mark_count(
+                "accessibility",
+                semantics.declared_accessibility_ranges.len(),
+            );
+            self.mark_detail_flag("accessibility", "semanticRole", true);
+        }
+        self.observe_accessibility_excluding(
+            &semantics.text_accessibility,
+            &semantics.declared_accessibility_ranges,
+        );
     }
 
     fn observe_accessibility_excluding(
@@ -307,7 +318,7 @@ impl CaptionFeatureSummary {
                 .iter()
                 .map(|character| character.utf8.as_str())
                 .collect::<String>();
-            self.observe_accessibility(&crate::caption_features::accessibility_evidence(&text));
+            self.observe_semantics(&crate::caption_features::caption_semantics(&text, &[]));
         }
     }
 
@@ -395,15 +406,10 @@ impl CaptionFeatureSummary {
             .iter()
             .map(|cue| cue.start..cue.end)
             .collect::<Vec<_>>();
-        if !semantic_ranges.is_empty() {
-            self.accessibility = true;
-            self.mark_count("accessibility", semantic_ranges.len());
-            self.mark_detail_flag("accessibility", "semanticRole", true);
-        }
-        self.observe_accessibility_excluding(
-            &crate::caption_features::accessibility_evidence(&caption.text),
+        self.observe_semantics(&crate::caption_features::caption_semantics(
+            &caption.text,
             &semantic_ranges,
-        );
+        ));
     }
 }
 
@@ -745,6 +751,53 @@ mod feature_tests {
             features.details("accessibility").unwrap()["continuationCue"],
             true
         );
+    }
+
+    #[test]
+    fn b24_and_b62_text_use_the_same_broadcast_semantic_model() {
+        let text = "（拍手）本文➡";
+        let characters = text
+            .chars()
+            .map(|text| {
+                let mut character = b24_character();
+                character.utf8 = text.to_string();
+                character
+            })
+            .collect::<Vec<_>>();
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![native_b24::CaptionRegion {
+                x: 0,
+                y: 0,
+                width: 960,
+                height: 540,
+                is_ruby: false,
+                first_character: 0,
+                character_count: characters.len() as u32,
+            }],
+            characters,
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let caption = crate::parse_ttml_captions(
+            &format!("<tt><body><p begin='0s' end='1s'>{text}</p></body></tt>"),
+            0,
+        )
+        .remove(0);
+        let mut b24 = CaptionFeatureSummary::default();
+        let mut b62 = CaptionFeatureSummary::default();
+
+        b24.observe_b24_scene(&scene);
+        b62.observe_ttml(&caption);
+
+        assert_eq!(
+            b24.observed_counts["accessibility"],
+            b62.observed_counts["accessibility"]
+        );
+        assert_eq!(b24.details("accessibility"), b62.details("accessibility"));
     }
 
     #[test]

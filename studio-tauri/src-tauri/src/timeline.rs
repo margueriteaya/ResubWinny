@@ -2,13 +2,14 @@ use std::{
     collections::BTreeSet,
     fs::File,
     io::{BufRead, BufReader, Seek},
+    ops::Range,
 };
 
 use serde::Serialize;
 
 use crate::{
     arib_symbols::{is_arib_additional_symbol, is_arib_additional_symbol_codepoint},
-    caption_features::{accessibility_ranges, gaiji_ranges},
+    caption_features::{caption_semantics, gaiji_ranges},
 };
 
 const MAX_WINDOW_SIZE: usize = 512;
@@ -540,10 +541,11 @@ fn event_presentation(
     }
     if let Some(source_text) = value.get("text").and_then(serde_json::Value::as_str) {
         let text = truncate(source_text);
-        add_text_features(&text, &mut features, &mut highlights);
-        add_structured_accessibility_features(
-            value,
-            source_text.chars().count().min(240),
+        add_gaiji_features(&text, &mut features, &mut highlights);
+        add_caption_semantics(
+            &text,
+            0,
+            &declared_accessibility_ranges(value),
             &mut features,
             &mut highlights,
         );
@@ -692,12 +694,18 @@ fn event_presentation(
                 .skip(start_offset)
                 .take(end_offset - start_offset)
                 .collect::<String>();
-            add_accessibility_features(&region_text, start_offset, &mut features, &mut highlights);
+            add_caption_semantics(
+                &region_text,
+                start_offset,
+                &[],
+                &mut features,
+                &mut highlights,
+            );
             classified_region = true;
         }
     }
     if !classified_region {
-        add_accessibility_features(&text, 0, &mut features, &mut highlights);
+        add_caption_semantics(&text, 0, &[], &mut features, &mut highlights);
     }
     (
         text,
@@ -715,15 +723,6 @@ fn normalize_ttml_color(value: &str) -> Option<String> {
     Some(format!("#{}", hex[..6].to_ascii_uppercase()))
 }
 
-fn add_text_features(
-    text: &str,
-    features: &mut BTreeSet<String>,
-    highlights: &mut Vec<TimelineHighlight>,
-) {
-    add_gaiji_features(text, features, highlights);
-    add_accessibility_features(text, 0, features, highlights);
-}
-
 fn add_gaiji_features(
     text: &str,
     features: &mut BTreeSet<String>,
@@ -739,13 +738,16 @@ fn add_gaiji_features(
     }
 }
 
-fn add_accessibility_features(
+fn add_caption_semantics(
     text: &str,
     offset: usize,
+    declared_accessibility_ranges: &[Range<usize>],
     features: &mut BTreeSet<String>,
     highlights: &mut Vec<TimelineHighlight>,
 ) {
-    for range in accessibility_ranges(text) {
+    for range in
+        caption_semantics(text, declared_accessibility_ranges).removable_accessibility_ranges
+    {
         features.insert("accessibility".into());
         highlights.push(TimelineHighlight {
             start: offset + range.start,
@@ -755,45 +757,27 @@ fn add_accessibility_features(
     }
 }
 
-fn add_structured_accessibility_features(
-    value: &serde_json::Value,
-    text_len: usize,
-    features: &mut BTreeSet<String>,
-    highlights: &mut Vec<TimelineHighlight>,
-) {
+fn declared_accessibility_ranges(value: &serde_json::Value) -> Vec<Range<usize>> {
     let Some(cues) = value
         .get("accessibility_cues")
         .or_else(|| value.get("accessibilityCues"))
         .and_then(serde_json::Value::as_array)
     else {
-        return;
+        return Vec::new();
     };
-    for cue in cues {
-        let start = cue
-            .get("start")
-            .and_then(serde_json::Value::as_u64)
-            .and_then(|value| usize::try_from(value).ok())
-            .unwrap_or(0)
-            .min(text_len);
-        let end = cue
-            .get("end")
-            .and_then(serde_json::Value::as_u64)
-            .and_then(|value| usize::try_from(value).ok())
-            .unwrap_or(start)
-            .min(text_len);
-        if end <= start {
-            continue;
-        }
-        features.insert("accessibility".into());
-        highlights.retain(|highlight| {
-            highlight.feature != "accessibility" || highlight.end <= start || end <= highlight.start
-        });
-        highlights.push(TimelineHighlight {
-            start,
-            end,
-            feature: "accessibility".into(),
-        });
-    }
+    cues.iter()
+        .filter_map(|cue| {
+            let start = cue
+                .get("start")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok())?;
+            let end = cue
+                .get("end")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok())?;
+            (end > start).then_some(start..end)
+        })
+        .collect()
 }
 
 fn truncate(value: &str) -> String {
