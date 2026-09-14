@@ -778,14 +778,12 @@ fn add_accessibility_ranges(
 }
 
 fn declared_accessibility_ranges(value: &serde_json::Value) -> Vec<Range<usize>> {
-    let Some(cues) = value
+    let mut ranges = value
         .get("accessibility_cues")
         .or_else(|| value.get("accessibilityCues"))
         .and_then(serde_json::Value::as_array)
-    else {
-        return Vec::new();
-    };
-    cues.iter()
+        .into_iter()
+        .flatten()
         .filter_map(|cue| {
             let start = cue
                 .get("start")
@@ -797,7 +795,21 @@ fn declared_accessibility_ranges(value: &serde_json::Value) -> Vec<Range<usize>>
                 .and_then(|value| usize::try_from(value).ok())?;
             (end > start).then_some(start..end)
         })
-        .collect()
+        .collect::<Vec<_>>();
+    ranges.extend(
+        value
+            .get("inferred_accessibility_ranges")
+            .or_else(|| value.get("inferredAccessibilityRanges"))
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|range| {
+                let start = range.get("start")?.as_u64()?.try_into().ok()?;
+                let end = range.get("end")?.as_u64()?.try_into().ok()?;
+                (end > start).then_some(start..end)
+            }),
+    );
+    ranges
 }
 
 fn truncate(value: &str) -> String {
@@ -1152,6 +1164,23 @@ mod tests {
         assert!(
             highlights.iter().any(|item| {
                 item.feature == "accessibility" && (item.start, item.end) == (1, 4)
+            })
+        );
+    }
+
+    #[test]
+    fn highlights_inferred_b62_cross_fragment_ranges() {
+        let value = serde_json::json!({
+            "text": "わたしオン！＞",
+            "inferred_accessibility_ranges": [{ "start": 6, "end": 7 }]
+        });
+
+        let (_, features, highlights, _) = event_presentation(&value);
+
+        assert!(features.iter().any(|feature| feature == "accessibility"));
+        assert!(
+            highlights.iter().any(|item| {
+                item.feature == "accessibility" && (item.start, item.end) == (6, 7)
             })
         );
     }

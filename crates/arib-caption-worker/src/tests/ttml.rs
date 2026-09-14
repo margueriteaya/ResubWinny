@@ -372,6 +372,56 @@ fn explicit_accessibility_roles_follow_the_preservation_choice() {
 }
 
 #[test]
+fn b62_caption_group_pairs_and_filters_cross_fragment_delimiters() {
+    let mut captions = parse_ttml_captions(
+        r#"<tt><body><div>
+          <p begin='0s' end='1s'>＜たった１錠。</p>
+          <p begin='0s' end='1s'>わたしオン！＞</p>
+        </div></body></tt>"#,
+        0,
+    );
+    annotate_ttml_group_semantics(&mut captions);
+    assert_eq!(captions.len(), 2);
+    assert_eq!(captions[0].inferred_accessibility_ranges, vec![0..1]);
+    assert_eq!(captions[1].inferred_accessibility_ranges, vec![6..7]);
+
+    let options = ConversionOptions {
+        preserve_accessibility: false,
+        ..Default::default()
+    };
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let directory = std::env::temp_dir().join(format!("arib-ttml-cross-fragment-{stamp}"));
+    fs::create_dir_all(&directory).expect("temporary directory");
+    let ass = directory.join("captions.ass");
+    let ttml = directory.join("captions.ttml");
+    let mut ass_writer = BufWriter::new(File::create(&ass).expect("ASS output"));
+    write_ass_header(&mut ass_writer).expect("ASS header");
+    write_ass_ttml_group(&mut ass_writer, &captions, &options).expect("ASS captions");
+    ass_writer.flush().expect("ASS flush");
+    let mut ttml_writer = BufWriter::new(File::create(&ttml).expect("TTML output"));
+    write_ttml_header(&mut ttml_writer).expect("TTML header");
+    for caption in &captions {
+        write_ttml_caption(&mut ttml_writer, caption, &options).expect("TTML caption");
+    }
+    write_ttml_footer(&mut ttml_writer).expect("TTML footer");
+    ttml_writer.flush().expect("TTML flush");
+
+    for text in [
+        fs::read_to_string(&ass).expect("ASS text"),
+        fs::read_to_string(&ttml).expect("TTML text"),
+    ] {
+        assert!(text.contains("たった１錠。"));
+        assert!(text.contains("わたしオン！"));
+        assert!(!text.contains('＜'));
+        assert!(!text.contains('＞'));
+    }
+    fs::remove_dir_all(directory).expect("cleanup outputs");
+}
+
+#[test]
 fn preserves_paragraph_level_accessibility_role_on_ttml_output() {
     let caption = parse_ttml_captions(
         r#"<tt xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><p begin='0s' end='1s' ttm:role='narration'>語り</p></body></tt>"#,

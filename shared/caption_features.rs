@@ -33,6 +33,7 @@ pub(crate) struct CaptionSemantics {
 
 pub(crate) struct CaptionGroupSemantics {
     pub(crate) fragments: Vec<CaptionSemantics>,
+    pub(crate) cross_fragment_ranges: Vec<Vec<Range<usize>>>,
     pub(crate) cross_fragment_delimiter_count: usize,
 }
 
@@ -142,6 +143,7 @@ pub(crate) fn caption_group_semantics(
         .iter()
         .map(|text| text.chars().collect::<Vec<_>>())
         .collect::<Vec<_>>();
+    let mut cross_fragment_ranges = vec![Vec::new(); texts.len()];
     let mut cross_fragment_delimiter_count = 0;
     for (open, close) in [('<', '>'), ('＜', '＞'), ('≪', '≫'), ('《', '》')] {
         let mut pending: Option<(usize, usize)> = None;
@@ -166,6 +168,8 @@ pub(crate) fn caption_group_semantics(
                 fragments[fragment_index]
                     .removable_accessibility_ranges
                     .push(end..end + 1);
+                cross_fragment_ranges[open_fragment].push(open_index..open_index + 1);
+                cross_fragment_ranges[fragment_index].push(end..end + 1);
                 fragments[open_fragment]
                     .text_accessibility
                     .narration_delimiter = true;
@@ -184,6 +188,7 @@ pub(crate) fn caption_group_semantics(
     }
     CaptionGroupSemantics {
         fragments,
+        cross_fragment_ranges,
         cross_fragment_delimiter_count,
     }
 }
@@ -571,6 +576,7 @@ mod tests {
         let group =
             caption_group_semantics(&["＜たった１錠。", "わたしオン「アレジオン」！＞"], &[]);
         assert_eq!(group.cross_fragment_delimiter_count, 1);
+        assert_eq!(group.cross_fragment_ranges, vec![vec![0..1], vec![13..14]]);
         assert_eq!(
             group.fragments[0].removable_accessibility_ranges,
             vec![0..1]
@@ -588,5 +594,18 @@ mod tests {
                 .iter()
                 .all(|fragment| fragment.removable_accessibility_ranges.is_empty())
         );
+
+        for (first, second) in [
+            ("<語りは", "続きます>"),
+            ("＜語りは", "続きます＞"),
+            ("≪心の声は", "続きます≫"),
+            ("《回想は", "続きます》"),
+            ("（伊藤）＜説明は", "続きます＞"),
+        ] {
+            let group = caption_group_semantics(&[first, second], &[]);
+            assert_eq!(group.cross_fragment_delimiter_count, 1, "{first}{second}");
+            assert_eq!(group.cross_fragment_ranges[0].len(), 1);
+            assert_eq!(group.cross_fragment_ranges[1].len(), 1);
+        }
     }
 }

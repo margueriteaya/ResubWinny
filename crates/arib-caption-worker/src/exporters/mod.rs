@@ -28,6 +28,7 @@ pub(crate) fn export_ttml_text(
     value: &str,
     style: &TtmlCaptionStyle,
     source: Option<&TtmlCaptionSource>,
+    additional_accessibility_ranges: &[std::ops::Range<usize>],
     options: &ConversionOptions,
 ) -> String {
     let resource_backed = style
@@ -35,9 +36,19 @@ pub(crate) fn export_ttml_text(
         .as_deref()
         .and_then(subt_resource_index)
         .is_some();
+    let retained = crate::caption_features::retained_characters_with_accessibility_ranges(
+        value,
+        true,
+        options.preserve_accessibility,
+        additional_accessibility_ranges,
+    );
     let text = value
         .chars()
-        .filter_map(|character| {
+        .enumerate()
+        .filter_map(|(index, character)| {
+            if !retained.get(index).copied().unwrap_or(false) {
+                return None;
+            }
             if !resource_backed || ttml_drcs_kind(character).is_none() {
                 return Some(character.to_string());
             }

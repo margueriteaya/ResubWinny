@@ -250,6 +250,7 @@ pub(crate) fn write_ttml_caption(
         &caption.text,
         &caption.style,
         caption.source.as_ref(),
+        &caption.inferred_accessibility_ranges,
         options,
     );
     if filtered_text.is_empty() {

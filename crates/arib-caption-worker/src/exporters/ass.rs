@@ -120,6 +120,7 @@ fn write_ass_standalone_ruby(
                 &caption.text,
                 &caption.style,
                 caption.source.as_ref(),
+                &caption.inferred_accessibility_ranges,
                 options,
             )
         });
@@ -259,6 +260,7 @@ fn write_ass_ttml_caption_at(
         &caption.text,
         &caption.style,
         caption.source.as_ref(),
+        &caption.inferred_accessibility_ranges,
         options,
     );
     if filtered_text.is_empty() {
@@ -277,7 +279,7 @@ fn write_ass_ttml_caption_at(
         .map(|body| parse_ass_inline_runs(&body, &caption.style))
         .unwrap_or_default();
     for run in &mut runs {
-        run.text = export_ttml_text(&run.text, &run.style, caption.source.as_ref(), options);
+        run.text = export_ttml_text(&run.text, &run.style, caption.source.as_ref(), &[], options);
     }
     runs.retain(|run| !run.text.is_empty());
     if runs.is_empty() {
@@ -532,7 +534,10 @@ pub(crate) fn filter_ttml_caption_preserved_body(
     caption: &TtmlCaption,
     options: &ConversionOptions,
 ) -> Option<String> {
-    let body = if !options.preserve_accessibility && !caption.accessibility_cues.is_empty() {
+    let body = if !options.preserve_accessibility
+        && (!caption.accessibility_cues.is_empty()
+            || !caption.inferred_accessibility_ranges.is_empty())
+    {
         filter_ttml_caption_accessibility(body, caption)?
     } else {
         body.to_owned()
@@ -573,6 +578,12 @@ fn filter_ttml_caption_accessibility(body: &str, caption: &TtmlCaption) -> Optio
         .accessibility_cues
         .iter()
         .map(|cue| offset.saturating_add(cue.start)..offset.saturating_add(cue.end))
+        .chain(
+            caption
+                .inferred_accessibility_ranges
+                .iter()
+                .map(|range| offset.saturating_add(range.start)..offset.saturating_add(range.end)),
+        )
         .collect::<Vec<_>>();
     let retained = crate::caption_features::retained_characters_with_accessibility_ranges(
         &text,
@@ -699,7 +710,7 @@ fn filter_ttml_preserved_body_with_source(
                 keep
             })
             .collect::<String>();
-        let filtered = export_ttml_text(&retained_text, &style, source, options);
+        let filtered = export_ttml_text(&retained_text, &style, source, &[], options);
         let range = node.range();
         edits.push((
             range.start - prefix.len()..range.end - prefix.len(),

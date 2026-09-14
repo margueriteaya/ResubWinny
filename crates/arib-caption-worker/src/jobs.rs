@@ -26,6 +26,7 @@ fn flush_ass_ttml_group(
     ttml_writer: &mut Option<BufWriter<File>>,
     options: &ConversionOptions,
 ) -> io::Result<()> {
+    annotate_ttml_group_semantics(pending);
     associate_standalone_ttml_ruby(pending);
     for caption in pending.iter() {
         if let Some(archive_writer) = archive_writer.as_mut() {
@@ -38,6 +39,32 @@ fn flush_ass_ttml_group(
     write_ass_ttml_group(writer, pending, options)?;
     pending.clear();
     Ok(())
+}
+
+pub(crate) fn annotate_ttml_group_semantics(captions: &mut [TtmlCaption]) {
+    let texts = captions
+        .iter()
+        .map(|caption| caption.text.as_str())
+        .collect::<Vec<_>>();
+    let declared = captions
+        .iter()
+        .map(|caption| {
+            caption
+                .accessibility_cues
+                .iter()
+                .map(|cue| cue.start..cue.end)
+                .chain(caption.inferred_accessibility_ranges.iter().cloned())
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let semantics = crate::caption_features::caption_group_semantics(&texts, &declared);
+    for (caption, ranges) in captions.iter_mut().zip(semantics.cross_fragment_ranges) {
+        caption.inferred_accessibility_ranges.extend(ranges);
+        caption
+            .inferred_accessibility_ranges
+            .sort_by_key(|range| (range.start, range.end));
+        caption.inferred_accessibility_ranges.dedup();
+    }
 }
 
 #[derive(Clone, Copy)]

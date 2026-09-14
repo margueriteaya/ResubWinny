@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::ops::Range;
 
 use crate::ARIB_TTML_NAMESPACE;
 use crate::caption::ruby::TtmlRubyBinding;
@@ -419,6 +420,7 @@ impl CaptionFeatureSummary {
             .accessibility_cues
             .iter()
             .map(|cue| cue.start..cue.end)
+            .chain(caption.inferred_accessibility_ranges.iter().cloned())
             .collect::<Vec<_>>();
         self.observe_semantics(&crate::caption_features::caption_semantics(
             &caption.text,
@@ -1065,6 +1067,8 @@ pub(crate) struct TtmlCaption {
     pub(crate) ruby_bindings: Vec<TtmlRubyBinding>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) accessibility_cues: Vec<TtmlAccessibilityCue>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) inferred_accessibility_ranges: Vec<Range<usize>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) source_layout: Option<TtmlSourceLayout>,
     pub(crate) source: Option<TtmlCaptionSource>,
