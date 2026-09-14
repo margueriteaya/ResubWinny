@@ -309,16 +309,30 @@ impl CaptionFeatureSummary {
             self.mark_count("gaiji", gaiji_count);
             self.mark_detail_flag("gaiji", "aribAdditionalSymbol", true);
         }
-        for characters in scene.regions.iter().filter_map(|region| {
-            let start = region.first_character as usize;
-            let end = start.saturating_add(region.character_count as usize);
-            scene.characters.get(start..end)
-        }) {
-            let text = characters
-                .iter()
-                .map(|character| character.utf8.as_str())
-                .collect::<String>();
-            self.observe_semantics(&crate::caption_features::caption_semantics(&text, &[]));
+        let texts = scene
+            .regions
+            .iter()
+            .filter_map(|region| {
+                let start = region.first_character as usize;
+                let end = start.saturating_add(region.character_count as usize);
+                scene.characters.get(start..end)
+            })
+            .map(|characters| {
+                characters
+                    .iter()
+                    .map(|character| character.utf8.as_str())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>();
+        let references = texts.iter().map(String::as_str).collect::<Vec<_>>();
+        let semantics = crate::caption_features::caption_group_semantics(&references, &[]);
+        for fragment in &semantics.fragments {
+            self.observe_semantics(fragment);
+        }
+        if semantics.cross_fragment_delimiter_count > 0 {
+            self.accessibility = true;
+            self.mark_count("accessibility", semantics.cross_fragment_delimiter_count);
+            self.mark_detail_flag("accessibility", "narrationDelimiter", true);
         }
     }
 
@@ -711,6 +725,56 @@ mod feature_tests {
                 first_character: 0,
                 character_count: 4,
             }],
+            characters,
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(
+            features.details("accessibility").unwrap()["narrationDelimiter"],
+            true
+        );
+    }
+
+    #[test]
+    fn narration_delimiters_can_pair_across_b24_regions() {
+        let characters = "＜たった１錠。わたしオン！＞"
+            .chars()
+            .map(|text| {
+                let mut character = b24_character();
+                character.utf8 = text.to_string();
+                character
+            })
+            .collect::<Vec<_>>();
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![
+                native_b24::CaptionRegion {
+                    x: 0,
+                    y: 0,
+                    width: 960,
+                    height: 270,
+                    is_ruby: false,
+                    first_character: 0,
+                    character_count: 7,
+                },
+                native_b24::CaptionRegion {
+                    x: 0,
+                    y: 270,
+                    width: 960,
+                    height: 270,
+                    is_ruby: false,
+                    first_character: 7,
+                    character_count: (characters.len() - 7) as u32,
+                },
+            ],
             characters,
             drcs_glyphs: Vec::new(),
             rendered_image: None,

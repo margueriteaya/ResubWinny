@@ -254,6 +254,47 @@ fn ttml_feature_filter_uses_the_complete_b24_text_range() {
 }
 
 #[test]
+fn cross_region_semantic_delimiters_are_filtered_from_b24_exports() {
+    let scene = scene_with_text_regions(
+        1_250,
+        &[(100, 200, "＜たった１錠。"), (100, 240, "わたしオン！＞")],
+    );
+    let mut intervals = scene_intervals(&scene);
+    for interval in &mut intervals {
+        interval.end_ms = 2_500;
+    }
+    assert_eq!(intervals[0].accessibility_ranges, vec![0..1]);
+    assert_eq!(intervals[1].accessibility_ranges, vec![6..7]);
+
+    let options = ConversionOptions {
+        preserve_accessibility: false,
+        ..ConversionOptions::default()
+    };
+    let ttml_text = intervals
+        .iter()
+        .map(|interval| interval_ttml_text(interval, &options))
+        .collect::<String>();
+    assert_eq!(ttml_text, "たった１錠。わたしオン！");
+
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let output = std::env::temp_dir().join(format!("arib-cross-region-cue-{stamp}.ass"));
+    let mut writer = BufWriter::new(File::create(&output).expect("output"));
+    for interval in &intervals {
+        write_ass_interval(&mut writer, interval, &options).expect("write interval");
+    }
+    writer.flush().expect("flush");
+    let ass = fs::read_to_string(&output).expect("read");
+    assert!(ass.contains("たった１錠。"));
+    assert!(ass.contains("わたしオン！"));
+    assert!(!ass.contains('＜'));
+    assert!(!ass.contains('＞'));
+    fs::remove_file(output).expect("cleanup");
+}
+
+#[test]
 fn turns_packed_drcs_pixels_into_ass_drawing() {
     let glyph = native_b24::DrcsGlyph {
         drcs_code: 1,
@@ -506,6 +547,7 @@ fn ass_export_groups_editable_ruby_text_and_keeps_inline_styles() {
                 utf8: "ん".into(),
             },
         ],
+        accessibility_ranges: Vec::new(),
         drcs_glyphs: Vec::new(),
         ruby_binding: None,
     };
@@ -580,6 +622,7 @@ fn ass_export_splits_discontinuous_b24_positions() {
             character("本", 140),
             character("語", 300),
         ],
+        accessibility_ranges: Vec::new(),
         drcs_glyphs: Vec::new(),
         ruby_binding: None,
     };
@@ -643,6 +686,7 @@ fn unpositioned_b24_group_orders_fragments_by_source_rows_and_writes_one_cue() {
                 utf8: character.to_string(),
             })
             .collect(),
+        accessibility_ranges: Vec::new(),
         drcs_glyphs: Vec::new(),
         ruby_binding: None,
     };

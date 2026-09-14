@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 use serde::Serialize;
 
@@ -23,6 +23,8 @@ pub(crate) struct RegionInterval {
     pub(crate) source_pid: Option<u16>,
     pub(crate) region: native_b24::CaptionRegion,
     pub(crate) characters: Vec<native_b24::CaptionCharacter>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) accessibility_ranges: Vec<Range<usize>>,
     pub(crate) drcs_glyphs: Vec<native_b24::DrcsGlyph>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ruby_binding: Option<RubyBinding>,
@@ -44,12 +46,32 @@ impl RegionInterval {
             && self.plane_height == other.plane_height
             && self.key() == other.key()
             && self.characters == other.characters
+            && self.accessibility_ranges == other.accessibility_ranges
             && self.drcs_glyphs == other.drcs_glyphs
     }
 }
 
 pub(crate) fn scene_intervals(scene: &native_b24::CaptionScene) -> Vec<RegionInterval> {
     let ruby_bindings = scene_ruby_bindings(scene);
+    let region_texts = scene
+        .regions
+        .iter()
+        .map(|region| {
+            let start = region.first_character as usize;
+            let end = start
+                .saturating_add(region.character_count as usize)
+                .min(scene.characters.len());
+            scene
+                .characters
+                .get(start..end)
+                .unwrap_or_default()
+                .iter()
+                .map(|character| character.utf8.as_str())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>();
+    let references = region_texts.iter().map(String::as_str).collect::<Vec<_>>();
+    let semantics = crate::caption_features::caption_group_semantics(&references, &[]);
     scene
         .regions
         .iter()
@@ -81,6 +103,11 @@ pub(crate) fn scene_intervals(scene: &native_b24::CaptionScene) -> Vec<RegionInt
                     source_pid: None,
                     region: region.clone(),
                     characters,
+                    accessibility_ranges: semantics
+                        .fragments
+                        .get(region_index)
+                        .map(|fragment| fragment.removable_accessibility_ranges.clone())
+                        .unwrap_or_default(),
                     drcs_glyphs,
                     ruby_binding: ruby_bindings.get(&region_index).cloned(),
                 }

@@ -834,7 +834,25 @@ pub(crate) fn write_ass_interval(
     let scale_y = ASS_PLAY_RES_Y as f32 / interval.plane_height.max(1) as f32;
     let scale_uniform = scale_x.min(scale_y);
     let mut line = Vec::new();
-    for character in &interval.characters {
+    for (source_index, character) in interval.characters.iter().enumerate() {
+        if !options.preserve_accessibility
+            && interval
+                .accessibility_ranges
+                .iter()
+                .any(|range| range.contains(&source_index))
+        {
+            write_filtered_ass_character_line(
+                writer,
+                interval,
+                &line,
+                scale_x,
+                scale_y,
+                scale_uniform,
+                options,
+            )?;
+            line.clear();
+            continue;
+        }
         if !options.preserve_gaiji && b24_character_is_gaiji_source(character) {
             write_filtered_ass_character_line(
                 writer,
@@ -951,7 +969,15 @@ pub(crate) fn write_ass_interval_group(
         .collect::<Vec<_>>();
     ordered_intervals.sort_by_key(|interval| (interval.region.y, interval.region.x));
     for interval in ordered_intervals {
-        for character in &interval.characters {
+        for (source_index, character) in interval.characters.iter().enumerate() {
+            if !options.preserve_accessibility
+                && interval
+                    .accessibility_ranges
+                    .iter()
+                    .any(|range| range.contains(&source_index))
+            {
+                continue;
+            }
             let mut text = b24_export_character_text(character, interval, options)
                 .map(|text| export_text(text, options))
                 .unwrap_or_default();

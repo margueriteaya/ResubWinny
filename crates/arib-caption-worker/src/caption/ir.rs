@@ -153,6 +153,7 @@ mod tests {
                 enclosure_style: 0,
                 utf8: "字".into(),
             }],
+            accessibility_ranges: Vec::new(),
             drcs_glyphs: Vec::new(),
             ruby_binding: None,
         };

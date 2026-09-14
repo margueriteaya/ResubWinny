@@ -31,6 +31,11 @@ pub(crate) struct CaptionSemantics {
     pub(crate) removable_accessibility_ranges: Vec<Range<usize>>,
 }
 
+pub(crate) struct CaptionGroupSemantics {
+    pub(crate) fragments: Vec<CaptionSemantics>,
+    pub(crate) cross_fragment_delimiter_count: usize,
+}
+
 #[allow(dead_code, reason = "convenience view of the shared semantic result")]
 pub(crate) fn accessibility_ranges(text: &str) -> Vec<Range<usize>> {
     caption_semantics(text, &[]).removable_accessibility_ranges
@@ -116,6 +121,91 @@ pub(crate) fn caption_semantics(
     }
 }
 
+pub(crate) fn caption_group_semantics(
+    texts: &[&str],
+    declared_accessibility_ranges: &[Vec<Range<usize>>],
+) -> CaptionGroupSemantics {
+    let mut fragments = texts
+        .iter()
+        .enumerate()
+        .map(|(index, text)| {
+            caption_semantics(
+                text,
+                declared_accessibility_ranges
+                    .get(index)
+                    .map(Vec::as_slice)
+                    .unwrap_or_default(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let characters = texts
+        .iter()
+        .map(|text| text.chars().collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+    let mut cross_fragment_delimiter_count = 0;
+    for (open, close) in [('<', '>'), ('＜', '＞'), ('≪', '≫'), ('《', '》')] {
+        let mut pending: Option<(usize, usize)> = None;
+        for (fragment_index, chars) in characters.iter().enumerate() {
+            let Some((start, end)) = semantic_content_bounds(chars) else {
+                continue;
+            };
+            let start_is_unmatched = chars[start] == open
+                && !fragments[fragment_index]
+                    .removable_accessibility_ranges
+                    .iter()
+                    .any(|range| range.contains(&start));
+            let end_is_unmatched = chars[end] == close
+                && !fragments[fragment_index]
+                    .removable_accessibility_ranges
+                    .iter()
+                    .any(|range| range.contains(&end));
+            if end_is_unmatched && let Some((open_fragment, open_index)) = pending.take() {
+                fragments[open_fragment]
+                    .removable_accessibility_ranges
+                    .push(open_index..open_index + 1);
+                fragments[fragment_index]
+                    .removable_accessibility_ranges
+                    .push(end..end + 1);
+                fragments[open_fragment]
+                    .text_accessibility
+                    .narration_delimiter = true;
+                fragments[fragment_index]
+                    .text_accessibility
+                    .narration_delimiter = true;
+                cross_fragment_delimiter_count += 1;
+            }
+            if start_is_unmatched {
+                pending = Some((fragment_index, start));
+            }
+        }
+    }
+    for fragment in &mut fragments {
+        normalize_ranges(&mut fragment.removable_accessibility_ranges);
+    }
+    CaptionGroupSemantics {
+        fragments,
+        cross_fragment_delimiter_count,
+    }
+}
+
+fn semantic_content_bounds(chars: &[char]) -> Option<(usize, usize)> {
+    let mut start = chars
+        .iter()
+        .position(|character| !character.is_whitespace())?;
+    let end = chars
+        .iter()
+        .rposition(|character| !character.is_whitespace())?;
+    if matches!(chars[start], '(' | '（') {
+        let close = if chars[start] == '(' { ')' } else { '）' };
+        if let Some(annotation_end) = (start + 1..=end).find(|index| chars[*index] == close) {
+            start = (annotation_end + 1..=end)
+                .find(|index| !chars[*index].is_whitespace())
+                .unwrap_or(end);
+        }
+    }
+    Some((start, end))
+}
+
 fn normalize_ranges(ranges: &mut Vec<Range<usize>>) {
     ranges.sort_by_key(|range| (range.start, range.end));
     let mut normalized: Vec<Range<usize>> = Vec::with_capacity(ranges.len());
@@ -196,10 +286,21 @@ fn add_narration_delimiter_ranges(chars: &[char], cue_ranges: &mut Vec<Vec<Range
         let content_end = (line_start..line_end)
             .rev()
             .find(|index| !chars[*index].is_whitespace());
-        if let (Some(start), Some(end)) = (content_start, content_end) {
+        if let (Some(mut start), Some(end)) = (content_start, content_end) {
+            if matches!(chars[start], '(' | '（') {
+                let close = if chars[start] == '(' { ')' } else { '）' };
+                if let Some(annotation_end) = (start + 1..=end).find(|index| chars[*index] == close)
+                {
+                    start = (annotation_end + 1..=end)
+                        .find(|index| !chars[*index].is_whitespace())
+                        .unwrap_or(end);
+                }
+            }
             let close = match chars[start] {
                 '<' => Some('>'),
                 '＜' => Some('＞'),
+                '≪' => Some('≫'),
+                '《' => Some('》'),
                 _ => None,
             };
             if let Some(close) = close {
@@ -404,20 +505,32 @@ mod tests {
 
     #[test]
     fn double_angle_range_closures_are_not_speaker_cues() {
-        for text in [
-            "≪いっしょに、未来を描いていこう。≫",
-            "続く世界｣をつくりたい。≫",
-        ] {
-            assert!(accessibility_ranges(text).is_empty());
-            assert_eq!(filtered_text(text, true, false), text);
-        }
+        let paired = "≪いっしょに、未来を描いていこう。≫";
+        assert_eq!(accessibility_ranges(paired), vec![0..1, 17..18]);
+        assert_eq!(
+            filtered_text(paired, true, false),
+            "いっしょに、未来を描いていこう。"
+        );
+        let closure = "続く世界｣をつくりたい。≫";
+        assert!(accessibility_ranges(closure).is_empty());
+        assert_eq!(filtered_text(closure, true, false), closure);
         let nested = accessibility_evidence("(女性A)≪どのオレにする？≫");
         assert!(!nested.speaker_cue);
-        assert_eq!(nested.ranges, vec![0..5]);
+        assert_eq!(nested.ranges, vec![0..5, 5..6, 14..15]);
         assert_eq!(
             filtered_text("(女性A)≪どのオレにする？≫", true, false),
-            "≪どのオレにする？≫"
+            "どのオレにする？"
         );
+    }
+
+    #[test]
+    fn speaker_annotation_can_precede_a_semantic_delimiter() {
+        assert_eq!(
+            accessibility_ranges("(伊藤)＜花粉に…＞"),
+            vec![0..4, 4..5, 9..10]
+        );
+        assert_eq!(filtered_text("(伊藤)＜花粉に…＞", true, false), "花粉に…");
+        assert_eq!(accessibility_ranges("《頼むぞ！》"), vec![0..1, 5..6]);
     }
 
     #[test]
@@ -450,6 +563,30 @@ mod tests {
         assert_eq!(
             adjacent_roles.declared_accessibility_ranges,
             vec![0..1, 1..2]
+        );
+    }
+
+    #[test]
+    fn semantic_delimiters_pair_across_caption_fragments() {
+        let group =
+            caption_group_semantics(&["＜たった１錠。", "わたしオン「アレジオン」！＞"], &[]);
+        assert_eq!(group.cross_fragment_delimiter_count, 1);
+        assert_eq!(
+            group.fragments[0].removable_accessibility_ranges,
+            vec![0..1]
+        );
+        assert_eq!(
+            group.fragments[1].removable_accessibility_ranges,
+            vec![13..14]
+        );
+
+        let unrelated = caption_group_semantics(&["1＜2", "価格＞税込"], &[]);
+        assert_eq!(unrelated.cross_fragment_delimiter_count, 0);
+        assert!(
+            unrelated
+                .fragments
+                .iter()
+                .all(|fragment| fragment.removable_accessibility_ranges.is_empty())
         );
     }
 }

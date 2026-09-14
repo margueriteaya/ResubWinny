@@ -657,7 +657,7 @@ fn event_presentation(
     if !has_source_coordinates {
         add_gaiji_features(&text, &mut features, &mut highlights);
     }
-    let mut classified_region = false;
+    let mut region_fragments = Vec::new();
     if let Some(regions) = value.get("regions").and_then(serde_json::Value::as_array) {
         for region in regions {
             let first = region
@@ -694,18 +694,25 @@ fn event_presentation(
                 .skip(start_offset)
                 .take(end_offset - start_offset)
                 .collect::<String>();
-            add_caption_semantics(
-                &region_text,
-                start_offset,
-                &[],
+            region_fragments.push((region_text, start_offset));
+        }
+    }
+    if region_fragments.is_empty() {
+        add_caption_semantics(&text, 0, &[], &mut features, &mut highlights);
+    } else {
+        let references = region_fragments
+            .iter()
+            .map(|(text, _)| text.as_str())
+            .collect::<Vec<_>>();
+        let semantics = crate::caption_features::caption_group_semantics(&references, &[]);
+        for ((_, offset), fragment) in region_fragments.iter().zip(semantics.fragments) {
+            add_accessibility_ranges(
+                &fragment.removable_accessibility_ranges,
+                *offset,
                 &mut features,
                 &mut highlights,
             );
-            classified_region = true;
         }
-    }
-    if !classified_region {
-        add_caption_semantics(&text, 0, &[], &mut features, &mut highlights);
     }
     (
         text,
@@ -745,9 +752,22 @@ fn add_caption_semantics(
     features: &mut BTreeSet<String>,
     highlights: &mut Vec<TimelineHighlight>,
 ) {
-    for range in
-        caption_semantics(text, declared_accessibility_ranges).removable_accessibility_ranges
-    {
+    let semantics = caption_semantics(text, declared_accessibility_ranges);
+    add_accessibility_ranges(
+        &semantics.removable_accessibility_ranges,
+        offset,
+        features,
+        highlights,
+    );
+}
+
+fn add_accessibility_ranges(
+    ranges: &[Range<usize>],
+    offset: usize,
+    features: &mut BTreeSet<String>,
+    highlights: &mut Vec<TimelineHighlight>,
+) {
+    for range in ranges {
         features.insert("accessibility".into());
         highlights.push(TimelineHighlight {
             start: offset + range.start,
@@ -1212,6 +1232,32 @@ mod tests {
                 item.feature == "accessibility" && (item.start, item.end) == (2, 7)
             })
         );
+    }
+
+    #[test]
+    fn b24_accessibility_highlights_pair_delimiters_across_regions() {
+        let value = serde_json::json!({
+            "regions": [
+                { "first_character": 0, "character_count": 7 },
+                { "first_character": 7, "character_count": 7 }
+            ],
+            "characters": [
+                { "utf8": "＜" }, { "utf8": "た" }, { "utf8": "っ" },
+                { "utf8": "た" }, { "utf8": "１" }, { "utf8": "錠" },
+                { "utf8": "。" }, { "utf8": "わ" }, { "utf8": "た" },
+                { "utf8": "し" }, { "utf8": "オ" }, { "utf8": "ン" },
+                { "utf8": "！" }, { "utf8": "＞" }
+            ]
+        });
+        let (text, features, highlights, _) = event_presentation(&value);
+        assert_eq!(text, "＜たった１錠。わたしオン！＞");
+        assert!(features.iter().any(|feature| feature == "accessibility"));
+        let ranges = highlights
+            .iter()
+            .filter(|item| item.feature == "accessibility")
+            .map(|item| (item.start, item.end))
+            .collect::<Vec<_>>();
+        assert_eq!(ranges, vec![(0, 1), (13, 14)]);
     }
 
     #[test]

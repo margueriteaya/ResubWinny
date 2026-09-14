@@ -84,6 +84,7 @@ pub(crate) fn write_ttml_footer(writer: &mut BufWriter<File>) -> io::Result<()> 
 
 pub(crate) fn interval_ttml_text(interval: &RegionInterval, options: &ConversionOptions) -> String {
     struct Cell {
+        source_index: usize,
         classifier_text: String,
         markup: Option<String>,
         source_gaiji: bool,
@@ -91,9 +92,11 @@ pub(crate) fn interval_ttml_text(interval: &RegionInterval, options: &Conversion
     let cells = interval
         .characters
         .iter()
-        .filter_map(|character| {
+        .enumerate()
+        .filter_map(|(source_index, character)| {
             if !character.utf8.is_empty() {
                 return Some(Cell {
+                    source_index,
                     classifier_text: character.utf8.clone(),
                     markup: None,
                     source_gaiji: b24_character_is_gaiji_source(character),
@@ -106,6 +109,7 @@ pub(crate) fn interval_ttml_text(interval: &RegionInterval, options: &Conversion
                 && let Some(replacement) = options.drcs_replacements.get(&character.drcs_code)
             {
                 return Some(Cell {
+                    source_index,
                     classifier_text: replacement.clone(),
                     markup: None,
                     source_gaiji: false,
@@ -120,11 +124,13 @@ pub(crate) fn interval_ttml_text(interval: &RegionInterval, options: &Conversion
                 .filter(|value| !value.is_empty());
             Some(match alternative {
                 Some(text) => Cell {
+                    source_index,
                     classifier_text: text.to_owned(),
                     markup: None,
                     source_gaiji: false,
                 },
                 None => Cell {
+                    source_index,
                     classifier_text: "\u{FFFC}".to_owned(),
                     markup: Some(format!(
                         "<span arib:drcs-code=\"0x{:X}\"{}>\u{FFFC}</span>",
@@ -147,6 +153,20 @@ pub(crate) fn interval_ttml_text(interval: &RegionInterval, options: &Conversion
         true,
         options.preserve_accessibility,
     );
+    if !options.preserve_accessibility {
+        let mut source_cursor = 0_usize;
+        for cell in &cells {
+            let end = source_cursor.saturating_add(cell.classifier_text.chars().count());
+            if interval
+                .accessibility_ranges
+                .iter()
+                .any(|range| range.contains(&cell.source_index))
+            {
+                retained[source_cursor..end].fill(false);
+            }
+            source_cursor = end;
+        }
+    }
     if !options.preserve_gaiji {
         let mut source_cursor = 0_usize;
         for cell in &cells {
