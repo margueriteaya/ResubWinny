@@ -382,8 +382,8 @@ fn b62_caption_group_pairs_and_filters_cross_fragment_delimiters() {
     );
     annotate_ttml_group_semantics(&mut captions);
     assert_eq!(captions.len(), 2);
-    assert_eq!(captions[0].inferred_accessibility_ranges, vec![0..1]);
-    assert_eq!(captions[1].inferred_accessibility_ranges, vec![6..7]);
+    assert_eq!(captions[0].resolved_accessibility_ranges, vec![0..1]);
+    assert_eq!(captions[1].resolved_accessibility_ranges, vec![6..7]);
 
     let options = ConversionOptions {
         preserve_accessibility: false,
@@ -419,6 +419,63 @@ fn b62_caption_group_pairs_and_filters_cross_fragment_delimiters() {
         assert!(!text.contains('＞'));
     }
     fs::remove_dir_all(directory).expect("cleanup outputs");
+}
+
+#[test]
+fn b62_caption_group_quote_state_preserves_title_parentheses() {
+    let mut captions = parse_ttml_captions(
+        r#"<tt><body><div>
+          <p begin='0s' end='1s'>曲「スゥ・ル・シエル・ド・パリ</p>
+          <p begin='0s' end='1s'>（パリの空の下）」。</p>
+        </div></body></tt>"#,
+        0,
+    );
+    annotate_ttml_group_semantics(&mut captions);
+    assert_eq!(captions.len(), 2);
+    assert!(captions[1].resolved_accessibility_ranges.is_empty());
+    assert!(captions[1].broadcast_semantics_resolved);
+
+    let options = ConversionOptions {
+        preserve_accessibility: false,
+        ..Default::default()
+    };
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let output = std::env::temp_dir().join(format!("arib-ttml-title-{stamp}.ttml"));
+    let mut writer = BufWriter::new(File::create(&output).expect("TTML output"));
+    write_ttml_header(&mut writer).expect("TTML header");
+    for caption in &captions {
+        write_ttml_caption(&mut writer, caption, &options).expect("TTML caption");
+    }
+    write_ttml_footer(&mut writer).expect("TTML footer");
+    writer.flush().expect("TTML flush");
+    let text = fs::read_to_string(&output).expect("TTML text");
+    assert!(text.contains("（パリの空の下）」"));
+    fs::remove_file(output).expect("cleanup output");
+}
+
+#[test]
+fn continuation_arrow_carries_b62_quote_state_to_the_next_caption() {
+    let mut captions = parse_ttml_captions(
+        r#"<tt><body><div>
+          <p begin='0s' end='1s'>曲「スゥ・ル・シエル・ド・パリ➡</p>
+          <p begin='1s' end='2s'>（パリの空の下）」。</p>
+        </div></body></tt>"#,
+        0,
+    );
+    let mut state = crate::caption_features::CaptionSequenceState::default();
+    let (first, second) = captions.split_at_mut(1);
+    annotate_ttml_group_semantics_with_state(first, &mut state);
+    annotate_ttml_group_semantics_with_state(second, &mut state);
+
+    assert_eq!(
+        first[0].resolved_accessibility_ranges.last(),
+        Some(&(15..16))
+    );
+    assert!(second[0].resolved_accessibility_ranges.is_empty());
+    assert!(second[0].broadcast_semantics_resolved);
 }
 
 #[test]

@@ -542,13 +542,23 @@ fn event_presentation(
     if let Some(source_text) = value.get("text").and_then(serde_json::Value::as_str) {
         let text = truncate(source_text);
         add_gaiji_features(&text, &mut features, &mut highlights);
-        add_caption_semantics(
-            &text,
-            0,
-            &declared_accessibility_ranges(value),
-            &mut features,
-            &mut highlights,
-        );
+        let accessibility_ranges = declared_accessibility_ranges(value);
+        let semantics_resolved = value
+            .get("broadcast_semantics_resolved")
+            .or_else(|| value.get("broadcastSemanticsResolved"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        if semantics_resolved {
+            add_accessibility_ranges(&accessibility_ranges, 0, &mut features, &mut highlights);
+        } else {
+            add_caption_semantics(
+                &text,
+                0,
+                &accessibility_ranges,
+                &mut features,
+                &mut highlights,
+            );
+        }
         if ruby && !text.is_empty() {
             highlights.push(TimelineHighlight {
                 start: 0,
@@ -798,7 +808,9 @@ fn declared_accessibility_ranges(value: &serde_json::Value) -> Vec<Range<usize>>
         .collect::<Vec<_>>();
     ranges.extend(
         value
-            .get("inferred_accessibility_ranges")
+            .get("resolved_accessibility_ranges")
+            .or_else(|| value.get("resolvedAccessibilityRanges"))
+            .or_else(|| value.get("inferred_accessibility_ranges"))
             .or_else(|| value.get("inferredAccessibilityRanges"))
             .and_then(serde_json::Value::as_array)
             .into_iter()
@@ -1172,7 +1184,8 @@ mod tests {
     fn highlights_inferred_b62_cross_fragment_ranges() {
         let value = serde_json::json!({
             "text": "わたしオン！＞",
-            "inferred_accessibility_ranges": [{ "start": 6, "end": 7 }]
+            "resolved_accessibility_ranges": [{ "start": 6, "end": 7 }],
+            "broadcast_semantics_resolved": true
         });
 
         let (_, features, highlights, _) = event_presentation(&value);
@@ -1182,6 +1195,18 @@ mod tests {
             highlights.iter().any(|item| {
                 item.feature == "accessibility" && (item.start, item.end) == (6, 7)
             })
+        );
+
+        let (_, features, highlights, _) = event_presentation(&serde_json::json!({
+            "text": "（パリの空の下）」。",
+            "resolved_accessibility_ranges": [],
+            "broadcast_semantics_resolved": true
+        }));
+        assert!(!features.iter().any(|feature| feature == "accessibility"));
+        assert!(
+            !highlights
+                .iter()
+                .any(|item| item.feature == "accessibility")
         );
     }
 
@@ -1287,6 +1312,36 @@ mod tests {
             .map(|item| (item.start, item.end))
             .collect::<Vec<_>>();
         assert_eq!(ranges, vec![(0, 1), (13, 14)]);
+    }
+
+    #[test]
+    fn b24_quote_state_keeps_title_parentheses_out_of_accessibility_highlights() {
+        let first = "曲「スゥ・ル・シエル・ド・パリ";
+        let second = "（パリの空の下）」。";
+        let text = format!("{first}{second}");
+        let characters = text
+            .chars()
+            .map(|character| serde_json::json!({ "utf8": character.to_string() }))
+            .collect::<Vec<_>>();
+        let value = serde_json::json!({
+            "regions": [
+                { "first_character": 0, "character_count": first.chars().count() },
+                {
+                    "first_character": first.chars().count(),
+                    "character_count": second.chars().count()
+                }
+            ],
+            "characters": characters
+        });
+
+        let (_, features, highlights, _) = event_presentation(&value);
+
+        assert!(!features.iter().any(|feature| feature == "accessibility"));
+        assert!(
+            !highlights
+                .iter()
+                .any(|item| item.feature == "accessibility")
+        );
     }
 
     #[test]

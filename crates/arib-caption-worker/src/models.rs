@@ -117,6 +117,8 @@ pub struct CaptionFeatureSummary {
     pub feature_details: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(default)]
     pub complete: bool,
+    #[serde(skip)]
+    pub(crate) semantic_state: crate::caption_features::CaptionSequenceState,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -326,7 +328,11 @@ impl CaptionFeatureSummary {
             })
             .collect::<Vec<_>>();
         let references = texts.iter().map(String::as_str).collect::<Vec<_>>();
-        let semantics = crate::caption_features::caption_group_semantics(&references, &[]);
+        let semantics = crate::caption_features::caption_group_semantics_with_state(
+            &references,
+            &[],
+            &mut self.semantic_state,
+        );
         for fragment in &semantics.fragments {
             self.observe_semantics(fragment);
         }
@@ -420,7 +426,7 @@ impl CaptionFeatureSummary {
             .accessibility_cues
             .iter()
             .map(|cue| cue.start..cue.end)
-            .chain(caption.inferred_accessibility_ranges.iter().cloned())
+            .chain(caption.resolved_accessibility_ranges.iter().cloned())
             .collect::<Vec<_>>();
         self.observe_semantics(&crate::caption_features::caption_semantics(
             &caption.text,
@@ -1068,7 +1074,9 @@ pub(crate) struct TtmlCaption {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) accessibility_cues: Vec<TtmlAccessibilityCue>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub(crate) inferred_accessibility_ranges: Vec<Range<usize>>,
+    pub(crate) resolved_accessibility_ranges: Vec<Range<usize>>,
+    #[serde(default)]
+    pub(crate) broadcast_semantics_resolved: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) source_layout: Option<TtmlSourceLayout>,
     pub(crate) source: Option<TtmlCaptionSource>,

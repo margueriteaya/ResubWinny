@@ -33,8 +33,12 @@ pub(crate) struct CaptionSemantics {
 
 pub(crate) struct CaptionGroupSemantics {
     pub(crate) fragments: Vec<CaptionSemantics>,
-    pub(crate) cross_fragment_ranges: Vec<Vec<Range<usize>>>,
     pub(crate) cross_fragment_delimiter_count: usize,
+}
+
+#[derive(Debug, Default, Clone)]
+pub(crate) struct CaptionSequenceState {
+    japanese_quote_stack: Vec<char>,
 }
 
 #[allow(dead_code, reason = "convenience view of the shared semantic result")]
@@ -122,9 +126,25 @@ pub(crate) fn caption_semantics(
     }
 }
 
+#[allow(
+    dead_code,
+    reason = "callers without a caption sequence use a fresh state"
+)]
 pub(crate) fn caption_group_semantics(
     texts: &[&str],
     declared_accessibility_ranges: &[Vec<Range<usize>>],
+) -> CaptionGroupSemantics {
+    caption_group_semantics_with_state(
+        texts,
+        declared_accessibility_ranges,
+        &mut CaptionSequenceState::default(),
+    )
+}
+
+pub(crate) fn caption_group_semantics_with_state(
+    texts: &[&str],
+    declared_accessibility_ranges: &[Vec<Range<usize>>],
+    sequence_state: &mut CaptionSequenceState,
 ) -> CaptionGroupSemantics {
     let mut fragments = texts
         .iter()
@@ -143,7 +163,16 @@ pub(crate) fn caption_group_semantics(
         .iter()
         .map(|text| text.chars().collect::<Vec<_>>())
         .collect::<Vec<_>>();
-    let mut cross_fragment_ranges = vec![Vec::new(); texts.len()];
+    let mut quote_stack = std::mem::take(&mut sequence_state.japanese_quote_stack);
+    for (fragment, chars) in fragments.iter_mut().zip(&characters) {
+        if !quote_stack.is_empty() {
+            suppress_quoted_leading_parenthetical(fragment, chars);
+        }
+        update_japanese_quote_stack(&mut quote_stack, chars);
+    }
+    if texts.is_empty() || caption_group_continues(texts) {
+        sequence_state.japanese_quote_stack = quote_stack;
+    }
     let mut cross_fragment_delimiter_count = 0;
     for (open, close) in [('<', '>'), ('＜', '＞'), ('≪', '≫'), ('《', '》')] {
         let mut pending: Option<(usize, usize)> = None;
@@ -168,8 +197,6 @@ pub(crate) fn caption_group_semantics(
                 fragments[fragment_index]
                     .removable_accessibility_ranges
                     .push(end..end + 1);
-                cross_fragment_ranges[open_fragment].push(open_index..open_index + 1);
-                cross_fragment_ranges[fragment_index].push(end..end + 1);
                 fragments[open_fragment]
                     .text_accessibility
                     .narration_delimiter = true;
@@ -188,9 +215,106 @@ pub(crate) fn caption_group_semantics(
     }
     CaptionGroupSemantics {
         fragments,
-        cross_fragment_ranges,
         cross_fragment_delimiter_count,
     }
+}
+
+fn caption_group_continues(texts: &[&str]) -> bool {
+    texts
+        .iter()
+        .rev()
+        .flat_map(|text| text.chars().rev())
+        .find(|character| !character.is_whitespace())
+        == Some('➡')
+}
+
+fn update_japanese_quote_stack(stack: &mut Vec<char>, chars: &[char]) {
+    for character in chars {
+        match character {
+            '「' => stack.push('」'),
+            '『' => stack.push('』'),
+            '｢' => stack.push('｣'),
+            '」' | '』' | '｣' if stack.last() == Some(character) => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+}
+
+fn leading_parenthetical_range(chars: &[char]) -> Option<Range<usize>> {
+    let start = chars
+        .iter()
+        .position(|character| !character.is_whitespace())?;
+    let close = match chars[start] {
+        '(' => ')',
+        '（' => '）',
+        _ => return None,
+    };
+    let end = (start + 1..chars.len()).find(|index| chars[*index] == close)?;
+    Some(start..end + 1)
+}
+
+fn parenthetical_has_sound_evidence(chars: &[char], range: &Range<usize>) -> bool {
+    let content = chars[range.start + 1..range.end - 1]
+        .iter()
+        .collect::<String>();
+    content.ends_with('音')
+        || [
+            "笑い声",
+            "話し声",
+            "泣き声",
+            "鳴き声",
+            "叫び声",
+            "歌声",
+            "歓声",
+        ]
+        .iter()
+        .any(|ending| content.ends_with(ending))
+        || ["拍手", "ノック", "チャイム", "ベル", "アラート"]
+            .iter()
+            .any(|marker| content.contains(marker))
+        || ["鳴る", "鳴く", "吠える"]
+            .iter()
+            .any(|ending| content.ends_with(ending))
+}
+
+fn suppress_quoted_leading_parenthetical(semantics: &mut CaptionSemantics, chars: &[char]) {
+    let Some(range) = leading_parenthetical_range(chars) else {
+        return;
+    };
+    if parenthetical_has_sound_evidence(chars, &range) {
+        return;
+    }
+    semantics
+        .text_accessibility
+        .cue_ranges
+        .retain(|cue| cue.as_slice() != std::slice::from_ref(&range));
+    semantics.text_accessibility.ranges = semantics
+        .text_accessibility
+        .cue_ranges
+        .iter()
+        .flatten()
+        .cloned()
+        .collect();
+    normalize_ranges(&mut semantics.text_accessibility.ranges);
+    semantics.text_accessibility.observed_count = semantics.text_accessibility.cue_ranges.len();
+
+    let mut leading_ranges = Vec::new();
+    add_leading_bracket_ranges(chars, '(', ')', &mut leading_ranges);
+    add_leading_bracket_ranges(chars, '（', '）', &mut leading_ranges);
+    semantics.text_accessibility.leading_annotation = leading_ranges.iter().any(|candidate| {
+        semantics
+            .text_accessibility
+            .cue_ranges
+            .iter()
+            .any(|cue| cue == candidate)
+    });
+    semantics.removable_accessibility_ranges = semantics.declared_accessibility_ranges.clone();
+    semantics
+        .removable_accessibility_ranges
+        .extend(semantics.text_accessibility.ranges.iter().cloned());
+    normalize_ranges(&mut semantics.removable_accessibility_ranges);
 }
 
 fn semantic_content_bounds(chars: &[char]) -> Option<(usize, usize)> {
@@ -327,22 +451,29 @@ fn add_leading_bracket_ranges(
     close: char,
     cue_ranges: &mut Vec<Vec<Range<usize>>>,
 ) {
-    let mut start = None;
-    let mut only_leading_whitespace = true;
-    for (index, character) in chars.iter().enumerate() {
-        if *character == '\n' || *character == '\r' {
-            start = None;
-            only_leading_whitespace = true;
-        } else if start.is_none() && only_leading_whitespace && *character == open {
-            start = Some(index);
-            only_leading_whitespace = false;
-        } else if *character == close
-            && let Some(begin) = start.take()
-        {
-            cue_ranges.push(single_range_cue(begin..index + 1));
-        } else if start.is_none() && !character.is_whitespace() {
-            only_leading_whitespace = false;
+    let mut line_start = 0;
+    while line_start < chars.len() {
+        let line_end = chars[line_start..]
+            .iter()
+            .position(|character| matches!(character, '\n' | '\r'))
+            .map_or(chars.len(), |offset| line_start + offset);
+        let Some(mut start) = (line_start..line_end).find(|index| !chars[*index].is_whitespace())
+        else {
+            line_start = line_end.saturating_add(1);
+            continue;
+        };
+        if matches!(chars[start], '☎' | '⚟') {
+            start = (start + 1..line_end)
+                .find(|index| !chars[*index].is_whitespace())
+                .unwrap_or(line_end);
         }
+        if start < line_end
+            && chars[start] == open
+            && let Some(end) = (start + 1..line_end).find(|index| chars[*index] == close)
+        {
+            cue_ranges.push(single_range_cue(start..end + 1));
+        }
+        line_start = line_end.saturating_add(1);
     }
 }
 
@@ -493,6 +624,10 @@ mod tests {
             filtered_text("⚟画面外☎電話の声 本文➡", true, false),
             "画面外電話の声 本文"
         );
+        assert_eq!(
+            accessibility_ranges("☎(リツコ)艦長 Bad Newsよ"),
+            vec![0..1, 1..6]
+        );
     }
 
     #[test]
@@ -576,7 +711,6 @@ mod tests {
         let group =
             caption_group_semantics(&["＜たった１錠。", "わたしオン「アレジオン」！＞"], &[]);
         assert_eq!(group.cross_fragment_delimiter_count, 1);
-        assert_eq!(group.cross_fragment_ranges, vec![vec![0..1], vec![13..14]]);
         assert_eq!(
             group.fragments[0].removable_accessibility_ranges,
             vec![0..1]
@@ -604,8 +738,107 @@ mod tests {
         ] {
             let group = caption_group_semantics(&[first, second], &[]);
             assert_eq!(group.cross_fragment_delimiter_count, 1, "{first}{second}");
-            assert_eq!(group.cross_fragment_ranges[0].len(), 1);
-            assert_eq!(group.cross_fragment_ranges[1].len(), 1);
+            assert!(!group.fragments[0].removable_accessibility_ranges.is_empty());
+            assert!(!group.fragments[1].removable_accessibility_ranges.is_empty());
+        }
+    }
+
+    #[test]
+    fn japanese_quote_state_distinguishes_title_parentheses_from_sound_cues() {
+        let title = caption_group_semantics(
+            &["曲「スゥ・ル・シエル・ド・パリ", "（パリの空の下）」。"],
+            &[],
+        );
+        assert!(title.fragments[1].removable_accessibility_ranges.is_empty());
+        assert!(!title.fragments[1].text_accessibility.leading_annotation);
+        let title_with_voice_word = caption_group_semantics(&["曲「", "（君の声）」"], &[]);
+        assert!(
+            title_with_voice_word.fragments[1]
+                .removable_accessibility_ranges
+                .is_empty()
+        );
+
+        for sound in ["（拍手）」", "（笑い声）」", "（ノック）」", "（爆発音）」"]
+        {
+            let group = caption_group_semantics(&["「会場から音が聞こえる", sound], &[]);
+            let end = sound
+                .chars()
+                .position(|character| character == '）')
+                .unwrap()
+                + 1;
+            assert_eq!(
+                group.fragments[1].removable_accessibility_ranges,
+                vec![0..end],
+                "{sound}"
+            );
+        }
+
+        let outside_quote = caption_group_semantics(&["本文", "（伊藤）説明"], &[]);
+        assert_eq!(
+            outside_quote.fragments[1].removable_accessibility_ranges,
+            vec![0..4]
+        );
+    }
+
+    #[test]
+    fn continuation_arrow_carries_quote_state_to_exactly_the_next_caption_page() {
+        let mut state = CaptionSequenceState::default();
+        let first = caption_group_semantics_with_state(
+            &["曲「スゥ・ル・シエル・ド・パリ➡"],
+            &[],
+            &mut state,
+        );
+        assert_eq!(
+            first.fragments[0].removable_accessibility_ranges,
+            vec![15..16]
+        );
+        caption_group_semantics_with_state(&[], &[], &mut state);
+        let second = caption_group_semantics_with_state(&["（パリの空の下）」。"], &[], &mut state);
+        assert!(
+            second.fragments[0]
+                .removable_accessibility_ranges
+                .is_empty()
+        );
+
+        let mut unlinked = CaptionSequenceState::default();
+        caption_group_semantics_with_state(&["曲「スゥ・ル・シエル・ド・パリ"], &[], &mut unlinked);
+        let next =
+            caption_group_semantics_with_state(&["（パリの空の下）」。"], &[], &mut unlinked);
+        assert_eq!(next.fragments[0].removable_accessibility_ranges, vec![0..8]);
+    }
+
+    #[test]
+    fn japanese_broadcast_notation_examples_form_a_fixed_semantic_matrix() {
+        // NHK G-Media and the domestic captioned-CM handbook describe these
+        // editorial uses. Transport-specific B24/B62 evidence enters the same
+        // semantic classifier separately.
+        let cases = [
+            ("（鈴木）こんにちは。", "こんにちは。"),
+            ("（笑い声）本文", "本文"),
+            ("（ノック）本文", "本文"),
+            ("☎(リツコ)艦長 Bad Newsよ", "艦長 Bad Newsよ"),
+            ("⚟画面の外からの声", "画面の外からの声"),
+            ("橋本≫進行します", "進行します"),
+            ("♪〜音楽", "音楽"),
+            ("＜ナレーション＞", "ナレーション"),
+            ("《心の声》", "心の声"),
+            ("本文➡", "本文"),
+        ];
+        for (source, expected) in cases {
+            assert_eq!(filtered_text(source, true, false), expected, "{source}");
+        }
+
+        assert_eq!(
+            filtered_text("♪「僕らは自由だね」君の声が", true, false),
+            "「僕らは自由だね」君の声が"
+        );
+        for ordinary_text in ["価格（税込）です", "「商品名」", "続く世界｣をつくりたい。≫"]
+        {
+            assert_eq!(
+                filtered_text(ordinary_text, true, false),
+                ordinary_text,
+                "{ordinary_text}"
+            );
         }
     }
 }

@@ -4,6 +4,7 @@ use std::cell::RefCell;
 fn queue_ass_ttml_caption(
     writer: &mut BufWriter<File>,
     pending: &mut Vec<TtmlCaption>,
+    semantic_state: &mut crate::caption_features::CaptionSequenceState,
     archive_writer: &mut Option<BufWriter<File>>,
     ttml_writer: &mut Option<BufWriter<File>>,
     options: &ConversionOptions,
@@ -13,7 +14,14 @@ fn queue_ass_ttml_caption(
         .first()
         .is_none_or(|first| first.start_ms == caption.start_ms && first.end_ms == caption.end_ms);
     if !same_group {
-        flush_ass_ttml_group(writer, pending, archive_writer, ttml_writer, options)?;
+        flush_ass_ttml_group(
+            writer,
+            pending,
+            semantic_state,
+            archive_writer,
+            ttml_writer,
+            options,
+        )?;
     }
     pending.push(caption);
     Ok(())
@@ -22,11 +30,12 @@ fn queue_ass_ttml_caption(
 fn flush_ass_ttml_group(
     writer: &mut BufWriter<File>,
     pending: &mut Vec<TtmlCaption>,
+    semantic_state: &mut crate::caption_features::CaptionSequenceState,
     archive_writer: &mut Option<BufWriter<File>>,
     ttml_writer: &mut Option<BufWriter<File>>,
     options: &ConversionOptions,
 ) -> io::Result<()> {
-    annotate_ttml_group_semantics(pending);
+    annotate_ttml_group_semantics_with_state(pending, semantic_state);
     associate_standalone_ttml_ruby(pending);
     for caption in pending.iter() {
         if let Some(archive_writer) = archive_writer.as_mut() {
@@ -41,7 +50,21 @@ fn flush_ass_ttml_group(
     Ok(())
 }
 
+#[allow(
+    dead_code,
+    reason = "isolated caption groups use a fresh sequence state in tests"
+)]
 pub(crate) fn annotate_ttml_group_semantics(captions: &mut [TtmlCaption]) {
+    annotate_ttml_group_semantics_with_state(
+        captions,
+        &mut crate::caption_features::CaptionSequenceState::default(),
+    );
+}
+
+pub(crate) fn annotate_ttml_group_semantics_with_state(
+    captions: &mut [TtmlCaption],
+    semantic_state: &mut crate::caption_features::CaptionSequenceState,
+) {
     let texts = captions
         .iter()
         .map(|caption| caption.text.as_str())
@@ -53,17 +76,18 @@ pub(crate) fn annotate_ttml_group_semantics(captions: &mut [TtmlCaption]) {
                 .accessibility_cues
                 .iter()
                 .map(|cue| cue.start..cue.end)
-                .chain(caption.inferred_accessibility_ranges.iter().cloned())
+                .chain(caption.resolved_accessibility_ranges.iter().cloned())
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    let semantics = crate::caption_features::caption_group_semantics(&texts, &declared);
-    for (caption, ranges) in captions.iter_mut().zip(semantics.cross_fragment_ranges) {
-        caption.inferred_accessibility_ranges.extend(ranges);
-        caption
-            .inferred_accessibility_ranges
-            .sort_by_key(|range| (range.start, range.end));
-        caption.inferred_accessibility_ranges.dedup();
+    let semantics = crate::caption_features::caption_group_semantics_with_state(
+        &texts,
+        &declared,
+        semantic_state,
+    );
+    for (caption, fragment) in captions.iter_mut().zip(semantics.fragments) {
+        caption.resolved_accessibility_ranges = fragment.removable_accessibility_ranges;
+        caption.broadcast_semantics_resolved = true;
     }
 }
 
@@ -188,6 +212,7 @@ where
     };
     write_ass_header(&mut writer)?;
     let mut pending_ass = Vec::new();
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
     let scan = match packetisation {
         TtmlPesPacketisation::MpegTs188 => scan_mpeg_ts_ttml(
             path,
@@ -197,6 +222,7 @@ where
                 queue_ass_ttml_caption(
                     &mut writer,
                     &mut pending_ass,
+                    &mut semantic_state,
                     &mut archive_writer,
                     &mut ttml_writer,
                     &options,
@@ -221,6 +247,7 @@ where
                 queue_ass_ttml_caption(
                     &mut writer,
                     &mut pending_ass,
+                    &mut semantic_state,
                     &mut archive_writer,
                     &mut ttml_writer,
                     &options,
@@ -260,6 +287,7 @@ where
     flush_ass_ttml_group(
         &mut writer,
         &mut pending_ass,
+        &mut semantic_state,
         &mut archive_writer,
         &mut ttml_writer,
         &options,
@@ -380,6 +408,7 @@ where
     let report_b62_bytes = RefCell::new(0_usize);
     write_ass_header(&mut writer)?;
     let mut pending_ass = Vec::new();
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
     let mut feature_summary = CaptionFeatureSummary::default();
     let summary = match scan_tlv_ttml(
         path,
@@ -484,6 +513,7 @@ where
             queue_ass_ttml_caption(
                 &mut writer,
                 &mut pending_ass,
+                &mut semantic_state,
                 &mut archive,
                 &mut ttml_writer,
                 &options,
@@ -551,6 +581,7 @@ where
         flush_ass_ttml_group(
             &mut writer,
             &mut pending_ass,
+            &mut semantic_state,
             &mut archive,
             &mut ttml_writer,
             &options,

@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Range};
 
 use serde::Serialize;
 
-use crate::{RubyBinding, native_b24, scene_ruby_bindings};
+use crate::{RubyBinding, caption_features::CaptionSequenceState, native_b24, scene_ruby_bindings};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct RegionKey {
@@ -51,7 +51,18 @@ impl RegionInterval {
     }
 }
 
+#[allow(
+    dead_code,
+    reason = "isolated scenes use a fresh sequence state in tests"
+)]
 pub(crate) fn scene_intervals(scene: &native_b24::CaptionScene) -> Vec<RegionInterval> {
+    scene_intervals_with_state(scene, &mut CaptionSequenceState::default())
+}
+
+fn scene_intervals_with_state(
+    scene: &native_b24::CaptionScene,
+    semantic_state: &mut CaptionSequenceState,
+) -> Vec<RegionInterval> {
     let ruby_bindings = scene_ruby_bindings(scene);
     let region_texts = scene
         .regions
@@ -71,7 +82,11 @@ pub(crate) fn scene_intervals(scene: &native_b24::CaptionScene) -> Vec<RegionInt
         })
         .collect::<Vec<_>>();
     let references = region_texts.iter().map(String::as_str).collect::<Vec<_>>();
-    let semantics = crate::caption_features::caption_group_semantics(&references, &[]);
+    let semantics = crate::caption_features::caption_group_semantics_with_state(
+        &references,
+        &[],
+        semantic_state,
+    );
     scene
         .regions
         .iter()
@@ -136,10 +151,11 @@ fn close_region_interval(interval: &mut RegionInterval, fallback_end_ms: i64) {
 pub(crate) fn apply_scene_intervals(
     active: &mut HashMap<RegionKey, RegionInterval>,
     scene: &native_b24::CaptionScene,
+    semantic_state: &mut CaptionSequenceState,
 ) -> Vec<RegionInterval> {
     let mut closed = Vec::new();
     let mut previous_active = std::mem::take(active);
-    for interval in scene_intervals(scene) {
+    for interval in scene_intervals_with_state(scene, semantic_state) {
         let key = interval.key();
         match previous_active.remove(&key) {
             Some(previous) if previous.same_visual(&interval) => {

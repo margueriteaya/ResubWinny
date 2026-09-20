@@ -148,11 +148,7 @@ pub(crate) fn interval_ttml_text(interval: &RegionInterval, options: &Conversion
         .iter()
         .map(|cell| cell.classifier_text.as_str())
         .collect::<String>();
-    let mut retained = crate::caption_features::retained_characters(
-        &combined,
-        true,
-        options.preserve_accessibility,
-    );
+    let mut retained = crate::caption_features::retained_characters(&combined, true, true);
     if !options.preserve_accessibility {
         let mut source_cursor = 0_usize;
         for cell in &cells {
@@ -250,7 +246,8 @@ pub(crate) fn write_ttml_caption(
         &caption.text,
         &caption.style,
         caption.source.as_ref(),
-        &caption.inferred_accessibility_ranges,
+        &caption.resolved_accessibility_ranges,
+        caption.broadcast_semantics_resolved,
         options,
     );
     if filtered_text.is_empty() {

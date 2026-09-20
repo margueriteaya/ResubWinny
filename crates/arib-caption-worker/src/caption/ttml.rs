@@ -1012,7 +1012,8 @@ pub(crate) fn parse_ttml_captions_until(
                 drcs_uses,
                 ruby_bindings,
                 accessibility_cues,
-                inferred_accessibility_ranges: Vec::new(),
+                resolved_accessibility_ranges: Vec::new(),
+                broadcast_semantics_resolved: false,
                 source_layout: Some(TtmlSourceLayout {
                     plane_width: display_plane.source_width,
                     plane_height: display_plane.source_height,
@@ -1127,7 +1128,8 @@ fn parse_ttml_captions_legacy(
                 drcs_uses,
                 ruby_bindings,
                 accessibility_cues: Vec::new(),
-                inferred_accessibility_ranges: Vec::new(),
+                resolved_accessibility_ranges: Vec::new(),
+                broadcast_semantics_resolved: false,
                 source_layout: Some(TtmlSourceLayout {
                     plane_width: display_plane.source_width,
                     plane_height: display_plane.source_height,

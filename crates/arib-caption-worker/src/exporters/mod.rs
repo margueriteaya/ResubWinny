@@ -29,6 +29,7 @@ pub(crate) fn export_ttml_text(
     style: &TtmlCaptionStyle,
     source: Option<&TtmlCaptionSource>,
     additional_accessibility_ranges: &[std::ops::Range<usize>],
+    accessibility_resolved: bool,
     options: &ConversionOptions,
 ) -> String {
     let resource_backed = style
@@ -36,12 +37,23 @@ pub(crate) fn export_ttml_text(
         .as_deref()
         .and_then(subt_resource_index)
         .is_some();
-    let retained = crate::caption_features::retained_characters_with_accessibility_ranges(
-        value,
-        true,
-        options.preserve_accessibility,
-        additional_accessibility_ranges,
-    );
+    let retained = if accessibility_resolved {
+        let mut retained = vec![true; value.chars().count()];
+        if !options.preserve_accessibility {
+            let length = retained.len();
+            for range in additional_accessibility_ranges {
+                retained[range.start.min(length)..range.end.min(length)].fill(false);
+            }
+        }
+        retained
+    } else {
+        crate::caption_features::retained_characters_with_accessibility_ranges(
+            value,
+            true,
+            options.preserve_accessibility,
+            additional_accessibility_ranges,
+        )
+    };
     let text = value
         .chars()
         .enumerate()

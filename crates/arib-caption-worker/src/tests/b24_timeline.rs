@@ -190,10 +190,11 @@ fn region_intervals_keep_independent_lifetimes() {
     let second = scene_with_text_regions(1_200, &[(100, 100, "label"), (500, 900, "body")]);
     let third = scene_with_text_regions(1_500, &[(500, 900, "body")]);
     let mut active = HashMap::new();
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
 
-    assert!(apply_scene_intervals(&mut active, &first).is_empty());
-    assert!(apply_scene_intervals(&mut active, &second).is_empty());
-    let closed = apply_scene_intervals(&mut active, &third);
+    assert!(apply_scene_intervals(&mut active, &first, &mut semantic_state).is_empty());
+    assert!(apply_scene_intervals(&mut active, &second, &mut semantic_state).is_empty());
+    let closed = apply_scene_intervals(&mut active, &third, &mut semantic_state);
     assert_eq!(closed.len(), 1);
     assert_eq!((closed[0].begin_ms, closed[0].end_ms), (1_000, 1_500));
     assert_eq!(closed[0].characters[0].utf8, "l");
@@ -213,8 +214,9 @@ fn region_interval_uses_its_wait_duration_before_a_later_scene() {
     clear.regions.clear();
     clear.characters.clear();
     let mut active = HashMap::new();
-    assert!(apply_scene_intervals(&mut active, &first).is_empty());
-    let closed = apply_scene_intervals(&mut active, &clear);
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
+    assert!(apply_scene_intervals(&mut active, &first, &mut semantic_state).is_empty());
+    let closed = apply_scene_intervals(&mut active, &clear, &mut semantic_state);
     assert_eq!(closed.len(), 1);
     assert_eq!((closed[0].begin_ms, closed[0].end_ms), (1_000, 1_300));
 }
@@ -292,6 +294,52 @@ fn cross_region_semantic_delimiters_are_filtered_from_b24_exports() {
     assert!(!ass.contains('＜'));
     assert!(!ass.contains('＞'));
     fs::remove_file(output).expect("cleanup");
+}
+
+#[test]
+fn cross_region_quote_state_preserves_title_parentheses() {
+    let scene = scene_with_text_regions(
+        1_250,
+        &[
+            (100, 200, "曲「スゥ・ル・シエル・ド・パリ"),
+            (100, 240, "（パリの空の下）」。"),
+        ],
+    );
+    let intervals = scene_intervals(&scene);
+    assert!(intervals[1].accessibility_ranges.is_empty());
+    let options = ConversionOptions {
+        preserve_accessibility: false,
+        ..ConversionOptions::default()
+    };
+    assert_eq!(
+        interval_ttml_text(&intervals[1], &options),
+        "（パリの空の下）」。"
+    );
+}
+
+#[test]
+fn continuation_arrow_carries_b24_quote_state_to_the_next_scene() {
+    let first = scene_with_text_regions(1_000, &[(100, 200, "曲「スゥ・ル・シエル・ド・パリ➡")]);
+    let second = scene_with_text_regions(2_000, &[(100, 200, "（パリの空の下）」。")]);
+    let mut active = HashMap::new();
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
+
+    assert!(apply_scene_intervals(&mut active, &first, &mut semantic_state).is_empty());
+    let closed = apply_scene_intervals(&mut active, &second, &mut semantic_state);
+    assert_eq!(closed.len(), 1);
+    assert_eq!(closed[0].accessibility_ranges.last(), Some(&(15..16)));
+    let remaining = finish_scene_intervals(&mut active, 3_000);
+    assert_eq!(remaining.len(), 1);
+    assert!(remaining[0].accessibility_ranges.is_empty());
+
+    let options = ConversionOptions {
+        preserve_accessibility: false,
+        ..ConversionOptions::default()
+    };
+    assert_eq!(
+        interval_ttml_text(&remaining[0], &options),
+        "（パリの空の下）」。"
+    );
 }
 
 #[test]
@@ -686,7 +734,7 @@ fn unpositioned_b24_group_orders_fragments_by_source_rows_and_writes_one_cue() {
                 utf8: character.to_string(),
             })
             .collect(),
-        accessibility_ranges: Vec::new(),
+        accessibility_ranges: crate::caption_features::accessibility_ranges(text),
         drcs_glyphs: Vec::new(),
         ruby_binding: None,
     };

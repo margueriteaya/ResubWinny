@@ -120,7 +120,8 @@ fn write_ass_standalone_ruby(
                 &caption.text,
                 &caption.style,
                 caption.source.as_ref(),
-                &caption.inferred_accessibility_ranges,
+                &caption.resolved_accessibility_ranges,
+                caption.broadcast_semantics_resolved,
                 options,
             )
         });
@@ -260,7 +261,8 @@ fn write_ass_ttml_caption_at(
         &caption.text,
         &caption.style,
         caption.source.as_ref(),
-        &caption.inferred_accessibility_ranges,
+        &caption.resolved_accessibility_ranges,
+        caption.broadcast_semantics_resolved,
         options,
     );
     if filtered_text.is_empty() {
@@ -279,7 +281,14 @@ fn write_ass_ttml_caption_at(
         .map(|body| parse_ass_inline_runs(&body, &caption.style))
         .unwrap_or_default();
     for run in &mut runs {
-        run.text = export_ttml_text(&run.text, &run.style, caption.source.as_ref(), &[], options);
+        run.text = export_ttml_text(
+            &run.text,
+            &run.style,
+            caption.source.as_ref(),
+            &[],
+            caption.broadcast_semantics_resolved,
+            options,
+        );
     }
     runs.retain(|run| !run.text.is_empty());
     if runs.is_empty() {
@@ -534,15 +543,30 @@ pub(crate) fn filter_ttml_caption_preserved_body(
     caption: &TtmlCaption,
     options: &ConversionOptions,
 ) -> Option<String> {
-    let body = if !options.preserve_accessibility
-        && (!caption.accessibility_cues.is_empty()
-            || !caption.inferred_accessibility_ranges.is_empty())
-    {
+    let accessibility_filtered = !options.preserve_accessibility
+        && (caption.broadcast_semantics_resolved
+            || !caption.accessibility_cues.is_empty()
+            || !caption.resolved_accessibility_ranges.is_empty());
+    let body = if accessibility_filtered {
         filter_ttml_caption_accessibility(body, caption)?
     } else {
         body.to_owned()
     };
-    filter_ttml_preserved_body_with_source(&body, &caption.style, caption.source.as_ref(), options)
+    let body = if accessibility_filtered {
+        filter_ttml_inline_body(&body, true, false)
+    } else {
+        body
+    };
+    let mut filtered_options = options.clone();
+    if accessibility_filtered {
+        filtered_options.preserve_accessibility = true;
+    }
+    filter_ttml_preserved_body_with_source(
+        &body,
+        &caption.style,
+        caption.source.as_ref(),
+        &filtered_options,
+    )
 }
 
 fn filter_ttml_caption_accessibility(body: &str, caption: &TtmlCaption) -> Option<String> {
@@ -574,23 +598,34 @@ fn filter_ttml_caption_accessibility(body: &str, caption: &TtmlCaption) -> Optio
     } else {
         0
     };
-    let semantic_ranges = caption
-        .accessibility_cues
-        .iter()
-        .map(|cue| offset.saturating_add(cue.start)..offset.saturating_add(cue.end))
-        .chain(
-            caption
-                .inferred_accessibility_ranges
-                .iter()
-                .map(|range| offset.saturating_add(range.start)..offset.saturating_add(range.end)),
+    let semantic_ranges = if caption.broadcast_semantics_resolved {
+        caption
+            .resolved_accessibility_ranges
+            .iter()
+            .map(|range| offset.saturating_add(range.start)..offset.saturating_add(range.end))
+            .collect::<Vec<_>>()
+    } else {
+        caption
+            .accessibility_cues
+            .iter()
+            .map(|cue| offset.saturating_add(cue.start)..offset.saturating_add(cue.end))
+            .collect::<Vec<_>>()
+    };
+    let retained = if caption.broadcast_semantics_resolved {
+        let mut retained = vec![true; text.chars().count()];
+        let length = retained.len();
+        for range in &semantic_ranges {
+            retained[range.start.min(length)..range.end.min(length)].fill(false);
+        }
+        retained
+    } else {
+        crate::caption_features::retained_characters_with_accessibility_ranges(
+            &text,
+            true,
+            false,
+            &semantic_ranges,
         )
-        .collect::<Vec<_>>();
-    let retained = crate::caption_features::retained_characters_with_accessibility_ranges(
-        &text,
-        true,
-        false,
-        &semantic_ranges,
-    );
+    };
     let mut edits = Vec::new();
     for (node, start) in nodes {
         let mut node_cursor = start;
@@ -710,7 +745,7 @@ fn filter_ttml_preserved_body_with_source(
                 keep
             })
             .collect::<String>();
-        let filtered = export_ttml_text(&retained_text, &style, source, &[], options);
+        let filtered = export_ttml_text(&retained_text, &style, source, &[], true, options);
         let range = node.range();
         edits.push((
             range.start - prefix.len()..range.end - prefix.len(),
@@ -878,10 +913,7 @@ pub(crate) fn write_ass_interval(
             continue;
         }
         let text = b24_export_character_text(character, interval, options);
-        let Some(text) = text.filter(|text| {
-            !crate::caption_features::filtered_text(text, true, options.preserve_accessibility)
-                .is_empty()
-        }) else {
+        let Some(text) = text else {
             write_filtered_ass_character_line(
                 writer,
                 interval,
@@ -990,7 +1022,7 @@ pub(crate) fn write_ass_interval_group(
                 continue;
             }
             let mut text = b24_export_character_text(character, interval, options)
-                .map(|text| export_text(text, options))
+                .map(str::to_owned)
                 .unwrap_or_default();
             if b24_export_character_text(character, interval, options).is_none()
                 && character.kind == 1
@@ -1047,11 +1079,7 @@ pub(crate) fn write_ass_interval_group(
             .iter()
             .map(|(_, text)| text.as_str())
             .collect::<String>();
-        let retained = crate::caption_features::retained_characters(
-            &combined,
-            true,
-            options.preserve_accessibility,
-        );
+        let retained = crate::caption_features::retained_characters(&combined, true, true);
         let mut cursor = 0_usize;
         let filtered_cells = cells
             .iter()
@@ -1186,7 +1214,7 @@ fn write_filtered_ass_character_line(
     scale_uniform: f32,
     options: &ConversionOptions,
 ) -> io::Result<()> {
-    if options.preserve_gaiji && options.preserve_accessibility {
+    if options.preserve_gaiji {
         return write_ass_character_line(
             writer,
             interval,
@@ -1198,11 +1226,7 @@ fn write_filtered_ass_character_line(
         );
     }
     let combined = line.iter().map(|(_, text)| *text).collect::<String>();
-    let retained = crate::caption_features::retained_characters(
-        &combined,
-        true,
-        options.preserve_accessibility,
-    );
+    let retained = crate::caption_features::retained_characters(&combined, true, true);
     let mut cursor = 0_usize;
     let owned = line
         .iter()

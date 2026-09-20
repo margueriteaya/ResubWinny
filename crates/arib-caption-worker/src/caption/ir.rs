@@ -170,7 +170,8 @@ mod tests {
             drcs_uses: Vec::new(),
             ruby_bindings: Vec::new(),
             accessibility_cues: Vec::new(),
-            inferred_accessibility_ranges: Vec::new(),
+            resolved_accessibility_ranges: Vec::new(),
+            broadcast_semantics_resolved: false,
             source_layout: None,
             source: None,
         };
