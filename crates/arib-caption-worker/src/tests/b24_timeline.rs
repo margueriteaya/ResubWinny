@@ -343,6 +343,31 @@ fn continuation_arrow_carries_b24_quote_state_to_the_next_scene() {
 }
 
 #[test]
+fn continuation_arrow_carries_b24_broadcast_delimiters_to_the_next_scene() {
+    let first = scene_with_text_regions(
+        1_000,
+        &[(100, 200, "(加寿彦)｟ダークエネルギーっていうのは➡")],
+    );
+    let second = scene_with_text_regions(2_000, &[(100, 200, "作用する｠")]);
+    let mut active = HashMap::new();
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
+
+    assert!(apply_scene_intervals(&mut active, &first, &mut semantic_state).is_empty());
+    let closed = apply_scene_intervals(&mut active, &second, &mut semantic_state);
+    assert_eq!(closed.len(), 1);
+    assert!(closed[0].accessibility_ranges.contains(&(5..6)));
+    let remaining = finish_scene_intervals(&mut active, 3_000);
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].accessibility_ranges, vec![4..5]);
+
+    let options = ConversionOptions {
+        preserve_accessibility: false,
+        ..ConversionOptions::default()
+    };
+    assert_eq!(interval_ttml_text(&remaining[0], &options), "作用する");
+}
+
+#[test]
 fn turns_packed_drcs_pixels_into_ass_drawing() {
     let glyph = native_b24::DrcsGlyph {
         drcs_code: 1,

@@ -479,6 +479,25 @@ fn continuation_arrow_carries_b62_quote_state_to_the_next_caption() {
 }
 
 #[test]
+fn continuation_arrow_carries_b62_broadcast_delimiters_to_the_next_caption() {
+    let mut captions = parse_ttml_captions(
+        r#"<tt><body><div>
+          <p begin='0s' end='1s'>(加寿彦)｟ダークエネルギーっていうのは➡</p>
+          <p begin='1s' end='2s'>作用する｠</p>
+        </div></body></tt>"#,
+        0,
+    );
+    let mut state = crate::caption_features::CaptionSequenceState::default();
+    let (first, second) = captions.split_at_mut(1);
+    annotate_ttml_group_semantics_with_state(first, &mut state);
+    annotate_ttml_group_semantics_with_state(second, &mut state);
+
+    assert!(first[0].resolved_accessibility_ranges.contains(&(5..6)));
+    assert_eq!(second[0].resolved_accessibility_ranges, vec![4..5]);
+    assert!(second[0].broadcast_semantics_resolved);
+}
+
+#[test]
 fn preserves_paragraph_level_accessibility_role_on_ttml_output() {
     let caption = parse_ttml_captions(
         r#"<tt xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><p begin='0s' end='1s' ttm:role='narration'>語り</p></body></tt>"#,

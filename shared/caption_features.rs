@@ -39,7 +39,17 @@ pub(crate) struct CaptionGroupSemantics {
 #[derive(Debug, Default, Clone)]
 pub(crate) struct CaptionSequenceState {
     japanese_quote_stack: Vec<char>,
+    semantic_delimiter_closes: Vec<char>,
 }
+
+const SEMANTIC_DELIMITER_PAIRS: [(char, char); 6] = [
+    ('<', '>'),
+    ('＜', '＞'),
+    ('≪', '≫'),
+    ('《', '》'),
+    ('｟', '｠'),
+    ('⦅', '⦆'),
+];
 
 #[allow(dead_code, reason = "convenience view of the shared semantic result")]
 pub(crate) fn accessibility_ranges(text: &str) -> Vec<Range<usize>> {
@@ -170,12 +180,24 @@ pub(crate) fn caption_group_semantics_with_state(
         }
         update_japanese_quote_stack(&mut quote_stack, chars);
     }
-    if texts.is_empty() || caption_group_continues(texts) {
+    let continues = caption_group_continues(texts);
+    let keeps_sequence_state = texts.is_empty() || continues;
+    if keeps_sequence_state {
         sequence_state.japanese_quote_stack = quote_stack;
     }
+    let mut inherited_closes = std::mem::take(&mut sequence_state.semantic_delimiter_closes);
     let mut cross_fragment_delimiter_count = 0;
-    for (open, close) in [('<', '>'), ('＜', '＞'), ('≪', '≫'), ('《', '》')] {
+    for (open, close) in SEMANTIC_DELIMITER_PAIRS {
         let mut pending: Option<(usize, usize)> = None;
+        let mut inherited = if let Some(index) = inherited_closes
+            .iter()
+            .position(|candidate| *candidate == close)
+        {
+            inherited_closes.remove(index);
+            true
+        } else {
+            false
+        };
         for (fragment_index, chars) in characters.iter().enumerate() {
             let Some((start, end)) = semantic_content_bounds(chars) else {
                 continue;
@@ -190,23 +212,40 @@ pub(crate) fn caption_group_semantics_with_state(
                     .removable_accessibility_ranges
                     .iter()
                     .any(|range| range.contains(&end));
-            if end_is_unmatched && let Some((open_fragment, open_index)) = pending.take() {
-                fragments[open_fragment]
-                    .removable_accessibility_ranges
-                    .push(open_index..open_index + 1);
+            if end_is_unmatched && (inherited || pending.is_some()) {
+                if let Some((open_fragment, open_index)) = pending.take() {
+                    fragments[open_fragment]
+                        .removable_accessibility_ranges
+                        .push(open_index..open_index + 1);
+                    fragments[open_fragment]
+                        .text_accessibility
+                        .narration_delimiter = true;
+                }
                 fragments[fragment_index]
                     .removable_accessibility_ranges
                     .push(end..end + 1);
-                fragments[open_fragment]
-                    .text_accessibility
-                    .narration_delimiter = true;
                 fragments[fragment_index]
                     .text_accessibility
                     .narration_delimiter = true;
+                inherited = false;
                 cross_fragment_delimiter_count += 1;
             }
             if start_is_unmatched {
                 pending = Some((fragment_index, start));
+            }
+        }
+        if keeps_sequence_state {
+            if let Some((open_fragment, open_index)) = pending {
+                fragments[open_fragment]
+                    .removable_accessibility_ranges
+                    .push(open_index..open_index + 1);
+                fragments[open_fragment]
+                    .text_accessibility
+                    .narration_delimiter = true;
+                inherited = true;
+            }
+            if inherited {
+                sequence_state.semantic_delimiter_closes.push(close);
             }
         }
     }
@@ -425,13 +464,9 @@ fn add_narration_delimiter_ranges(chars: &[char], cue_ranges: &mut Vec<Vec<Range
                         .unwrap_or(end);
                 }
             }
-            let close = match chars[start] {
-                '<' => Some('>'),
-                '＜' => Some('＞'),
-                '≪' => Some('≫'),
-                '《' => Some('》'),
-                _ => None,
-            };
+            let close = SEMANTIC_DELIMITER_PAIRS
+                .iter()
+                .find_map(|(open, close)| (*open == chars[start]).then_some(*close));
             if let Some(close) = close {
                 let mut ranges = Vec::with_capacity(2);
                 if let Some(index) = (start + 1..=end).find(|index| chars[*index] == close) {
@@ -808,6 +843,41 @@ mod tests {
     }
 
     #[test]
+    fn continuation_arrow_carries_broadcast_delimiters_to_the_next_page() {
+        for (open, close) in [('｟', '｠'), ('⦅', '⦆'), ('＜', '＞'), ('《', '》')] {
+            let mut state = CaptionSequenceState::default();
+            let first_text = format!("(加寿彦){open}ダークエネルギーっていうのは➡");
+            let first = caption_group_semantics_with_state(&[&first_text], &[], &mut state);
+            let open_index = first_text
+                .chars()
+                .position(|character| character == open)
+                .unwrap();
+            assert!(
+                first.fragments[0]
+                    .removable_accessibility_ranges
+                    .contains(&(open_index..open_index + 1)),
+                "{first_text}"
+            );
+
+            caption_group_semantics_with_state(&[], &[], &mut state);
+            let second_text = format!("作用する{close}");
+            let second = caption_group_semantics_with_state(&[&second_text], &[], &mut state);
+            let close_index = second_text.chars().count() - 1;
+            assert!(
+                second.fragments[0]
+                    .removable_accessibility_ranges
+                    .contains(&(close_index..close_index + 1)),
+                "{second_text}"
+            );
+        }
+
+        let mut unlinked = CaptionSequenceState::default();
+        caption_group_semantics_with_state(&["｟前の字幕"], &[], &mut unlinked);
+        let next = caption_group_semantics_with_state(&["次の字幕｠"], &[], &mut unlinked);
+        assert!(next.fragments[0].removable_accessibility_ranges.is_empty());
+    }
+
+    #[test]
     fn japanese_broadcast_notation_examples_form_a_fixed_semantic_matrix() {
         // NHK G-Media and the domestic captioned-CM handbook describe these
         // editorial uses. Transport-specific B24/B62 evidence enters the same
@@ -822,6 +892,8 @@ mod tests {
             ("♪〜音楽", "音楽"),
             ("＜ナレーション＞", "ナレーション"),
             ("《心の声》", "心の声"),
+            ("｟フィルター音声｠", "フィルター音声"),
+            ("⦅フィルター音声⦆", "フィルター音声"),
             ("本文➡", "本文"),
         ];
         for (source, expected) in cases {
