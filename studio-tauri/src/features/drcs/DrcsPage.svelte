@@ -16,7 +16,7 @@
   <div class="header-actions"><button class="outline" onclick={onRefresh} disabled={!canRefresh}>{t("drcs.refreshResources")}</button></div>
 </header>
 <section class="drcs-page">
-  <DrcsDictionary {glyphs} {message} refresh={onRefresh} {getMapping} saveMapping={onSaveMapping} />
+  <DrcsDictionary {glyphs} {message} {getMapping} saveMapping={onSaveMapping} />
 </section>
 
 <style>

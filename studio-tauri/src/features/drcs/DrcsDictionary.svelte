@@ -11,8 +11,6 @@ import { FileType2, Filter, Grid3X3, Image, Maximize2, Minus, Plus, RotateCcw, S
   export let message = ''
   export let getMapping: (id: string) => Mapping | undefined
   export let saveMapping: (id: string, text: string, action: Mapping['action']) => void
-  export let refresh: () => void = () => {}
-
   let selected: Glyph | null = null
   let search = ''
   let tab: 'auto' | 'user' = 'auto'
@@ -40,14 +38,14 @@ import { FileType2, Filter, Grid3X3, Image, Maximize2, Minus, Plus, RotateCcw, S
   }
 </script>
 
-<section class="dictionary-shell">
-  <div class="dictionary-tabs"><MacSegmentedControl ariaLabel={t('nav.drcs')} value={tab} options={[{value:'auto',label:t('drcs.auto')},{value:'user',label:t('drcs.user')}]} onChange={(value) => tab = value as typeof tab} /></div>
-  <div class="dictionary-tools">
+<section class:empty={!glyphs.length} class="dictionary-shell">
+  {#if glyphs.length}
+    <div class="dictionary-tabs"><MacSegmentedControl ariaLabel={t('nav.drcs')} value={tab} options={[{value:'auto',label:t('drcs.auto')},{value:'user',label:t('drcs.user')}]} onChange={(value) => tab = value as typeof tab} /></div>
+    <div class="dictionary-tools">
     <label class="search"><Search size={17} /><input bind:value={search} placeholder={t('drcs.search')} /><button aria-label={t('drcs.clearSearch')} onclick={() => search = ''}><X size={15} /></button></label>
     <PopupButton label={t('drcs.status')} value={status} options={[{value:'all',label:t('drcs.all')},{value:'mapped',label:t('drcs.mapped')},{value:'review',label:t('drcs.review')}]} onChange={(value) => status = value as typeof status} />
-    <button class="tool-button" onclick={() => status = status === 'review' ? 'all' : 'review'}><Filter size={17} /> {status === 'review' ? t('drcs.allGlyphs') : t('drcs.needsReview')}</button><button class="tool-button" aria-label={t('drcs.refresh')} onclick={refresh}><RotateCcw size={18} /></button>
-  </div>
-  {#if glyphs.length}
+    <button class="tool-button" onclick={() => status = status === 'review' ? 'all' : 'review'}><Filter size={17} /> {status === 'review' ? t('drcs.allGlyphs') : t('drcs.needsReview')}</button>
+    </div>
     <div class:no-inspector={!selected} class="dictionary-content">
       <section class="glyph-table" aria-label={t('drcs.glyphs')}>
         <div class="glyph-heading"><span>{t('drcs.preview')}</span><span>{t('drcs.mapping')}</span><span>{t('drcs.status')}</span></div>
@@ -85,10 +83,12 @@ import { FileType2, Filter, Grid3X3, Image, Maximize2, Minus, Plus, RotateCcw, S
 
 <style>
   .dictionary-shell{display:grid;grid-template-rows:40px 48px minmax(0,1fr);width:100%;height:100%;min-height:0;color:var(--rw-text);overflow:hidden;background:transparent}
+  .dictionary-shell.empty{grid-template-rows:minmax(0,1fr)}
   .dictionary-tabs{justify-self:start;display:flex;align-items:center;width:max-content;height:40px;margin:0}
   .dictionary-tabs :global(.mac-segmented button){min-width:88px}
   .dictionary-tools{justify-self:stretch;display:flex;align-items:center;gap:8px;width:100%;min-height:48px;padding:6px 0;border-bottom:1px solid var(--rw-border-subtle)}
   .search{display:flex;align-items:center;gap:7px;width:min(270px,32%);height:32px;padding:0 8px;color:var(--rw-muted);border:1px solid var(--rw-border);border-radius:7px;background:var(--rw-content)}
+  .search:focus-within{border-color:var(--rw-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--rw-accent) 24%,transparent)}
   .search input{min-width:0;min-height:0!important;flex:1;padding:0!important;border:0!important;outline:0!important;background:transparent!important;font-size:11px}.search button{display:grid;place-items:center;width:22px;height:22px;padding:0;border-radius:50%;color:inherit;background:transparent}
   .tool-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 10px;border:.5px solid var(--rw-glass-border);border-radius:8px;color:var(--rw-text);background:transparent;font-size:11px}.tool-button:first-of-type{margin-left:auto}
   .dictionary-tools :global(.popup-button){width:152px;margin-top:0}
@@ -108,6 +108,7 @@ import { FileType2, Filter, Grid3X3, Image, Maximize2, Minus, Plus, RotateCcw, S
   .dictionary-empty{display:grid;place-items:center;gap:8px;min-height:0;color:var(--rw-muted);text-align:center}.dictionary-empty h2,.dictionary-empty p{margin:0}.dictionary-empty h2{color:var(--rw-text);font-size:15px}
   @media(max-width:980px){.dictionary-content{grid-template-columns:minmax(0,1fr) 270px}.glyph-heading,.glyph-row{grid-template-columns:72px minmax(130px,1fr) 96px}.dictionary-tools{flex-wrap:wrap}.search{width:min(240px,48%)}}
   @media(max-width:720px){.dictionary-shell{height:auto;overflow:visible}.dictionary-content{grid-template-columns:1fr;overflow:visible}.glyph-table{overflow:visible;border-right:0}.dictionary-inspector{overflow:visible;border-top:1px solid var(--rw-border-subtle)}.dictionary-tools .tool-button:first-of-type{margin-left:0}}
+  @media(forced-colors:active){.search:focus-within{outline:2px solid Highlight;outline-offset:2px}}
 
   /* DRCS identifiers and mapping notes are work data, not decorative labels. */
   .tool-button{font-size:12px}.glyph-heading{height:34px;font-size:11px}.glyph-row{min-height:74px;contain-intrinsic-size:auto 74px}.mapping small,.mapping-status small{font-size:11px;line-height:15px}.mapping-status{font-size:12px}.table-footer{height:34px;font-size:11px}.filter-empty p,.dictionary-inspector header p{font-size:12px;line-height:16px}.zoom-row b{font-size:12px}.dictionary-inspector>label,.dictionary-inspector legend{font-size:12px}.dictionary-inspector input[type="text"]{font-size:12px}.mapping-hint{font-size:11px;line-height:15px}.save-mapping,.reset{font-size:12px}
