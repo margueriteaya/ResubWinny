@@ -147,8 +147,6 @@ main[data-preview-active="true"] .shell-glass { transition: none; }
 .traffic-light { position: relative; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; }
 .traffic-light img { position: absolute; inset: 0; display: block; width: 14px; height: 14px; transition: opacity var(--rw-motion-fast) var(--rw-ease-out); }
 .traffic-hover,.traffic-active { opacity: 0; }
-.traffic-lights:hover .traffic-normal { opacity: 0; }
-.traffic-lights:hover .traffic-hover { opacity: 1; }
 .traffic-light:active .traffic-hover { opacity: 0; }
 .traffic-light:active .traffic-active { opacity: 1; }
 .titlebar-icon {
@@ -242,6 +240,9 @@ main[data-preview-active="true"] .shell-glass { transition: none; }
 .titlebar-icon,.pane-toggle { background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; }
 
 @media (hover:hover) and (pointer:fine) {
+  .traffic-lights:hover .traffic-normal { opacity:0; }
+  .traffic-lights:hover .traffic-hover { opacity:1; }
+  .sidebar-navigation button:hover::after { opacity:.55; }
   .liquid-control:hover:not(:disabled) .liquid-visual-layer { background-color:color-mix(in srgb,var(--rw-glass-control-hover) 58%,transparent); }
   .liquid-control:hover:not(:disabled) .liquid-visual-layer::before { background-position:58% 56%; opacity:.76; transform:translate3d(1.5%,1%,0); }
   .liquid-control:hover:not(:disabled) .liquid-visual-layer::after { border-color:rgba(255,255,255,.44); opacity:.88; }
@@ -401,7 +402,7 @@ main { background: var(--rw-surface) !important; }
   transition: color var(--rw-motion-responsive) var(--rw-ease-out), background-color var(--rw-motion-responsive) var(--rw-ease-out);
 }
 .sidebar-navigation button::after { content:""; position:absolute; inset:.5px; border-radius:inherit; pointer-events:none; opacity:0; background:linear-gradient(145deg,rgba(255,255,255,.2),transparent 42%); transition:opacity var(--rw-motion-responsive) var(--rw-ease-out); }
-.sidebar-navigation button:hover::after,.sidebar-navigation button:focus-visible::after,.sidebar-navigation button.active::after { opacity:.55; }
+.sidebar-navigation button:focus-visible::after,.sidebar-navigation button.active::after { opacity:.55; }
 .sidebar-navigation button svg {
   color: currentColor !important;
 }

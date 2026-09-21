@@ -792,7 +792,7 @@
     container-type: inline-size;
     text-align: left;
   }
-  .timeline-track button:hover { background: color-mix(in srgb, var(--event-color, var(--rw-accent)) 12%, var(--rw-content)); }
+  @media(hover:hover) and (pointer:fine){.timeline-track button:hover{background:color-mix(in srgb,var(--event-color,var(--rw-accent)) 12%,var(--rw-content))}}
   .timeline-track button:global(.current) { border-color: color-mix(in srgb, var(--rw-accent) 82%, var(--rw-border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--rw-accent) 42%, transparent), 0 2px 5px rgba(0, 68, 150, .12); }
   .timeline-event-features { display: flex; align-items: center; height: 17px; overflow: hidden; gap: 4px; white-space: nowrap; }
   .timeline-event-feature { display: inline-flex; align-items: center; min-width: 0; gap: 2px; color: var(--feature-color); font-size: 11px; line-height: 15px; font-weight: 650; }
