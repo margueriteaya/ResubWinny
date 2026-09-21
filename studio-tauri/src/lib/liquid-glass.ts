@@ -28,6 +28,7 @@ const surfaceSelector = [
   ".approved-icon",
   ".format-picker button",
   ".capability-chips button",
+  ".status-bar .task-control",
 ].join(",");
 
 const refractiveSurfaceSelector = [
@@ -86,6 +87,7 @@ const interactiveSurfaceSelector = [
   ".approved-icon",
   ".format-picker button",
   ".capability-chips button",
+  ".status-bar .task-control",
 ].join(",");
 
 declare global {
