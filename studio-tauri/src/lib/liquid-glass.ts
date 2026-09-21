@@ -26,6 +26,8 @@ const surfaceSelector = [
   ".popup-menu",
   ".approved-secondary",
   ".approved-icon",
+  ".format-picker button",
+  ".capability-chips button",
 ].join(",");
 
 const refractiveSurfaceSelector = [
@@ -82,6 +84,8 @@ const interactiveSurfaceSelector = [
   ".mac-checkbox .checkbox-box",
   ".approved-secondary",
   ".approved-icon",
+  ".format-picker button",
+  ".capability-chips button",
 ].join(",");
 
 declare global {
@@ -146,22 +150,26 @@ export function installLiquidGlass() {
   document.body.append(tooltip);
   let tooltipHost: HTMLElement | null = null;
   let tooltipTimer = 0;
+  let tooltipWarmUntil = 0;
   let pointerFrame = 0;
   let pointerHost: HTMLElement | null = null;
   let pointerX = 50;
   let pointerY = 50;
 
-  const hideTooltip = () => {
+  const hideTooltip = (keepWarm = false) => {
     if (tooltipTimer) window.clearTimeout(tooltipTimer);
     tooltipTimer = 0;
+    if (keepWarm && !tooltip.hidden) tooltipWarmUntil = performance.now() + 400;
+    else if (!keepWarm) tooltipWarmUntil = 0;
     tooltipHost = null;
     tooltip.hidden = true;
   };
-  const showTooltip = (host: HTMLElement) => {
+  const showTooltip = (host: HTMLElement, instant = false) => {
     const label = host.dataset.tooltip?.trim();
     if (!label || !host.isConnected) return;
     tooltipHost = host;
     tooltip.textContent = label;
+    tooltip.toggleAttribute("data-instant", instant);
     tooltip.hidden = false;
     const hostBounds = host.getBoundingClientRect();
     const tooltipBounds = tooltip.getBoundingClientRect();
@@ -179,9 +187,10 @@ export function installLiquidGlass() {
   };
   const scheduleTooltip = (host: HTMLElement, delay: number) => {
     if (tooltipHost === host && !tooltip.hidden) return;
-    hideTooltip();
+    const instant = performance.now() < tooltipWarmUntil;
+    hideTooltip(instant);
     tooltipHost = host;
-    tooltipTimer = window.setTimeout(() => showTooltip(host), delay);
+    tooltipTimer = window.setTimeout(() => showTooltip(host, instant), instant ? 0 : delay);
   };
 
   const clearPointerHighlight = (host: HTMLElement | null = pointerHost) => {
@@ -268,12 +277,13 @@ export function installLiquidGlass() {
   };
   const tooltipPointerOut = (event: PointerEvent) => {
     const host = (event.target as Element | null)?.closest<HTMLElement>("[data-tooltip]");
-    if (host && !host.contains(event.relatedTarget as Node | null)) hideTooltip();
+    if (host && !host.contains(event.relatedTarget as Node | null)) hideTooltip(true);
   };
   const tooltipFocusIn = (event: FocusEvent) => {
     const host = (event.target as Element | null)?.closest<HTMLElement>("[data-tooltip]");
     if (host && !host.matches(":disabled")) scheduleTooltip(host, 120);
   };
+  const dismissTooltip = () => hideTooltip();
   const surfaceDisabled = (surface: HTMLElement) => {
     if (surface.matches(":disabled")) return true;
     const composite = surface.closest<HTMLElement>(".mac-slider, .mac-switch, .mac-checkbox");
@@ -301,25 +311,14 @@ export function installLiquidGlass() {
       delete surface.dataset.liquidPressed;
     });
   };
-  const keyDown = (event: KeyboardEvent) => {
-    if (event.repeat || (event.key !== " " && event.key !== "Enter")) return;
-    const surface = liquidSurface(event.target);
-    if (!surface || surfaceDisabled(surface)) return;
-    surface.dataset.liquidPressed = "true";
-  };
-  const keyUp = (event: KeyboardEvent) => {
-    if (event.key === " " || event.key === "Enter") releasePressedSurfaces();
-  };
   document.addEventListener("pointerover", tooltipPointerOver, { passive: true });
   document.addEventListener("pointerout", tooltipPointerOut, { passive: true });
   document.addEventListener("pointermove", pointerMove, { passive: true });
   document.addEventListener("pointerout", pointerOut, { passive: true });
   document.addEventListener("pointerdown", pointerDown, { passive: true });
-  document.addEventListener("keydown", keyDown);
-  document.addEventListener("keyup", keyUp);
   document.addEventListener("focusin", tooltipFocusIn);
-  document.addEventListener("focusout", hideTooltip);
-  document.addEventListener("scroll", hideTooltip, { capture: true, passive: true });
+  document.addEventListener("focusout", dismissTooltip);
+  document.addEventListener("scroll", dismissTooltip, { capture: true, passive: true });
   window.addEventListener("pointerup", releasePressedSurfaces, { passive: true });
   window.addEventListener("pointercancel", releasePressedSurfaces, { passive: true });
 
@@ -332,11 +331,9 @@ export function installLiquidGlass() {
     document.removeEventListener("pointermove", pointerMove);
     document.removeEventListener("pointerout", pointerOut);
     document.removeEventListener("pointerdown", pointerDown);
-    document.removeEventListener("keydown", keyDown);
-    document.removeEventListener("keyup", keyUp);
     document.removeEventListener("focusin", tooltipFocusIn);
-    document.removeEventListener("focusout", hideTooltip);
-    document.removeEventListener("scroll", hideTooltip, { capture: true });
+    document.removeEventListener("focusout", dismissTooltip);
+    document.removeEventListener("scroll", dismissTooltip, { capture: true });
     window.removeEventListener("pointerup", releasePressedSurfaces);
     window.removeEventListener("pointercancel", releasePressedSurfaces);
     if (bootFrame) cancelAnimationFrame(bootFrame);
