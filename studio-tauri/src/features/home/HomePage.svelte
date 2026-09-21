@@ -2,7 +2,7 @@
   import { ChevronDown, FileUp, FileVideo2, FolderPlus, Layers3, ScanText, TriangleAlert } from "@lucide/svelte";
   import { t } from "../../i18n";
   import type { AppSettings, ExportFormat, ExportPreservation } from "../../backend";
-  import { capabilitySummary } from "../tasks/format-capabilities";
+  import { formatCapabilities, type CapabilityLevel } from "../tasks/format-capabilities";
   import { togglePreferredFormat } from "./export-preferences";
   import { liquidDisclosure } from "../../lib/motion";
 
@@ -31,12 +31,33 @@
     onSettingsChange({ ...settings, exportPreferences: { ...settings.exportPreferences, ...next } });
   }
   function toggleFormat(format: ExportFormat) {
-    updatePreferences({ formats: togglePreferredFormat(settings.exportPreferences.formats, format) });
+    const nextFormats = togglePreferredFormat(settings.exportPreferences.formats, format);
+    explainedFormat = nextFormats.includes(format) ? format : nextFormats[0] ?? "ASS";
+    activeCapabilityFeature = preferredCapability(explainedFormat);
+    updatePreferences({ formats: nextFormats });
   }
   function togglePreservation(key: keyof ExportPreservation) {
     updatePreferences({ preservation: { ...settings.exportPreferences.preservation, [key]: !settings.exportPreferences.preservation[key] } });
   }
   let noticeExpanded = false;
+  let explainedFormat: ExportFormat = settings.exportPreferences.formats[0] ?? "ASS";
+  let activeCapabilityFeature = "drcs";
+  const capabilityIcon: Record<CapabilityLevel, string> = { preserved: "✓", approximated: "△", conditional: "◇", unsupported: "×" };
+  const capabilityPriority: CapabilityLevel[] = ["conditional", "unsupported", "approximated", "preserved"];
+  const preferredCapability = (format: ExportFormat) => {
+    const entries = formatCapabilities(format);
+    return capabilityPriority.map((level) => entries.find((entry) => entry.level === level)?.feature).find(Boolean) ?? entries[0]?.feature ?? "position";
+  };
+  const levelLabel = (level: CapabilityLevel) => t(`home.capability.${level}`);
+  const levelDetail = (level: CapabilityLevel) => t(`home.capability.${level}Detail`);
+  const summaryParts = (format: ExportFormat) => capabilityPriority
+    .map((level) => ({ level, count: formatCapabilities(format).filter((entry) => entry.level === level).length }))
+    .filter(({ count }) => count > 0)
+    .map(({ level, count }) => t(`home.capability.summary.${level}`).replace("{count}", String(count)));
+  $: if (!settings.exportPreferences.formats.includes(explainedFormat)) explainedFormat = settings.exportPreferences.formats[0] ?? "ASS";
+  $: explainedCapabilities = formatCapabilities(explainedFormat);
+  $: if (!explainedCapabilities.some((entry) => entry.feature === activeCapabilityFeature)) activeCapabilityFeature = preferredCapability(explainedFormat);
+  $: activeCapability = explainedCapabilities.find((entry) => entry.feature === activeCapabilityFeature) ?? explainedCapabilities[0];
 
   const historyStatus = (item: HistoryItem) => {
     if (item.warnings) return `${item.warnings} ${t("home.warnings")}`;
@@ -63,8 +84,14 @@
   <section class="home-output-preferences" aria-label={t("home.outputPreferences")}>
     <div class="preference-group format-preference">
       <h2>{t("home.outputFormats")}</h2>
-      <div class="format-picker">{#each formats as format}<button type="button" class:selected={settings.exportPreferences.formats.includes(format)} onclick={() => toggleFormat(format)}>{format}</button>{/each}</div>
-      <div class="format-notes">{#each settings.exportPreferences.formats as format}<p class="format-note"><b>{format}</b><br /><small>{capabilitySummary(format, (feature) => t(`feature.${feature}`))}</small></p>{/each}</div>
+      <div class="format-picker">{#each formats as format}<button type="button" class:selected={settings.exportPreferences.formats.includes(format)} class:explained={explainedFormat === format} aria-pressed={settings.exportPreferences.formats.includes(format)} onclick={() => toggleFormat(format)}>{format}</button>{/each}</div>
+      <p class="decision-summary"><b>{explainedFormat}</b><span>{summaryParts(explainedFormat).join(" · ")}</span></p>
+      <div class="capability-chips" role="list" aria-label={t("home.capability.features")}>
+        {#each explainedCapabilities as capability (capability.feature)}
+          <button type="button" class={`level-${capability.level}`} aria-pressed={activeCapabilityFeature === capability.feature} title={levelLabel(capability.level)} onclick={() => activeCapabilityFeature = capability.feature}><i>{capabilityIcon[capability.level]}</i>{t(`feature.${capability.feature}`)}</button>
+        {/each}
+      </div>
+      {#if activeCapability}<div class={`capability-detail level-${activeCapability.level}`} aria-live="polite"><b><i>{capabilityIcon[activeCapability.level]}</i>{t(`feature.${activeCapability.feature}`)} · {levelLabel(activeCapability.level)}</b><p>{levelDetail(activeCapability.level)}</p></div>{/if}
     </div>
     <div class="preference-group preservation-preference">
       <h2>{t("home.preserveContent")}</h2>
@@ -118,7 +145,7 @@
   .dropzone-copy small { color: var(--rw-text-secondary); font-size: 12px; line-height: 17px; }
   .home-primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; margin-top: 18px; padding: 0 16px; border: 1px solid color-mix(in srgb, var(--rw-accent) 80%, var(--rw-border)); border-radius: 7px; color: #fff; background: var(--rw-accent); font-size: 13px; font-weight: 680; }
   .recent-workbench-section { margin-top: 22px; }
-  .home-output-preferences{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(250px,.88fr);gap:10px;margin-top:12px}.preference-group{min-width:0;padding:13px 14px;border:1px solid var(--rw-border-subtle);border-radius:9px;background:color-mix(in srgb,var(--rw-surface-muted) 72%,var(--rw-content))}.home-output-preferences h2{margin:0 0 9px;font-size:12px;line-height:16px;font-weight:680;letter-spacing:.015em}.format-picker,.preservation-picker{display:flex;flex-wrap:wrap;gap:6px}.format-picker button{padding:5px 10px;border:1px solid var(--rw-border);border-radius:6px;color:var(--rw-text-secondary);background:var(--rw-content);font-size:12px}.format-picker button.selected{border-color:var(--rw-accent);color:var(--rw-text);background:color-mix(in srgb,var(--rw-accent) 12%,var(--rw-content))}.format-note{margin:7px 0 0;color:var(--rw-text-secondary);font-size:11px;line-height:15px}.preservation-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 10px}.preservation-picker label{display:inline-flex;align-items:center;gap:5px;min-width:0;color:var(--rw-text-secondary);font-size:11px;line-height:16px}
+  .home-output-preferences{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(250px,.88fr);gap:10px;margin-top:12px;align-items:stretch}.preference-group{min-width:0;padding:13px 14px;border:1px solid var(--rw-border-subtle);border-radius:9px;background:color-mix(in srgb,var(--rw-surface-muted) 72%,var(--rw-content))}.format-preference{box-sizing:border-box;height:256px}.home-output-preferences h2{margin:0 0 9px;font-size:12px;line-height:16px;font-weight:680;letter-spacing:.015em}.format-picker,.preservation-picker{display:flex;flex-wrap:wrap;gap:6px}.format-picker button{padding:5px 10px;border:1px solid var(--rw-border);border-radius:6px;color:var(--rw-text-secondary);background:var(--rw-content);font-size:12px}.format-picker button.selected{border-color:var(--rw-accent);color:var(--rw-text);background:color-mix(in srgb,var(--rw-accent) 12%,var(--rw-content))}.format-picker button.explained{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--rw-accent) 56%,transparent)}.decision-summary{display:flex;gap:6px;min-height:30px;margin:8px 0 6px;color:var(--rw-text-secondary);font-size:11px;line-height:15px}.decision-summary b{color:var(--rw-text)}.capability-chips{display:flex;flex-wrap:wrap;gap:5px}.capability-chips button{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 7px;border:1px solid var(--rw-border-subtle);border-radius:6px;color:var(--rw-text-secondary);background:var(--rw-content);font-size:10px}.capability-chips button i,.capability-detail i{font-style:normal}.capability-chips button[aria-pressed="true"]{border-color:color-mix(in srgb,currentColor 48%,var(--rw-border));color:var(--rw-text);background:color-mix(in srgb,var(--rw-accent) 8%,var(--rw-content))}.level-preserved i,.level-preserved>b{color:var(--rw-success)}.level-approximated i,.level-approximated>b{color:var(--rw-warning)}.level-conditional i,.level-conditional>b{color:var(--rw-accent)}.level-unsupported i,.level-unsupported>b{color:#c24848}.capability-detail{min-height:60px;margin-top:7px;padding:8px 9px;border:1px solid var(--rw-border-subtle);border-radius:7px;background:var(--rw-content)}.capability-detail b{font-size:10px;line-height:14px}.capability-detail b i{margin-right:4px}.capability-detail p{margin:3px 0 0;color:var(--rw-text-secondary);font-size:10px;line-height:14px}.preservation-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 10px}.preservation-picker label{display:inline-flex;align-items:center;gap:5px;min-width:0;color:var(--rw-text-secondary);font-size:11px;line-height:16px}
   .recent-workbench-section > header { display: flex; align-items: center; min-height: 36px; border-bottom: 1px solid var(--rw-border); }
   .recent-workbench-section h2 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 680; }
   .recent-task-list { margin: 0; padding: 0; list-style: none; }
@@ -141,7 +168,7 @@
   .home-secondary-actions button :global(svg) { flex: 0 0 auto; color: var(--rw-accent); }
   .home-secondary-actions span { min-width: 0; }.home-secondary-actions b, .home-secondary-actions small { display: block; }
   .home-secondary-actions b { font-size: 12px; line-height: 16px; font-weight: 650; }.home-secondary-actions small { overflow: hidden; max-width: 190px; color: var(--rw-muted); font-size: 11px; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
-  @container content (max-width: 620px) { .workbench-home { margin-top: 10px; }.workbench-home-title { text-align: left; }.home-output-preferences{grid-template-columns:1fr}.recent-task-list button { grid-template-columns: 34px minmax(0, 1fr) auto; }.recent-status { display: none; }.home-secondary-actions { justify-content: stretch; }.home-secondary-actions button { flex: 1; }.home-secondary-actions small { max-width: 120px; } }
+  @container content (max-width: 620px) { .workbench-home { margin-top: 10px; }.workbench-home-title { text-align: left; }.home-output-preferences{grid-template-columns:1fr}.format-preference{height:auto;min-height:214px}.recent-task-list button { grid-template-columns: 34px minmax(0, 1fr) auto; }.recent-status { display: none; }.home-secondary-actions { justify-content: stretch; }.home-secondary-actions button { flex: 1; }.home-secondary-actions small { max-width: 120px; } }
   @keyframes caption-scan{from{opacity:.2;transform:translateY(2px)}to{opacity:.95;transform:none}}
   @media(prefers-reduced-motion:reduce){.caption-outline.inspecting i{animation:none}.source-rights-notice button :global(svg){transition:none}}
   @media(forced-colors:active){.caption-outline,.source-rights-notice{border:1px solid CanvasText}}
