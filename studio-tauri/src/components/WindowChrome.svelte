@@ -21,6 +21,7 @@
   export let sourceInspectorCollapsed = workspaceLayout.sourceCollapsed;
   export let outputInspectorCollapsed = workspaceLayout.outputCollapsed;
   export let minimal = false;
+  export let hasTask = false;
   export let onWindowAction: (action: "minimize" | "maximize" | "close") => void = () => {};
   export let onBeginDrag: () => void = () => {};
   export let onBeginResize: (direction: string) => void = () => {};
@@ -63,7 +64,7 @@
   </button>
   <div class="title-drag-region" role="presentation" onmousedown={onBeginDrag}></div>
   <div class="titlebar-tools">
-    {#if page === "tasks"}
+    {#if page === "tasks" && hasTask}
       <div class="titlebar-button-group" aria-label={t("workspace.panelControls")}>
         <button class="titlebar-icon liquid-control" aria-label={sourceInspectorCollapsed ? t("app.showSidebar") : t("app.hideSidebar")} data-tooltip={sourceInspectorCollapsed ? t("app.showSidebar") : t("app.hideSidebar")} onclick={onToggleSourceInspector}>{#if sourceInspectorCollapsed}<PanelLeftOpen size={16} />{:else}<PanelLeftClose size={16} />{/if}</button>
         <button class="titlebar-icon liquid-control" aria-label={outputInspectorCollapsed ? t("workspace.showOutput") : t("workspace.hideOutput")} data-tooltip={outputInspectorCollapsed ? t("workspace.showOutput") : t("workspace.hideOutput")} onclick={onToggleOutputInspector}>{#if outputInspectorCollapsed}<PanelRightOpen size={16} />{:else}<PanelRightClose size={16} />{/if}</button>

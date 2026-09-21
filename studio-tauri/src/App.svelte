@@ -1027,6 +1027,7 @@
       workspaceLayout={appSettings.workspaceLayout}
       {sourceInspectorCollapsed}
       {outputInspectorCollapsed}
+      hasTask={Boolean(inspection)}
       onWindowAction={(action) => void windowSession.action(action)}
       onBeginDrag={() => void windowSession.beginDrag()}
       onBeginResize={(direction) => void windowSession.beginResize(direction as ResizeDirection)}
