@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
   import { TriangleAlert, X } from "@lucide/svelte";
+  import { noticeIn, noticeOut } from "./lib/motion";
   import HomePage from "./features/home/HomePage.svelte";
   import OnboardingPage from "./features/onboarding/OnboardingPage.svelte";
   import { OnboardingSession } from "./features/onboarding/session";
@@ -1039,7 +1040,7 @@
   {/key}
 
   {#if error}
-    <div class="global-error" role="alert">
+    <div class="global-error" role="alert" in:noticeIn out:noticeOut>
       <TriangleAlert class="global-error-icon" size={17} aria-hidden="true" />
       <span>{error}</span>
       <button type="button" aria-label={t("common.dismiss")} onclick={() => error = ""}><X size={16} /></button>

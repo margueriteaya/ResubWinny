@@ -248,6 +248,7 @@ export function installLiquidGlass() {
 
   const accessibilityMedia = [
     window.matchMedia("(prefers-reduced-motion: reduce)"),
+    window.matchMedia("(prefers-reduced-transparency: reduce)"),
     window.matchMedia("(forced-colors: active)"),
   ];
   const updateMaterialMode = () => {
@@ -293,30 +294,22 @@ export function installLiquidGlass() {
     if (event.button !== 0) return;
     const surface = liquidSurface(event.target);
     if (!surface || surfaceDisabled(surface)) return;
-    delete surface.dataset.liquidReleasing;
     surface.dataset.liquidPressed = "true";
   };
   const releasePressedSurfaces = () => {
     document.querySelectorAll<HTMLElement>(".liquid-control[data-liquid-pressed]").forEach((surface) => {
       delete surface.dataset.liquidPressed;
-      surface.dataset.liquidReleasing = "true";
     });
   };
   const keyDown = (event: KeyboardEvent) => {
     if (event.repeat || (event.key !== " " && event.key !== "Enter")) return;
     const surface = liquidSurface(event.target);
     if (!surface || surfaceDisabled(surface)) return;
-    delete surface.dataset.liquidReleasing;
     surface.dataset.liquidPressed = "true";
   };
   const keyUp = (event: KeyboardEvent) => {
     if (event.key === " " || event.key === "Enter") releasePressedSurfaces();
   };
-  const animationEnd = (event: AnimationEvent) => {
-    const surface = (event.target as Element | null)?.closest<HTMLElement>('.liquid-control[data-liquid-releasing="true"]');
-    if (surface && event.animationName === "rw-liquid-release") delete surface.dataset.liquidReleasing;
-  };
-
   document.addEventListener("pointerover", tooltipPointerOver, { passive: true });
   document.addEventListener("pointerout", tooltipPointerOut, { passive: true });
   document.addEventListener("pointermove", pointerMove, { passive: true });
@@ -324,7 +317,6 @@ export function installLiquidGlass() {
   document.addEventListener("pointerdown", pointerDown, { passive: true });
   document.addEventListener("keydown", keyDown);
   document.addEventListener("keyup", keyUp);
-  document.addEventListener("animationend", animationEnd);
   document.addEventListener("focusin", tooltipFocusIn);
   document.addEventListener("focusout", hideTooltip);
   document.addEventListener("scroll", hideTooltip, { capture: true, passive: true });
@@ -342,7 +334,6 @@ export function installLiquidGlass() {
     document.removeEventListener("pointerdown", pointerDown);
     document.removeEventListener("keydown", keyDown);
     document.removeEventListener("keyup", keyUp);
-    document.removeEventListener("animationend", animationEnd);
     document.removeEventListener("focusin", tooltipFocusIn);
     document.removeEventListener("focusout", hideTooltip);
     document.removeEventListener("scroll", hideTooltip, { capture: true });

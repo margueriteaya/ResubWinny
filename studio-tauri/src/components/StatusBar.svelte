@@ -20,7 +20,7 @@
 <footer class="status-bar">
   <span><HardDrive size={17} />{container ? `${bytes(sourceSize)} · ${container}` : t("common.ready")}</span>
   {#if isExporting}
-    <div class="task-progress"><span>{isPaused ? t("task.pausedStatus") : t("task.processing")} ({progress.toFixed(1)}%)</span><i><b style={`width:${progress}%`}></b></i></div>
+    <div class="task-progress"><span>{isPaused ? t("task.pausedStatus") : t("task.processing")} ({progress.toFixed(1)}%)</span><i><b style={`transform:scaleX(${Math.max(0, Math.min(100, progress)) / 100})`}></b></i></div>
     <span>{progress.toFixed(0)}%</span>
     {#if isPaused}<button onclick={onResume}><CirclePlay size={17} /> {t("task.resume")}</button>{:else}<button onclick={onPause}><CirclePause size={17} /> {t("task.pause")}</button>{/if}
     <button onclick={onCancel}><X size={17} /> {t("task.cancel")}</button>

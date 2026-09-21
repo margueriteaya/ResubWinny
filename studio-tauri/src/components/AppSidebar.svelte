@@ -13,8 +13,10 @@
   export let onNavigate: (page: Page) => void = () => {};
 
   const displayVersion = `v${packageMetadata.version.replace(/-alpha(?:\.\d+)?$/, "alpha")}`;
-  const pageOrder: Page[] = ["home", "tasks", "batch", "drcs", "settings"];
-  $: activeIndex = Math.max(0, pageOrder.indexOf(page));
+  $: visiblePages = userMode === "nerd"
+    ? ["home", "tasks", "batch", "drcs", "settings"] satisfies Page[]
+    : ["home", "tasks", "settings"] satisfies Page[];
+  $: activeIndex = Math.max(0, visiblePages.indexOf(page));
 </script>
 
 <aside id="app-sidebar" class="sidebar" class:collapsed data-liquid-region>
@@ -43,7 +45,7 @@
     overflow: hidden;
     opacity: 1;
     transform: translateX(0);
-    transition: height var(--rw-motion-fluid) var(--rw-ease-fluid), padding var(--rw-motion-fluid) var(--rw-ease-fluid), opacity var(--rw-motion-responsive) var(--rw-ease-out), transform var(--rw-motion-fluid) var(--rw-ease-fluid), visibility 0s linear;
+    transition: opacity var(--rw-motion-fast) var(--rw-ease-out), transform var(--rw-motion-responsive) var(--rw-ease-out), visibility 0s linear;
   }
   .sidebar-identity strong { display: block; font-size: 15px; line-height: 20px; font-weight: 650; white-space: nowrap; }
   .sidebar-identity small { display: block; overflow: hidden; color: var(--rw-muted); font-size: 11px; line-height: 15px; text-overflow: ellipsis; white-space: nowrap; }
@@ -59,7 +61,7 @@
     white-space: nowrap;
     opacity: 1;
     transform: translateX(0);
-    transition: height var(--rw-motion-fluid) var(--rw-ease-fluid), margin var(--rw-motion-fluid) var(--rw-ease-fluid), opacity var(--rw-motion-responsive) var(--rw-ease-out), transform var(--rw-motion-fluid) var(--rw-ease-fluid), visibility 0s linear;
+    transition: opacity var(--rw-motion-fast) var(--rw-ease-out), transform var(--rw-motion-responsive) var(--rw-ease-out), visibility 0s linear;
   }
   .sidebar-navigation {
     --sidebar-nav-inset: 8px;
@@ -68,7 +70,6 @@
     display: grid;
     gap: 2px;
     padding: 2px var(--sidebar-nav-inset);
-    transition: padding var(--rw-motion-fluid) var(--rw-ease-fluid);
   }
   .sidebar-selection {
     position: absolute;
@@ -79,12 +80,10 @@
     height: 36px;
     border: .5px solid color-mix(in srgb, var(--rw-glass-border) 88%, var(--rw-accent) 12%);
     border-radius: 10px;
-    background: color-mix(in srgb, var(--rw-accent) 12%, rgba(255,255,255,.30));
-    box-shadow: 0 4px 12px rgba(25,34,42,.08), inset 0 .75px rgba(255,255,255,.64), inset 0 -.5px rgba(41,56,69,.10);
-    backdrop-filter: blur(15px) saturate(1.24) brightness(1.025);
-    -webkit-backdrop-filter: blur(15px) saturate(1.24) brightness(1.025);
+    background: color-mix(in srgb, var(--rw-accent) 13%, rgba(255,255,255,.34));
+    box-shadow: 0 3px 10px rgba(25,34,42,.07), inset 0 .75px rgba(255,255,255,.58), inset 0 -.5px rgba(41,56,69,.10);
     transform: translate3d(0, calc(var(--sidebar-selection-index) * 38px), 0);
-    transition: transform var(--rw-motion-fluid) var(--rw-ease-spring), left var(--rw-motion-fluid) var(--rw-ease-fluid), right var(--rw-motion-fluid) var(--rw-ease-fluid), border-radius var(--rw-motion-fluid) var(--rw-ease-fluid);
+    transition: transform var(--rw-motion-responsive) var(--rw-ease-out);
     pointer-events: none;
   }
   .sidebar-selection::after { position: absolute; inset: .5px; border: .5px solid rgba(255,255,255,.28); border-radius: inherit; opacity: .78; content: ""; }
@@ -124,7 +123,7 @@
     white-space: nowrap;
     opacity: 1;
     transform: translateX(0);
-    transition: width var(--rw-motion-fluid) var(--rw-ease-fluid), opacity var(--rw-motion-responsive) var(--rw-ease-out), transform var(--rw-motion-fluid) var(--rw-ease-fluid), visibility 0s linear;
+    transition: opacity var(--rw-motion-fast) var(--rw-ease-out), transform var(--rw-motion-responsive) var(--rw-ease-out), visibility 0s linear;
   }
   .sidebar-navigation :global(svg) {
     position: absolute;
@@ -135,7 +134,7 @@
     height: 16px;
     color: currentColor;
     stroke-width: 1.8;
-    transition: left var(--rw-motion-fluid) var(--rw-ease-fluid), color var(--rw-motion-responsive) var(--rw-ease-out), transform var(--rw-motion-fluid) var(--rw-ease-spring);
+    transition: color var(--rw-motion-responsive) var(--rw-ease-out), transform var(--rw-motion-responsive) var(--rw-ease-out);
   }
   .sidebar-navigation button.active :global(svg) { color: var(--rw-accent); transform: scale(1.04); }
   .sidebar-navigation em {
@@ -153,7 +152,7 @@
     line-height: 18px;
     font-style: normal;
     text-align: center;
-    transition: top var(--rw-motion-fluid) var(--rw-ease-fluid), right var(--rw-motion-fluid) var(--rw-ease-fluid), transform var(--rw-motion-fluid) var(--rw-ease-spring), opacity var(--rw-motion-responsive) var(--rw-ease-out);
+    transition: transform var(--rw-motion-responsive) var(--rw-ease-out), opacity var(--rw-motion-fast) var(--rw-ease-out);
   }
   .current-label { margin-top: 9px; }
   .sidebar-current-task {
@@ -171,7 +170,7 @@
     text-align: left;
     opacity: 1;
     transform: translateX(0);
-    transition: max-height var(--rw-motion-fluid) var(--rw-ease-fluid), margin var(--rw-motion-fluid) var(--rw-ease-fluid), padding var(--rw-motion-fluid) var(--rw-ease-fluid), border-color var(--rw-motion-responsive) var(--rw-ease-out), opacity var(--rw-motion-responsive) var(--rw-ease-out), transform var(--rw-motion-fluid) var(--rw-ease-fluid), visibility 0s linear;
+    transition: border-color var(--rw-motion-responsive) var(--rw-ease-out), opacity var(--rw-motion-fast) var(--rw-ease-out), transform var(--rw-motion-responsive) var(--rw-ease-out), visibility 0s linear;
   }
   .sidebar-current-task span,
   .sidebar-current-task b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -183,13 +182,13 @@
   .sidebar.collapsed .sidebar-section-label,
   .sidebar.collapsed .sidebar-current-task { visibility: hidden; opacity: 0; transform: translateX(-8px); }
   .sidebar.collapsed .sidebar-identity,
-  .sidebar.collapsed .sidebar-section-label { transition-delay: 0s,0s,0s,0s,var(--rw-motion-responsive); }
-  .sidebar.collapsed .sidebar-current-task { transition-delay: 0s,0s,0s,0s,0s,0s,var(--rw-motion-responsive); }
+  .sidebar.collapsed .sidebar-section-label { transition-delay: 0s,0s,var(--rw-motion-fast); }
+  .sidebar.collapsed .sidebar-current-task { transition-delay:0s,0s,0s,var(--rw-motion-fast); }
   .sidebar.collapsed .sidebar-identity { height: 0; padding-top: 0; padding-bottom: 0; }
   .sidebar.collapsed .sidebar-section-label { height: 0; margin-top: 0; }
   .sidebar.collapsed .sidebar-current-task { max-height: 0; margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-color: transparent; }
   .sidebar.collapsed .sidebar-navigation { --sidebar-nav-inset: 0px; --sidebar-icon-left: 18px; }
-  .sidebar.collapsed .sidebar-navigation button > span { width: 0; visibility: hidden; opacity: 0; transform: translateX(-8px); transition-delay: 0s,0s,0s,var(--rw-motion-responsive); }
+  .sidebar.collapsed .sidebar-navigation button > span { width: 0; visibility: hidden; opacity: 0; transform: translateX(-8px); transition-delay: 0s,0s,var(--rw-motion-fast); }
   .sidebar.collapsed .sidebar-navigation em { top: 1px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; line-height: 16px; transform: scale(.86); }
 
   @media (prefers-reduced-motion: reduce) {

@@ -4,6 +4,7 @@
   import type { AppSettings, ExportFormat, ExportPreservation } from "../../backend";
   import { capabilitySummary } from "../tasks/format-capabilities";
   import { togglePreferredFormat } from "./export-preferences";
+  import { liquidDisclosure } from "../../lib/motion";
 
   type HistoryItem = {
     name: string;
@@ -60,16 +61,20 @@
     <span class="home-primary-action"><FolderPlus size={16} />{t("home.select")}</span>
   </button>
   <section class="home-output-preferences" aria-label={t("home.outputPreferences")}>
-    <h2>{t("home.outputFormats")}</h2>
-    <div class="format-picker">{#each formats as format}<button type="button" class:selected={settings.exportPreferences.formats.includes(format)} onclick={() => toggleFormat(format)}>{format}</button>{/each}</div>
-    <div class="format-notes">{#each settings.exportPreferences.formats as format}<p class="format-note"><b>{format}</b><br /><small>{capabilitySummary(format, (feature) => t(`feature.${feature}`))}</small></p>{/each}</div>
-    <h2>{t("home.preserveContent")}</h2>
-    <div class="preservation-picker">{#each preservationKeys as key}<label><input type="checkbox" checked={settings.exportPreferences.preservation[key]} onchange={() => togglePreservation(key)} />{t(`feature.${key}`)}</label>{/each}</div>
+    <div class="preference-group format-preference">
+      <h2>{t("home.outputFormats")}</h2>
+      <div class="format-picker">{#each formats as format}<button type="button" class:selected={settings.exportPreferences.formats.includes(format)} onclick={() => toggleFormat(format)}>{format}</button>{/each}</div>
+      <div class="format-notes">{#each settings.exportPreferences.formats as format}<p class="format-note"><b>{format}</b><br /><small>{capabilitySummary(format, (feature) => t(`feature.${feature}`))}</small></p>{/each}</div>
+    </div>
+    <div class="preference-group preservation-preference">
+      <h2>{t("home.preserveContent")}</h2>
+      <div class="preservation-picker">{#each preservationKeys as key}<label><input type="checkbox" checked={settings.exportPreferences.preservation[key]} onchange={() => togglePreservation(key)} />{t(`feature.${key}`)}</label>{/each}</div>
+    </div>
   </section>
   <aside class="source-rights-notice">
     <TriangleAlert size={14}/><span>{t("home.rightsNotice")}</span>
     <button type="button" aria-expanded={noticeExpanded} aria-controls="source-rights-detail" onclick={() => noticeExpanded = !noticeExpanded}>{t("home.rightsWhy")}<ChevronDown size={13}/></button>
-    {#if noticeExpanded}<p id="source-rights-detail">{t("onboarding.noticeBody")}</p>{/if}
+    {#if noticeExpanded}<p id="source-rights-detail" transition:liquidDisclosure>{t("onboarding.noticeBody")}</p>{/if}
   </aside>
 
   <section class="recent-workbench-section">
@@ -99,11 +104,11 @@
 </div>
 
 <style>
-  .workbench-home { width: min(820px, 100%); min-width: 0; margin: clamp(8px, 4vh, 36px) auto 0; color: var(--rw-text); }
-  .workbench-home-title { margin-bottom: 20px; text-align: center; }
+  .workbench-home { width: min(880px, 100%); min-width: 0; margin: clamp(6px, 2.8vh, 24px) auto 0; color: var(--rw-text); }
+  .workbench-home-title { margin-bottom: 16px; text-align: center; }
   .workbench-home-title h1 { margin: 0; font-size: 24px; line-height: 30px; font-weight: 720; letter-spacing: -.02em; }
   .workbench-home-title p { margin: 6px 0 0; color: var(--rw-text-secondary); font-size: 13px; line-height: 19px; }
-  .recording-dropzone { position:relative;display: grid; place-items: center; width: 100%; min-height: clamp(230px, 31vh, 290px); padding: 30px; overflow:hidden;border: 1px dashed color-mix(in srgb, var(--rw-accent) 58%, var(--rw-border)); border-radius: 12px; color: var(--rw-text); background: var(--rw-surface-muted); text-align: center; }
+  .recording-dropzone { position:relative;display: grid; place-items: center; width: 100%; min-height: clamp(200px, 27vh, 250px); padding: 26px; overflow:hidden;border: 1px dashed color-mix(in srgb, var(--rw-accent) 58%, var(--rw-border)); border-radius: 12px; color: var(--rw-text); background: color-mix(in srgb,var(--rw-surface-muted) 86%,var(--rw-content)); text-align: center; }
   .caption-outline{position:absolute;inset:18px;display:grid;align-content:center;gap:9px;padding:22px;border:1px solid color-mix(in srgb,var(--rw-accent) 14%,var(--rw-border-subtle));border-radius:8px;opacity:.5;pointer-events:none}.caption-outline i{display:block;width:34%;height:5px;margin-left:auto;margin-right:auto;border-radius:3px;background:color-mix(in srgb,var(--rw-accent) 12%,var(--rw-border))}.caption-outline i:nth-child(2){width:47%}.caption-outline b{position:absolute;right:16px;bottom:14px;color:color-mix(in srgb,var(--rw-accent) 22%,transparent);font-size:26px}.recording-dropzone> :global(svg),.dropzone-copy,.home-primary-action{position:relative;z-index:1}.caption-outline.inspecting i{animation:caption-scan 900ms var(--rw-ease-fluid) infinite alternate}.caption-outline.inspecting i:nth-child(2){animation-delay:120ms}.caption-outline.inspecting i:nth-child(3){animation-delay:240ms}
   .source-rights-notice{display:grid;grid-template-columns:14px minmax(0,1fr) auto;align-items:center;gap:7px;margin-top:8px;padding:8px 10px;border:1px solid color-mix(in srgb,#c73c3c 55%,var(--rw-border));border-left:3px solid #c73c3c;border-radius:8px;background:color-mix(in srgb,#d83e3e 9%,var(--rw-content));color:color-mix(in srgb,#9f2020 62%,var(--rw-text));font-size:11px;line-height:16px}.source-rights-notice :global(svg){color:#c93636}.source-rights-notice button{display:inline-flex;align-items:center;gap:3px;padding:2px 4px;border:0;color:#b52d2d;background:transparent;font-size:11px;font-weight:620}.source-rights-notice button :global(svg){transition:transform var(--rw-motion-fluid) var(--rw-ease-spring)}.source-rights-notice button[aria-expanded="true"] :global(svg){transform:rotate(180deg)}.source-rights-notice p{grid-column:2/-1;margin:1px 0 2px;color:color-mix(in srgb,#972626 48%,var(--rw-text-secondary))}:global([data-theme="dark"]) .source-rights-notice{color:#ffaaaa;background:color-mix(in srgb,#8d1717 28%,var(--rw-content));border-color:rgba(255,105,105,.48);border-left-color:#ff6868}:global([data-theme="dark"]) .source-rights-notice p{color:#efb6b6}:global([data-theme="dark"]) .source-rights-notice button{color:#ff9696}
   .recording-dropzone:hover:not(:disabled), .recording-dropzone:focus-visible { border-color: var(--rw-accent); background: color-mix(in srgb, var(--rw-accent) 5%, var(--rw-surface-muted)); }
@@ -113,7 +118,7 @@
   .dropzone-copy small { color: var(--rw-text-secondary); font-size: 12px; line-height: 17px; }
   .home-primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; margin-top: 18px; padding: 0 16px; border: 1px solid color-mix(in srgb, var(--rw-accent) 80%, var(--rw-border)); border-radius: 7px; color: #fff; background: var(--rw-accent); font-size: 13px; font-weight: 680; }
   .recent-workbench-section { margin-top: 22px; }
-  .home-output-preferences{margin-top:14px;padding:14px 16px;border:1px solid var(--rw-border-subtle);border-radius:9px;background:var(--rw-surface-muted)}.home-output-preferences h2{margin:0 0 8px;font-size:13px}.home-output-preferences h2:not(:first-child){margin-top:14px}.format-picker,.preservation-picker{display:flex;flex-wrap:wrap;gap:7px}.format-picker button{padding:6px 11px;border:1px solid var(--rw-border);border-radius:6px;color:var(--rw-text-secondary);background:var(--rw-content);font-size:12px}.format-picker button.selected{border-color:var(--rw-accent);color:var(--rw-text);background:color-mix(in srgb,var(--rw-accent) 12%,var(--rw-content))}.format-note{margin:8px 0 0;color:var(--rw-text-secondary);font-size:11px}.preservation-picker label{display:inline-flex;align-items:center;gap:5px;color:var(--rw-text-secondary);font-size:11px}
+  .home-output-preferences{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(250px,.88fr);gap:10px;margin-top:12px}.preference-group{min-width:0;padding:13px 14px;border:1px solid var(--rw-border-subtle);border-radius:9px;background:color-mix(in srgb,var(--rw-surface-muted) 72%,var(--rw-content))}.home-output-preferences h2{margin:0 0 9px;font-size:12px;line-height:16px;font-weight:680;letter-spacing:.015em}.format-picker,.preservation-picker{display:flex;flex-wrap:wrap;gap:6px}.format-picker button{padding:5px 10px;border:1px solid var(--rw-border);border-radius:6px;color:var(--rw-text-secondary);background:var(--rw-content);font-size:12px}.format-picker button.selected{border-color:var(--rw-accent);color:var(--rw-text);background:color-mix(in srgb,var(--rw-accent) 12%,var(--rw-content))}.format-note{margin:7px 0 0;color:var(--rw-text-secondary);font-size:11px;line-height:15px}.preservation-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 10px}.preservation-picker label{display:inline-flex;align-items:center;gap:5px;min-width:0;color:var(--rw-text-secondary);font-size:11px;line-height:16px}
   .recent-workbench-section > header { display: flex; align-items: center; min-height: 36px; border-bottom: 1px solid var(--rw-border); }
   .recent-workbench-section h2 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 680; }
   .recent-task-list { margin: 0; padding: 0; list-style: none; }
@@ -136,7 +141,7 @@
   .home-secondary-actions button :global(svg) { flex: 0 0 auto; color: var(--rw-accent); }
   .home-secondary-actions span { min-width: 0; }.home-secondary-actions b, .home-secondary-actions small { display: block; }
   .home-secondary-actions b { font-size: 12px; line-height: 16px; font-weight: 650; }.home-secondary-actions small { overflow: hidden; max-width: 190px; color: var(--rw-muted); font-size: 11px; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
-  @container content (max-width: 620px) { .workbench-home { margin-top: 10px; }.workbench-home-title { text-align: left; }.recent-task-list button { grid-template-columns: 34px minmax(0, 1fr) auto; }.recent-status { display: none; }.home-secondary-actions { justify-content: stretch; }.home-secondary-actions button { flex: 1; }.home-secondary-actions small { max-width: 120px; } }
+  @container content (max-width: 620px) { .workbench-home { margin-top: 10px; }.workbench-home-title { text-align: left; }.home-output-preferences{grid-template-columns:1fr}.recent-task-list button { grid-template-columns: 34px minmax(0, 1fr) auto; }.recent-status { display: none; }.home-secondary-actions { justify-content: stretch; }.home-secondary-actions button { flex: 1; }.home-secondary-actions small { max-width: 120px; } }
   @keyframes caption-scan{from{opacity:.2;transform:translateY(2px)}to{opacity:.95;transform:none}}
   @media(prefers-reduced-motion:reduce){.caption-outline.inspecting i{animation:none}.source-rights-notice button :global(svg){transition:none}}
   @media(forced-colors:active){.caption-outline,.source-rights-notice{border:1px solid CanvasText}}

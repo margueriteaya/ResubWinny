@@ -13,6 +13,7 @@
   let root: HTMLDivElement;
   let trigger: HTMLButtonElement;
   let open = false;
+  let keyboardOpen = false;
   let itemButtons: HTMLButtonElement[] = [];
   $: selectedLabel = options.find((option) => option.value === value)?.label ?? value;
 
@@ -27,9 +28,10 @@
     close(true);
   }
 
-  async function openMenu() {
+  async function openMenu(fromKeyboard = false) {
     if (disabled || open) return;
     await onOpen();
+    keyboardOpen = fromKeyboard;
     open = true;
   }
 
@@ -44,15 +46,15 @@
     });
   }
 
-  function toggleMenu() {
+  function toggleMenu(event: MouseEvent) {
     if (open) close(true);
-    else void openMenu();
+    else void openMenu(event.detail === 0);
   }
 
   function triggerKeydown(event: KeyboardEvent) {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      void openMenu().then(() => focusSelected(event.key === "ArrowUp" ? "last" : "selected"));
+      void openMenu(true).then(() => focusSelected(event.key === "ArrowUp" ? "last" : "selected"));
     } else if (event.key === "Escape") close();
   }
 
@@ -80,7 +82,7 @@
   });
 </script>
 
-<div class:open class="popup-button" bind:this={root}>
+<div class:open class="popup-button" data-keyboard-open={keyboardOpen} bind:this={root}>
   <button class="popup-trigger liquid-control" bind:this={trigger} type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} {disabled} onclick={toggleMenu} onkeydown={triggerKeydown}>
     <span class="popup-label">{selectedLabel}</span><ChevronsUpDown size={13} strokeWidth={1.8} />
   </button>
