@@ -22,6 +22,9 @@
   --rw-accent: #0a84ff;
   --rw-success: #30a14e;
   --rw-warning: #d18400;
+  --rw-accent-text: #006edc;
+  --rw-success-text: #19723a;
+  --rw-warning-text: #9a5d00;
   --rw-glass: rgba(242, 247, 250, .42);
   --rw-glass-shell: rgba(241, 246, 249, .24);
   --rw-glass-shell-edge: rgba(255, 255, 255, .54);
@@ -58,6 +61,9 @@ html:lang(ko) { --rw-font-ui: "SF Pro Text", "SF Pro Display", -apple-system, Bl
   --rw-border: rgba(235, 235, 245, .18);
   --rw-border-subtle: rgba(235, 235, 245, .10);
   --rw-accent: #409cff;
+  --rw-accent-text: var(--rw-accent);
+  --rw-success-text: var(--rw-success);
+  --rw-warning-text: var(--rw-warning);
   --rw-glass: rgba(46, 49, 54, .46);
   --rw-glass-shell: rgba(31, 34, 38, .32);
   --rw-glass-shell-edge: rgba(255, 255, 255, .16);
@@ -75,6 +81,7 @@ button { transition: color var(--rw-motion-responsive) var(--rw-ease-out), backg
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [role="slider"]:focus-visible, [role="scrollbar"]:focus-visible, [tabindex="0"].pane-separator:focus-visible { outline: 3px solid color-mix(in srgb, var(--rw-accent) 42%, transparent); outline-offset: 2px; }
 .rw-tooltip { position: fixed; z-index: 1000; max-width: 280px; padding: 5px 8px; border: .5px solid var(--rw-glass-border); border-radius: 6px; color: var(--rw-text); background: color-mix(in srgb, var(--rw-glass-shell) 90%, var(--rw-content)); box-shadow: 0 6px 20px rgba(0,0,0,.18), inset 0 .5px rgba(255,255,255,.62); backdrop-filter: blur(24px) saturate(1.2); -webkit-backdrop-filter: blur(24px) saturate(1.2); font-size: 11px; line-height: 15px; overflow-wrap: anywhere; pointer-events: none; animation: rw-tooltip-in var(--rw-motion-fast) var(--rw-ease-out); }
 .rw-tooltip[hidden] { display: none; }
+.rw-tooltip[data-instant] { animation: none; }
 @keyframes rw-tooltip-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 
 main {
