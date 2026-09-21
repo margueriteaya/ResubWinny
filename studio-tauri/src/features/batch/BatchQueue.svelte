@@ -88,9 +88,9 @@
 
 <section class="batch-shell">
   <div class="batch-actions">
-    <button class="add" onclick={addFiles}
+    {#if items.length}<button class="add" onclick={addFiles}
       ><FolderPlus size={20} /> {t("batch.add")}</button
-    ><button
+    >{/if}<button
       class="secondary output-directory"
       onclick={chooseOutputDirectory}
       data-tooltip={outputDirectory || t("batch.sameFolder")}
@@ -236,7 +236,7 @@
       </section>
       <section>
         <h2>{t("batch.quickActions")}</h2>
-        <button class="quick-action" onclick={clearCompleted}
+        <button class="quick-action" onclick={clearCompleted} disabled={queueSummary.completed === 0}
           ><Trash2 size={17} /> {t("batch.clearCompleted")}</button
         ><button class="quick-action" onclick={pauseQueue} disabled={!running || paused}
           ><CirclePause size={17} /> {t("batch.pauseQueue")}</button
