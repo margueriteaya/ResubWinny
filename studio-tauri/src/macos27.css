@@ -43,6 +43,7 @@
   --rw-ease-fluid: cubic-bezier(.22, 1, .36, 1);
   --rw-ease-spring: cubic-bezier(.2, .9, .25, 1.08);
   font-family: var(--resubwinny-ui-font, var(--rw-font-ui));
+  font-optical-sizing: auto;
 }
 
 html:lang(zh-CN) { --rw-font-ui: "SF Pro Text", "SF Pro Display", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei UI", sans-serif; }
@@ -256,14 +257,17 @@ main[data-preview-active="true"] .shell-glass { transition: none; }
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
-.outline:hover,.icon-button:hover,.quiet-button:hover,.filter-button:hover,.tool-button:hover,.select:hover,.language-trigger:hover,.player-button:hover:not(:disabled),.timeline-tools button:hover { background: var(--rw-glass-control-hover) !important; }
 .primary-button,.export-button,.save,.save-mapping,.add,.approved-primary { min-height:32px !important; border:.5px solid color-mix(in srgb,var(--rw-accent) 82%,black 18%) !important; border-radius:7px !important; color:#fff !important; background:var(--rw-accent-control) !important; box-shadow:0 1px 2px rgba(0,74,160,.24),inset 0 1px rgba(255,255,255,.28),inset 0 -1px rgba(0,34,92,.18) !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
 .primary-button::after,.export-button::after,.save::after,.save-mapping::after,.add::after,.approved-primary::after { display:none; }
-.primary-button:hover:not(:disabled),.export-button:hover:not(:disabled),.save:hover:not(:disabled),.save-mapping:hover:not(:disabled),.add:hover:not(:disabled),.approved-primary:hover { background:color-mix(in srgb,var(--rw-accent) 90%,white 10%) !important; box-shadow:0 2px 5px rgba(0,74,160,.28),inset 0 1px rgba(255,255,255,.32),inset 0 -1px rgba(0,34,92,.16) !important; }
 .primary-button:disabled,.export-button:disabled,.save:disabled,.save-mapping:disabled,.add:disabled { color:color-mix(in srgb,#fff 72%,transparent) !important; background:color-mix(in srgb,var(--rw-accent) 42%,var(--rw-surface-muted)) !important; box-shadow:inset 0 .5px rgba(255,255,255,.18) !important; opacity:.62; }
 input:not([type="checkbox"]):not([type="range"]), select, textarea { min-height: 32px; border: 1px solid var(--rw-border) !important; border-radius: 6px !important; color: var(--rw-text) !important; background: var(--rw-content) !important; }
 input[type="checkbox"] { width: 16px !important; height: 16px !important; min-width: 16px; margin: 0; accent-color: var(--rw-accent); }
 input[type="range"] { accent-color: var(--rw-accent); }
+
+@media (hover:hover) and (pointer:fine) {
+  .outline:hover,.icon-button:hover,.quiet-button:hover,.filter-button:hover,.tool-button:hover,.select:hover,.language-trigger:hover,.player-button:hover:not(:disabled),.timeline-tools button:hover { background: var(--rw-glass-control-hover) !important; }
+  .primary-button:hover:not(:disabled),.export-button:hover:not(:disabled),.save:hover:not(:disabled),.save-mapping:hover:not(:disabled),.add:hover:not(:disabled),.approved-primary:hover { background:color-mix(in srgb,var(--rw-accent) 90%,white 10%) !important; box-shadow:0 2px 5px rgba(0,74,160,.28),inset 0 1px rgba(255,255,255,.32),inset 0 -1px rgba(0,34,92,.16) !important; }
+}
 
 .home-header,.workspace-header { align-items: center !important; margin: 0 0 16px !important; }
 .home-header h1,.workspace-header h1 { font-size: 20px !important; line-height: 25px; font-weight: 650; }
