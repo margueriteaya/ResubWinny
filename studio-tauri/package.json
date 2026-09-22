@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@lucide/svelte": "^1.0.1",
+    "@tabler/icons-svelte": "^3.48.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.4.0",
     "macos-traffic-lights": "^1.1.0",
