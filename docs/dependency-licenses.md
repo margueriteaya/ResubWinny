@@ -4,7 +4,7 @@ This file is generated from the committed Cargo and npm lock data by
 `scripts/generate-license-report.ps1`. It records package metadata for review;
 the dependency source distributions remain the authoritative license texts.
 
-Generated inventory: 466 Cargo packages and 89 npm packages.
+Generated inventory: 466 Cargo packages and 91 npm packages.
 
 ## Cargo
 
@@ -29,7 +29,7 @@ Generated inventory: 466 Cargo packages and 89 npm packages.
 | `bit-vec` | `0.8.0` | Apache-2.0 OR MIT | Desktop service |
 | `bitflags` | `1.3.2` | MIT/Apache-2.0 | Desktop service |
 | `bitflags` | `2.13.1` | MIT OR Apache-2.0 | Desktop service, Worker |
-| `block-buffer` | `0.10.4` | MIT OR Apache-2.0 | Desktop service |
+| `block-buffer` | `0.10.4` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `block2` | `0.6.2` | MIT | Desktop service |
 | `brotli` | `8.0.4` | BSD-3-Clause AND MIT | Desktop service |
 | `brotli-decompressor` | `5.0.3` | BSD-3-Clause/MIT | Desktop service |
@@ -60,11 +60,11 @@ Generated inventory: 466 Cargo packages and 89 npm packages.
 | `core-foundation-sys` | `0.8.7` | MIT OR Apache-2.0 | Desktop service |
 | `core-graphics` | `0.25.0` | MIT OR Apache-2.0 | Desktop service |
 | `core-graphics-types` | `0.2.0` | MIT OR Apache-2.0 | Desktop service |
-| `cpufeatures` | `0.2.17` | MIT OR Apache-2.0 | Desktop service |
+| `cpufeatures` | `0.2.17` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `crc32fast` | `1.5.1` | MIT OR Apache-2.0 | Desktop service, Worker |
 | `crossbeam-channel` | `0.5.16` | MIT OR Apache-2.0 | Desktop service |
 | `crossbeam-utils` | `0.8.22` | MIT OR Apache-2.0 | Desktop service |
-| `crypto-common` | `0.1.7` | MIT OR Apache-2.0 | Desktop service |
+| `crypto-common` | `0.1.7` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `cssparser` | `0.36.0` | MPL-2.0 | Desktop service |
 | `cssparser-macros` | `0.6.1` | MPL-2.0 | Desktop service |
 | `ctor` | `0.8.0` | Apache-2.0 OR MIT | Desktop service |
@@ -79,7 +79,7 @@ Generated inventory: 466 Cargo packages and 89 npm packages.
 | `deranged` | `0.5.8` | MIT OR Apache-2.0 | Desktop service |
 | `derive_more` | `2.1.1` | MIT | Desktop service |
 | `derive_more-impl` | `2.1.1` | MIT | Desktop service |
-| `digest` | `0.10.7` | MIT OR Apache-2.0 | Desktop service |
+| `digest` | `0.10.7` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `dirs` | `6.0.0` | MIT OR Apache-2.0 | Desktop service |
 | `dirs-sys` | `0.5.0` | MIT OR Apache-2.0 | Desktop service |
 | `dispatch2` | `0.3.1` | Zlib OR Apache-2.0 OR MIT | Desktop service |
@@ -128,7 +128,7 @@ Generated inventory: 466 Cargo packages and 89 npm packages.
 | `gdkwayland-sys` | `0.18.2` | MIT | Desktop service |
 | `gdkx11` | `0.18.2` | MIT | Desktop service |
 | `gdkx11-sys` | `0.18.2` | MIT | Desktop service |
-| `generic-array` | `0.14.7` | MIT | Desktop service |
+| `generic-array` | `0.14.7` | MIT | Desktop service, Fuzz targets, Worker |
 | `getrandom` | `0.2.17` | MIT OR Apache-2.0 | Desktop service |
 | `getrandom` | `0.3.4` | MIT OR Apache-2.0 | Desktop service |
 | `getrandom` | `0.4.3` | MIT OR Apache-2.0 | Desktop service, Fuzz targets |
@@ -192,7 +192,7 @@ Generated inventory: 466 Cargo packages and 89 npm packages.
 | `keyboard-types` | `0.7.0` | MIT OR Apache-2.0 | Desktop service |
 | `libappindicator` | `0.9.0` | Apache-2.0 OR MIT | Desktop service |
 | `libappindicator-sys` | `0.9.0` | Apache-2.0 OR MIT | Desktop service |
-| `libc` | `0.2.189` | MIT OR Apache-2.0 | Desktop service, Fuzz targets |
+| `libc` | `0.2.189` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `libdbus-sys` | `0.2.7` | Apache-2.0/MIT | Desktop service |
 | `libfuzzer-sys` | `0.4.13` | (MIT OR Apache-2.0) AND NCSA | Fuzz targets |
 | `libloading` | `0.7.4` | ISC | Desktop service |
@@ -304,7 +304,7 @@ Generated inventory: 466 Cargo packages and 89 npm packages.
 | `serialize-to-javascript` | `0.1.2` | MIT OR Apache-2.0 | Desktop service |
 | `serialize-to-javascript-impl` | `0.1.2` | MIT OR Apache-2.0 | Desktop service |
 | `servo_arc` | `0.4.3` | MIT OR Apache-2.0 | Desktop service |
-| `sha2` | `0.10.9` | MIT OR Apache-2.0 | Desktop service |
+| `sha2` | `0.10.9` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `shlex` | `2.0.1` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `simd-adler32` | `0.3.10` | MIT | Desktop service, Worker |
 | `siphasher` | `1.0.3` | MIT/Apache-2.0 | Desktop service |
@@ -374,7 +374,7 @@ Generated inventory: 466 Cargo packages and 89 npm packages.
 | `try-lock` | `0.2.5` | MIT | Desktop service |
 | `ttf-parser` | `0.25.1` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `typeid` | `1.0.3` | MIT OR Apache-2.0 | Desktop service |
-| `typenum` | `1.20.1` | MIT OR Apache-2.0 | Desktop service |
+| `typenum` | `1.20.1` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `unic-char-property` | `0.9.0` | MIT/Apache-2.0 | Desktop service |
 | `unic-char-range` | `0.9.0` | MIT/Apache-2.0 | Desktop service |
 | `unic-common` | `0.9.0` | MIT/Apache-2.0 | Desktop service |
@@ -386,7 +386,7 @@ Generated inventory: 466 Cargo packages and 89 npm packages.
 | `urlpattern` | `0.3.0` | MIT | Desktop service |
 | `utf8_iter` | `1.0.4` | Apache-2.0 OR MIT | Desktop service |
 | `uuid` | `1.26.0` | Apache-2.0 OR MIT | Desktop service |
-| `version_check` | `0.9.5` | MIT/Apache-2.0 | Desktop service |
+| `version_check` | `0.9.5` | MIT/Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `version-compare` | `0.2.1` | MIT | Desktop service |
 | `vswhom` | `0.1.0` | MIT | Desktop service |
 | `vswhom-sys` | `0.1.3` | MIT | Desktop service |
@@ -508,6 +508,8 @@ Generated inventory: 466 Cargo packages and 89 npm packages.
 | `@sveltejs/load-config` | `0.2.3` | MIT |
 | `@sveltejs/vite-plugin-svelte` | `7.3.0` | MIT |
 | `@sveltejs/vite-plugin-svelte/node_modules/magic-string` | `1.2.3` | MIT |
+| `@tabler/icons` | `3.48.0` | MIT |
+| `@tabler/icons-svelte` | `3.48.0` | MIT |
 | `@tauri-apps/api` | `2.11.1` | Apache-2.0 OR MIT |
 | `@tauri-apps/cli` | `2.11.4` | Apache-2.0 OR MIT |
 | `@tauri-apps/cli-darwin-arm64` | `2.11.4` | Apache-2.0 OR MIT |
