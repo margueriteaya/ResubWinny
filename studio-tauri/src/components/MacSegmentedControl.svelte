@@ -1,13 +1,25 @@
 <script lang="ts">
-  export let value = "";
-  export let options: { value: string; label: string; icon?: any }[] = [];
-  export let ariaLabel = "";
-  export let size: "regular" | "toolbar" = "regular";
-  export let iconOnly = false;
-  export let disabled = false;
-  export let onChange: (value: string) => void = () => {};
-  let keyboardNavigation = false;
-  $: selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
+  let {
+    value = $bindable(""),
+    options = [],
+    ariaLabel = "",
+    size = "regular",
+    iconOnly = false,
+    disabled = false,
+    onChange = () => {},
+  }: {
+    value?: string;
+    options?: { value: string; label: string; icon?: any }[];
+    ariaLabel?: string;
+    size?: "regular" | "toolbar";
+    iconOnly?: boolean;
+    disabled?: boolean;
+    onChange?: (value: string) => void;
+  } = $props();
+  let keyboardNavigation = $state(false);
+  const selectedIndex = $derived(
+    Math.max(0, options.findIndex((option) => option.value === value)),
+  );
 
   function selectOption(index: number, group: HTMLElement | null) {
     if (disabled) return;

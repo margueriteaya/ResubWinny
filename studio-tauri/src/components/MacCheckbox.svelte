@@ -1,9 +1,17 @@
 <script lang="ts">
-  export let checked = false;
-  export let disabled = false;
-  export let label = "";
-  export let mixed = false;
-  export let onChange: (checked: boolean) => void = () => {};
+  let {
+    checked = $bindable(false),
+    disabled = false,
+    label = "",
+    mixed = $bindable(false),
+    onChange = () => {},
+  }: {
+    checked?: boolean;
+    disabled?: boolean;
+    label?: string;
+    mixed?: boolean;
+    onChange?: (checked: boolean) => void;
+  } = $props();
 
   function update(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
