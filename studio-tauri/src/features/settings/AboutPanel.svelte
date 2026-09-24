@@ -10,9 +10,9 @@
     { label: 'settings.releases', target: 'releases' },
     { label: 'settings.reportIssue', target: 'issues' },
   ]
-  let info: AboutInfo | null = null
-  let loadError = ''
-  export let onShowOnboarding: () => void = () => {}
+  let info: AboutInfo | null = $state(null)
+  let loadError = $state('')
+  let { onShowOnboarding = () => {} }: { onShowOnboarding?: () => void } = $props()
 
   onMount(() => {
     if (!isDesktopRuntime()) return

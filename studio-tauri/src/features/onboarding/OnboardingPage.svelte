@@ -6,12 +6,20 @@
   import OnboardingColorBackground from "./OnboardingColorBackground.svelte";
   import XmbWaveBackground from "./XmbWaveBackground.svelte";
 
-  export let saving = false;
-  export let error = "";
-  export let userMode: UserMode = "normie";
-  export let onComplete: (mode: UserMode) => void = () => {};
-  export let onOpenAbout: () => void = () => {};
-  let motionPaused = false;
+  let {
+    saving = false,
+    error = "",
+    userMode = "normie",
+    onComplete = () => {},
+    onOpenAbout = () => {},
+  }: {
+    saving?: boolean;
+    error?: string;
+    userMode?: UserMode;
+    onComplete?: (mode: UserMode) => void;
+    onOpenAbout?: () => void;
+  } = $props();
+  let motionPaused = $state(false);
 
   onMount(() => {
     const syncMotionState = () => motionPaused = document.visibilityState === "hidden";

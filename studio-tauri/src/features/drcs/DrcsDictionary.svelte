@@ -7,28 +7,38 @@ import { FileType2, Filter, Grid3X3, Image, Maximize2, Minus, Plus, RotateCcw, S
   type Glyph = { id: string; width: number; height: number; alternativeText: string; image: string }
   type Mapping = { text: string; action: 'image' | 'character' | 'font' }
 
-  export let glyphs: Glyph[] = []
-  export let message = ''
-  export let getMapping: (id: string) => Mapping | undefined
-  export let saveMapping: (id: string, text: string, action: Mapping['action']) => void
-  let selected: Glyph | null = null
-  let search = ''
-  let tab: 'auto' | 'user' = 'auto'
-  let mapping = ''
-  let action: Mapping['action'] = 'image'
-  let status: 'all' | 'mapped' | 'review' = 'all'
-  let zoom = 400
-  let grid = true
+  let {
+    glyphs = [],
+    message = '',
+    getMapping,
+    saveMapping,
+  }: {
+    glyphs?: Glyph[];
+    message?: string;
+    getMapping: (id: string) => Mapping | undefined;
+    saveMapping: (id: string, text: string, action: Mapping['action']) => void;
+  } = $props();
+  let selected: Glyph | null = $state(null)
+  let search = $state('')
+  let tab: 'auto' | 'user' = $state('auto')
+  let mapping = $state('')
+  let action: Mapping['action'] = $state('image')
+  let status: 'all' | 'mapped' | 'review' = $state('all')
+  let zoom = $state(400)
+  let grid = $state(true)
 
-  $: visible = glyphs.filter((glyph) => {
+  const visible = $derived(glyphs.filter((glyph) => {
     const saved = getMapping(glyph.id)
     const needsReview = !saved?.text && (saved?.action ?? 'image') === 'image'
     return (tab === 'auto' || saved)
       && (status === 'all' || (status === 'mapped' ? !needsReview : needsReview))
       && (glyph.id.toLowerCase().includes(search.toLowerCase()) || glyph.alternativeText.includes(search))
+  }))
+  // Keep a selection that still exists in the filtered view.
+  $effect(() => {
+    if (visible.length && (!selected || !visible.some((glyph) => glyph.id === selected?.id))) selectGlyph(visible[0])
+    else if (!visible.length) selected = null
   })
-  $: if (visible.length && (!selected || !visible.some((glyph) => glyph.id === selected?.id))) selectGlyph(visible[0])
-  $: if (!visible.length) selected = null
 
   function selectGlyph(glyph: Glyph) {
     selected = glyph

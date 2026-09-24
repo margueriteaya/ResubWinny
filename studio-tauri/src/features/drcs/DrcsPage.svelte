@@ -3,12 +3,21 @@
   import type { DrcsGlyph, DrcsMapping } from "../../backend";
   import { t } from "../../i18n";
 
-  export let glyphs: DrcsGlyph[] = [];
-  export let message = "";
-  export let canRefresh = false;
-  export let onRefresh: () => void = () => {};
-  export let getMapping: (id: string) => { text: string; action: DrcsMapping["action"] } | undefined = () => undefined;
-  export let onSaveMapping: (id: string, text: string, action: DrcsMapping["action"]) => void = () => {};
+  let {
+    glyphs = [],
+    message = "",
+    canRefresh = false,
+    onRefresh = () => {},
+    getMapping = () => undefined,
+    onSaveMapping = () => {},
+  }: {
+    glyphs?: DrcsGlyph[];
+    message?: string;
+    canRefresh?: boolean;
+    onRefresh?: () => void;
+    getMapping?: (id: string) => { text: string; action: DrcsMapping["action"] } | undefined;
+    onSaveMapping?: (id: string, text: string, action: DrcsMapping["action"]) => void;
+  } = $props();
 </script>
 
 <header class="workspace-header">

@@ -10,35 +10,45 @@
   import LicensesPanel from './LicensesPanel.svelte'
 
   type Panel = 'general' | 'typography' | 'output' | 'playback' | 'about' | 'licenses'
-  export let saveCaptionFont: (font: string) => void = () => {}
-  export let onSettingsSaved: (settings: AppSettings) => void | Promise<void> = () => {}
-  export let onSettingsPreview: (settings: AppSettings) => void | Promise<void> = () => {}
-  export let persistSettings: (settings: AppSettings) => Promise<AppSettings | null> = async (settings) => settings
-  export let onError: (reason: unknown) => void = () => {}
-  export let onShowOnboarding: () => void = () => {}
+  let {
+    saveCaptionFont = () => {},
+    onSettingsSaved = () => {},
+    onSettingsPreview = () => {},
+    persistSettings = async (settings) => settings,
+    onError = () => {},
+    onShowOnboarding = () => {},
+    panel = 'general',
+  }: {
+    saveCaptionFont?: (font: string) => void;
+    onSettingsSaved?: (settings: AppSettings) => void | Promise<void>;
+    onSettingsPreview?: (settings: AppSettings) => void | Promise<void>;
+    persistSettings?: (settings: AppSettings) => Promise<AppSettings | null>;
+    onError?: (reason: unknown) => void;
+    onShowOnboarding?: () => void;
+    panel?: Panel;
+  } = $props();
   const defaults: AppSettings = { uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', userMode: 'normie', exportPreferences: { formats: ['ASS'], preservation: { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true } }, locale: 'system', theme: 'system', workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false }, onboardingVersion: 0 }
-  let preferences: AppSettings = { ...defaults }
-  let preferencesReady = !isDesktopRuntime()
-  export let panel: Panel = 'general'
-  let persistenceState: 'idle' | 'saving' | 'saved' | 'error' = 'idle'
-  let persistenceRevision = 0
-  let savedTimer = 0
-  let previewRuntime: PreviewRuntime | null = null
-  let installedLocales = availableLocales()
-  let languageRefreshBusy = false
-  let languageError = ''
-  $: languageOptions = [
+  let preferences: AppSettings = $state({ ...defaults })
+  let preferencesReady = $state(!isDesktopRuntime())
+  let persistenceState: 'idle' | 'saving' | 'saved' | 'error' = $state('idle')
+  let persistenceRevision = $state(0)
+  let savedTimer = $state(0)
+  let previewRuntime: PreviewRuntime | null = $state(null)
+  let installedLocales = $state(availableLocales())
+  let languageRefreshBusy = $state(false)
+  let languageError = $state('')
+  const languageOptions = $derived([
     { value: 'system', label: t('settings.languageSystem') },
     ...installedLocales.map((pack) => ({ value: pack.locale, label: `${pack.name} (${pack.locale})` })),
-  ]
-  $: categoryOptions = [
+  ])
+  const categoryOptions = $derived([
     { value: 'general', label: t('settings.general') },
     { value: 'typography', label: t('settings.typography') },
     { value: 'output', label: t('settings.output') },
     { value: 'playback', label: t('settings.playbackAndRuntime') },
     { value: 'about', label: t('settings.about') },
     { value: 'licenses', label: t('settings.licenses') },
-  ]
+  ])
 
   function applyFont() {
     const font = preferences.uiFont === 'system'
