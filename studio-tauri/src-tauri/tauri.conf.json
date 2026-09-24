@@ -46,7 +46,10 @@
     },
     "windows": {
       "wix": { "language": "en-US" },
-      "nsis": { "installMode": "perMachine" }
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": ["English", "SimpChinese", "TradChinese", "Japanese"]
+      }
     }
   }
 }
