@@ -18,18 +18,18 @@ Tauri/Svelte UI 是 Rust 后端的客户端。它不解析 TS/TLV 数据、解�
 | 命令 | 责任 |
 | --- | --- |
 | `inspect_source` | 录音和字幕轨道发现的有界探测 |
-| `start_export` | 启动流工作器并发出 `task-event` 进度；接受可选的经过验证的 `trackId` |
-| `cancel_export` | 停止当前工作进程 |
-| `pause_export` / `resume_export` | 向工作人员发送协作控制消息 |
+| `start_export` | 启动流式 Worker 并发出 `task-event` 进度；接受可选的经过验证的 `trackId` |
+| `cancel_export` | 停止当前 Worker 进程 |
+| `pause_export` / `resume_export` | 向 Worker 发送协作控制消息 |
 | `create_job` / `list_jobs` / `get_job` / `remove_job` | 在没有媒体负载的情况下保留任务摘要 |
-| `start_job` / `pause_job` / `resume_job` / `cancel_job` | 通过工人主管控制持久化作业 |
+| `start_job` / `pause_job` / `resume_job` / `cancel_job` | 通过 Worker 主管控制持久化作业 |
 | `get_job_diagnostics` | 返回为持久作业收集的有界结构化诊断信息 |
 | `get_job_diagnostics_window` | 使用偏移/限制返回有界诊断页 |
 | `list_jobs_window` | 返回最近任务摘要的有界页面 |
 | `get_job_artifacts` | 返回任务工件清单和 `.part` 路径 |
 | `get_job_checkpoint` | 返回任务的最新有界进度检查点 |
 | `pause_queue` / `resume_queue` / `queue_is_paused` | 控制 Supervisor 队列并协作暂停/恢复其活动 Worker |
-| `load_drcs_report` | 读取工作人员生成的 DRCS 报告并返回可显示的字形图像 |
+| `load_drcs_report` | 读取 Worker 生成的 DRCS 报告并返回可显示的字形图像 |
 | `get_settings` / `update_settings` | 读取或自动更新经过验证的 UI 并导出应用程序数据 `settings.json` 中的默认值 |
 | `list_language_packs` | 从固定的 app-data `language-packs/` 目录中重新扫描有界的 JSON 语言文件；不接受任意浏览器提供的目录 |
 | `open_language_pack_directory` | 在需要时创建该固定目录并使用平台文件管理器打开它 |
@@ -37,7 +37,7 @@ Tauri/Svelte UI 是 Rust 后端的客户端。它不解析 TS/TLV 数据、解�
 | `preview_command` | 将查找/暂停命令转发到 libmpv |
 | `get_preview_capabilities` | 报告声明的视频/字幕合成路线以及仅当前可用的路线 |
 | `get_preview_runtime` | 报告发现的 libmpv 运行时以及渲染 API 符号可用性，而不声明渲染表面存在 |
-| `get_preview_render_diagnostics` | 报告活动的本机路由和有界渲染线程计数器/错误；缺少工作人员会返回稳定的非活动结果 |
+| `get_preview_render_diagnostics` | 报告活动的本机路由和有界渲染线程计数器/错误；缺少 Worker 会返回稳定的非活动结果 |
 | `render_at` | 返回请求的存档时间的有界字幕平面快照，而不通过 WebView 发送视频帧 |
 | `sync_preview_overlay` | 读取嵌入的 libmpv 时间，渲染有界本机平面，并应用、清除或删除 Windows 覆盖层，无需 WebView 计时或布局 |
 | `get_playback_time_mapping` / `update_playback_time_mapping` | 获取或替换本机字幕预览使用的经过验证的媒体时间→项目时间段映射 |
@@ -53,11 +53,11 @@ TLV 归档导出还可能包含有界 `asset_evidence` 和 `resource_evidence` �
 
 该快照还带有 `renderProfile`。它的合同故意与 libaribcaption 兼容：使用捆绑的 `Rounded M+ 1m for ARIB` 系列，保留字符单元几何形状，将 ruby 保持在 0.5 相对比例，并从解码的源字符数据中获取背景 alpha 和描边颜色。发布的 libaribcaption 屏幕截图是面向观看者的视觉参考；其固定的本地基线和审核规则位于`docs/visual-reference.md`中。该配置文件的 B24 部分由解码器支持。当前的本机 TTML 路径使用捆绑字体、源前景/背景 RGBA、跨度样式运行、简单水平 ruby 和显式关联的垂直 ruby，包括跨自动列的有界延续。复杂的 ruby 分组、完整的垂直方向和标准笔划行为在测试其本机实现之前仍然是声明性元数据； UI 不得使用任意 CSS 阴影或固定黑框来模仿它们。 `captionOverlayModes` 是一系列结构化后端路由功能：`id`、`available`、`experimental` 和 `unavailableReasonCode`。在 Windows 上，当发现的运行时导出完整渲染 API 时，`libmpv-render` 变得可用；后端默认选择它，如果渲染工作启动失败，则按源回退到 `libmpv-client-overlay`。 UI 呈现后端的实际路线，并且从不选择渲染器本身。
 
-## 工人活动信封
+## Worker 事件信封
 
-工作器 JSONL 事件使用 `protocolVersion`、`jobId`、`sequence` 和 `payload` 字段。为了兼容性，旧的顶级事件字段在迁移期间仍然存在。 Tauri 层必须在将事件转发到 Svelte 之前验证版本和序列。
+Worker JSONL 事件使用 `protocolVersion`、`jobId`、`sequence` 和 `payload` 字段。为了兼容性，旧的顶级事件字段在迁移期间仍然存在。 Tauri 层必须在将事件转发到 Svelte 之前验证版本和序列。
 
-工作线程首先发出 `hello`，然后是有界 `stage-changed`、`track-discovered`、进度、`diagnostic`、`drcs-discovered`、暂停/恢复、取消、`artifact-created`、完成或 `failed` 事件（如果适用）。每个成功发布的工件都会报告其稳定类型和完成前的最终路径； Tauri 使用该事件来更新原子 `app-data/jobs/{job-id}/artifacts.json` 清单，而不是从 UI 选项推断最终工件。检查点持久性属于 Tauri：只有在 `checkpoint.json` 原子发布后，它才会转发 `checkpoint-written`。 Tauri 在每次任务事件中转发稳定的 `code` 和 `parameters` 形状。时间线和诊断页面流式传输其 JSONL 源并仅保留请求的窗口；桌面不会在内存中缓存完整的存档或诊断历史记录。实时时间窗口 API 保留一个有界的预取窗口，并将字节光标移到新完成的 JSONL 行上，仅当请求的时间离开该窗口或工件被替换时才从磁盘重建。协议版本和序列违规保留其原始消息作为证据，但也携带命名参数，例如 `expected`、`actual`、`previous` 和 `current`； Svelte 本地化代码而不解析该消息。当工作人员提供的诊断参数是 JSON 对象时，将逐字保留。取消或失败时，工件状态将与 Worker 事件和文件证据进行协调：`completed` 表示 Worker 发布了它，`preserved` 表示预先存在的目标保持不变，`incomplete` 表示 `.part` 文件保留。 `failed` 或 `cancelled` 表示不存在更强的伪影证据。应用程序启动时，持久的活动状态变为 `Interrupted`，持久的 `Queued` 任务变为 `Ready`；内存队列永远不会自行恢复。 `resume_job` 仅在验证作业 ID、源、输出、轨道、源大小、进度范围和有界头/尾源指纹后重播 `Interrupted`、`Failed` 或 `Cancelled` 作业。仅报告时间戳更改，但当大小和指纹仍然匹配时接受。本机解码器和部分伪像状态未序列化，因此恢复当前从可信记录源执行完整重播，而不是声明字节精确恢复。
+Worker 首先发出 `hello`，然后是有界 `stage-changed`、`track-discovered`、进度、`diagnostic`、`drcs-discovered`、暂停/恢复、取消、`artifact-created`、完成或 `failed` 事件（如果适用）。每个成功发布的工件都会报告其稳定类型和完成前的最终路径； Tauri 使用该事件来更新原子 `app-data/jobs/{job-id}/artifacts.json` 清单，而不是从 UI 选项推断最终工件。检查点持久性属于 Tauri：只有在 `checkpoint.json` 原子发布后，它才会转发 `checkpoint-written`。 Tauri 在每次任务事件中转发稳定的 `code` 和 `parameters` 形状。时间线和诊断页面流式传输其 JSONL 源并仅保留请求的窗口；桌面不会在内存中缓存完整的存档或诊断历史记录。实时时间窗口 API 保留一个有界的预取窗口，并将字节光标移到新完成的 JSONL 行上，仅当请求的时间离开该窗口或工件被替换时才从磁盘重建。协议版本和序列违规保留其原始消息作为证据，但也携带命名参数，例如 `expected`、`actual`、`previous` 和 `current`； Svelte 本地化代码而不解析该消息。当 Worker 提供的诊断参数是 JSON 对象时，将逐字保留。取消或失败时，工件状态将与 Worker 事件和文件证据进行协调：`completed` 表示 Worker 发布了它，`preserved` 表示预先存在的目标保持不变，`incomplete` 表示 `.part` 文件保留。 `failed` 或 `cancelled` 表示不存在更强的工件证据。应用程序启动时，持久的活动状态变为 `Interrupted`，持久的 `Queued` 任务变为 `Ready`；内存队列永远不会自行恢复。 `resume_job` 仅在验证作业 ID、源、输出、轨道、源大小、进度范围和有界头/尾源指纹后重播 `Interrupted`、`Failed` 或 `Cancelled` 作业。仅报告时间戳更改，但当大小和指纹仍然匹配时接受。本机解码器和部分工件状态未序列化，因此恢复当前从可信记录源执行完整重播，而不是声明字节精确恢复。
 
 Worker 是独立可执行的，必须在 UI 集成之前进行测试：
 
