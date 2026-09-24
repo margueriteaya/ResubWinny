@@ -11,15 +11,24 @@ machine-readable provenance record.
 - Version: `v1.1.2`
 - Commit: `c64c23b8905ba514b87c9789269e9f66f949ffe0`
 - Source snapshot SHA-256:
-  `E71F007E91A0D417384E6CDC12FAD38EF5D4BC2A5FEE14425EE6404559B069E8`
+  `FDEFC6BC6EBB73BC5DCD2BD3DBB24CBB2D4DFD6A577BD1A3617E91AC646787A8`
 - License: MIT
 - Copyright: Copyright (c) 2022 magicxqq
 - Local license: `third_party/libaribcaption/LICENSE`
 
 The complete upstream source is vendored without nested Git metadata and
 linked statically through
-ResubWinny's separately maintained narrow C ABI bridge. ResubWinny carries no
-patches inside the vendored tree at this revision.
+ResubWinny's separately maintained narrow C ABI bridge.
+
+ResubWinny carries one patch inside the vendored tree at this revision. It adds
+`source_graphic_set`, `source_ku` and `source_ten` to `CaptionChar` so decoded
+characters retain their original ARIB graphic-set coordinates, which the
+broadcast caption semantics model needs to tell rows 90-94 special symbols
+apart from ordinary characters. The patch touches
+`include/aribcaption/caption.h`, `include/aribcaption/caption.hpp`,
+`src/decoder/decoder_impl.cpp` and `src/decoder/decoder_impl.hpp`. It adds
+fields and passes through existing call sites; upstream behaviour is otherwise
+unchanged. The snapshot hashes above cover the patched tree.
 
 ## libaribtlv
 

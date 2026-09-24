@@ -99,6 +99,30 @@ try {
         }
     }
 
+    # The notices restate some vendored snapshot hashes for readers who never
+    # open the manifest. Nothing else compared the two copies, so they drifted
+    # silently once already. Which components restate a hash is an editorial
+    # choice, so require only that every restated hash is a current manifest
+    # value rather than demanding a hash per component.
+    $manifestSnapshots = @(
+        $dependencyManifest.dependencies.PSObject.Properties |
+            ForEach-Object { $_.Value.sourceSnapshotSha256 } |
+            Where-Object { $_ }
+    )
+    $restated = [regex]::Matches(
+        $thirdPartyNotices,
+        '(?m)^- Source snapshot SHA-256:\s*\r?\n\s*`([0-9A-F]{64})`'
+    )
+    if ($restated.Count -eq 0) {
+        throw 'THIRD_PARTY_NOTICES.md no longer restates any source snapshot SHA-256.'
+    }
+    foreach ($match in $restated) {
+        $hash = $match.Groups[1].Value
+        if ($manifestSnapshots -notcontains $hash) {
+            throw "THIRD_PARTY_NOTICES.md states a source snapshot SHA-256 that no longer matches third_party/versions.json: $hash"
+        }
+    }
+
     Write-Output "Repository hygiene verified for $($tracked.Count) tracked files."
 } finally {
     Pop-Location
