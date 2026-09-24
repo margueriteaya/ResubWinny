@@ -33,6 +33,10 @@ pub(crate) struct CaptionSemantics {
 
 pub(crate) struct CaptionGroupSemantics {
     pub(crate) fragments: Vec<CaptionSemantics>,
+    #[allow(
+        dead_code,
+        reason = "the Worker counts paired delimiters while the desktop inspector uses the fragment ranges"
+    )]
     pub(crate) cross_fragment_delimiter_count: usize,
 }
 
