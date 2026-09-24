@@ -232,14 +232,15 @@ Add `-Dependencies` to delete `node_modules`; add `-DownloadedRuntimes` to delet
 ```text
 ResubWinny/
 ├── crates/
-│   └── arib-caption-worker/       # Streaming detection, parsing, subtitle model, CLI, and exporters
-│       ├── src/caption/           # B24, TTML/B62, and Ruby semantics
-│       ├── src/transport/         # MPEG-TS, M2TS, and experimental TLV/MMTP
-│       ├── src/exporters/         # ASS, TTML, SRT, WebVTT, archive, and other outputs
-│       └── src/tests/             # Modular Worker regression tests
+│   ├── arib-caption-worker/       # Streaming detection, parsing, subtitle model, CLI, and exporters
+│   │   ├── src/caption/           # B24, TTML/B62, and Ruby semantics
+│   │   ├── src/transport/         # MPEG-TS, M2TS, and experimental TLV/MMTP
+│   │   ├── src/exporters/         # ASS, TTML, SRT, WebVTT, archive, and other outputs
+│   │   └── src/tests/             # Modular Worker regression tests
+│   └── caption-semantics/         # Broadcast caption semantics shared by the Worker and desktop backend
 ├── native/
 │   └── aribcaption-bridge/        # Narrow C ABI bridge for libaribcaption
-├── shared/                        # Recognition rules shared by the Worker and desktop backend
+├── shared/                        # Format capability data shared by the Worker and frontend
 ├── studio-tauri/
 │   ├── src/                       # Svelte frontend
 │   │   ├── backend/               # typed Tauri API and event entry points

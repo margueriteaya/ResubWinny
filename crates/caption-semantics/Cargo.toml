@@ -1,0 +1,10 @@
+[package]
+name = "caption-semantics"
+version = "0.2.3-alpha.1"
+edition = "2024"
+license = "MPL-2.0"
+
+# Broadcast caption semantics shared by the Worker and the desktop service.
+# Both consume this as an ordinary library so each item is compiled once and
+# neither side needs dead-code allowances for what only the other side calls.
+[dependencies]

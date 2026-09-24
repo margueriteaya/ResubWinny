@@ -1,8 +1,7 @@
 mod about;
-#[path = "../../../shared/arib_symbols.rs"]
-mod arib_symbols;
-#[path = "../../../shared/caption_features.rs"]
-mod caption_features;
+// Shared broadcast caption semantics live in their own crate so each item is
+// compiled once; re-export them under the paths the modules already use.
+use caption_semantics::{arib_symbols, caption_features};
 mod caption_renderer;
 mod drcs;
 mod export;

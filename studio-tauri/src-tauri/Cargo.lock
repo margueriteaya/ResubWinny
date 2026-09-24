@@ -246,6 +246,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "caption-semantics"
+version = "0.2.3-alpha.1"
+
+[[package]]
 name = "cargo-platform"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2577,6 +2581,7 @@ name = "resubwinny-studio"
 version = "0.2.3-alpha.1"
 dependencies = [
  "base64 0.23.1",
+ "caption-semantics",
  "fontdue",
  "libloading 0.9.0",
  "png 0.17.16",

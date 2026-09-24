@@ -13,6 +13,7 @@ name = "arib-caption-worker"
 version = "0.2.3-alpha.1"
 dependencies = [
  "base64",
+ "caption-semantics",
  "cmake",
  "encoding_rs",
  "image",
@@ -62,6 +63,10 @@ name = "byteorder-lite"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
+
+[[package]]
+name = "caption-semantics"
+version = "0.2.3-alpha.1"
 
 [[package]]
 name = "cc"

@@ -13,6 +13,7 @@ name = "arib-caption-worker"
 version = "0.2.3-alpha.1"
 dependencies = [
  "base64",
+ "caption-semantics",
  "cmake",
  "encoding_rs",
  "roxmltree",
@@ -37,6 +38,10 @@ checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
 dependencies = [
  "generic-array",
 ]
+
+[[package]]
+name = "caption-semantics"
+version = "0.2.3-alpha.1"
 
 [[package]]
 name = "cc"

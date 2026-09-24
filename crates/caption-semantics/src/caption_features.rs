@@ -1,47 +1,39 @@
 use std::ops::Range;
 
-pub(crate) fn gaiji_ranges(text: &str) -> Vec<Range<usize>> {
+pub fn gaiji_ranges(text: &str) -> Vec<Range<usize>> {
     text.chars()
         .enumerate()
-        .filter(|(_, character)| super::arib_symbols::is_arib_additional_symbol(*character))
+        .filter(|(_, character)| crate::arib_symbols::is_arib_additional_symbol(*character))
         .map(|(index, _)| index..index + 1)
         .collect()
 }
 
-#[allow(
-    dead_code,
-    reason = "the Worker reports detail flags while the desktop inspector shares the ranges"
-)]
-pub(crate) struct AccessibilityEvidence {
-    pub(crate) ranges: Vec<Range<usize>>,
-    pub(crate) cue_ranges: Vec<Vec<Range<usize>>>,
-    pub(crate) observed_count: usize,
-    pub(crate) leading_annotation: bool,
-    pub(crate) music_cue: bool,
-    pub(crate) narration_delimiter: bool,
-    pub(crate) speaker_cue: bool,
-    pub(crate) continuation_cue: bool,
-    pub(crate) phone_cue: bool,
-    pub(crate) offscreen_cue: bool,
+pub struct AccessibilityEvidence {
+    pub ranges: Vec<Range<usize>>,
+    pub cue_ranges: Vec<Vec<Range<usize>>>,
+    pub observed_count: usize,
+    pub leading_annotation: bool,
+    pub music_cue: bool,
+    pub narration_delimiter: bool,
+    pub speaker_cue: bool,
+    pub continuation_cue: bool,
+    pub phone_cue: bool,
+    pub offscreen_cue: bool,
 }
 
-pub(crate) struct CaptionSemantics {
-    pub(crate) text_accessibility: AccessibilityEvidence,
-    pub(crate) declared_accessibility_ranges: Vec<Range<usize>>,
-    pub(crate) removable_accessibility_ranges: Vec<Range<usize>>,
+pub struct CaptionSemantics {
+    pub text_accessibility: AccessibilityEvidence,
+    pub declared_accessibility_ranges: Vec<Range<usize>>,
+    pub removable_accessibility_ranges: Vec<Range<usize>>,
 }
 
-pub(crate) struct CaptionGroupSemantics {
-    pub(crate) fragments: Vec<CaptionSemantics>,
-    #[allow(
-        dead_code,
-        reason = "the Worker counts paired delimiters while the desktop inspector uses the fragment ranges"
-    )]
-    pub(crate) cross_fragment_delimiter_count: usize,
+pub struct CaptionGroupSemantics {
+    pub fragments: Vec<CaptionSemantics>,
+    pub cross_fragment_delimiter_count: usize,
 }
 
 #[derive(Debug, Default, Clone)]
-pub(crate) struct CaptionSequenceState {
+pub struct CaptionSequenceState {
     japanese_quote_stack: Vec<char>,
     semantic_delimiter_closes: Vec<char>,
 }
@@ -55,8 +47,7 @@ const SEMANTIC_DELIMITER_PAIRS: [(char, char); 6] = [
     ('⦅', '⦆'),
 ];
 
-#[allow(dead_code, reason = "convenience view of the shared semantic result")]
-pub(crate) fn accessibility_ranges(text: &str) -> Vec<Range<usize>> {
+pub fn accessibility_ranges(text: &str) -> Vec<Range<usize>> {
     caption_semantics(text, &[]).removable_accessibility_ranges
 }
 
@@ -64,7 +55,7 @@ fn single_range_cue(range: Range<usize>) -> Vec<Range<usize>> {
     std::iter::once(range).collect()
 }
 
-pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
+pub fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
     let chars = text.chars().collect::<Vec<_>>();
     let mut cue_ranges = Vec::new();
     let mut index = 0;
@@ -117,7 +108,7 @@ pub(crate) fn accessibility_evidence(text: &str) -> AccessibilityEvidence {
     }
 }
 
-pub(crate) fn caption_semantics(
+pub fn caption_semantics(
     text: &str,
     declared_accessibility_ranges: &[Range<usize>],
 ) -> CaptionSemantics {
@@ -140,11 +131,7 @@ pub(crate) fn caption_semantics(
     }
 }
 
-#[allow(
-    dead_code,
-    reason = "callers without a caption sequence use a fresh state"
-)]
-pub(crate) fn caption_group_semantics(
+pub fn caption_group_semantics(
     texts: &[&str],
     declared_accessibility_ranges: &[Vec<Range<usize>>],
 ) -> CaptionGroupSemantics {
@@ -155,7 +142,7 @@ pub(crate) fn caption_group_semantics(
     )
 }
 
-pub(crate) fn caption_group_semantics_with_state(
+pub fn caption_group_semantics_with_state(
     texts: &[&str],
     declared_accessibility_ranges: &[Vec<Range<usize>>],
     sequence_state: &mut CaptionSequenceState,
@@ -516,15 +503,7 @@ fn add_leading_bracket_ranges(
     }
 }
 
-#[allow(
-    dead_code,
-    reason = "the desktop inspector uses ranges while the Worker also filters text"
-)]
-pub(crate) fn filtered_text(
-    text: &str,
-    preserve_gaiji: bool,
-    preserve_accessibility: bool,
-) -> String {
+pub fn filtered_text(text: &str, preserve_gaiji: bool, preserve_accessibility: bool) -> String {
     text.chars()
         .zip(retained_characters(
             text,
@@ -536,11 +515,7 @@ pub(crate) fn filtered_text(
         .collect()
 }
 
-#[allow(
-    dead_code,
-    reason = "the Worker maps retained characters back to styled source cells"
-)]
-pub(crate) fn retained_characters(
+pub fn retained_characters(
     text: &str,
     preserve_gaiji: bool,
     preserve_accessibility: bool,
@@ -548,7 +523,7 @@ pub(crate) fn retained_characters(
     retained_characters_with_accessibility_ranges(text, preserve_gaiji, preserve_accessibility, &[])
 }
 
-pub(crate) fn retained_characters_with_accessibility_ranges(
+pub fn retained_characters_with_accessibility_ranges(
     text: &str,
     preserve_gaiji: bool,
     preserve_accessibility: bool,
