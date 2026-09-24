@@ -181,18 +181,25 @@ impl WglContext {
     /// `hwnd` must be a live child window owned by the current process.
     pub(crate) unsafe fn create(hwnd: isize) -> Result<Self, String> {
         let hwnd = hwnd as *mut c_void;
+        // SAFETY: `hwnd` is a live window owned by this process, per the
+        // contract above. The DC is released on every error path and in Drop.
         let hdc = unsafe { GetDC(hwnd) };
         if hdc.is_null() {
             return Err("Could not acquire a device context for libmpv rendering.".into());
         }
         let descriptor = PixelFormatDescriptor::rgba_double_buffered();
+        // SAFETY: `hdc` is non-null and `descriptor` outlives both calls.
         let format = unsafe { ChoosePixelFormat(hdc, &descriptor) };
         if format == 0 || unsafe { SetPixelFormat(hdc, format, &descriptor) } == 0 {
+            // SAFETY: releases the DC acquired above exactly once on this path.
             unsafe { ReleaseDC(hwnd, hdc) };
             return Err("Could not configure an OpenGL pixel format for libmpv rendering.".into());
         }
+        // SAFETY: `hdc` has an OpenGL-capable pixel format set above, which is
+        // what wglCreateContext requires.
         let context = unsafe { wglCreateContext(hdc) };
         if context.is_null() {
+            // SAFETY: releases the DC acquired above exactly once on this path.
             unsafe { ReleaseDC(hwnd, hdc) };
             return Err("Could not create an OpenGL context for libmpv rendering.".into());
         }
@@ -202,12 +209,14 @@ impl WglContext {
     }
 
     pub(crate) fn make_current(&self) -> Result<(), String> {
+        // SAFETY: both handles are owned by `self` and stay valid until Drop.
         (unsafe { wglMakeCurrent(self.hdc, self.context) } != 0)
             .then_some(())
             .ok_or_else(|| "Could not make the libmpv OpenGL context current.".into())
     }
 
     pub(crate) fn swap_buffers(&self) -> Result<(), String> {
+        // SAFETY: `self.hdc` is owned by this context and still valid.
         (unsafe { SwapBuffers(self.hdc) } != 0)
             .then_some(())
             .ok_or_else(|| "Could not present the libmpv OpenGL frame.".into())
@@ -225,6 +234,8 @@ impl WglContext {
             .filter(|bytes| *bytes <= 128 * 1024 * 1024)
             .ok_or_else(|| "Native render capture exceeds its bounded size.".to_string())?;
         let mut pixels = vec![0; bytes];
+        // SAFETY: the caller holds the current GL context, and `pixels` was
+        // sized to exactly width * height * 4 bytes above.
         unsafe {
             glReadBuffer(GL_FRONT);
             glReadPixels(
@@ -241,6 +252,10 @@ impl WglContext {
     }
 }
 
+/// # Safety
+///
+/// `name` must be a NUL-terminated symbol name. libmpv calls this with a
+/// current GL context on the render thread.
 pub(crate) unsafe extern "C" fn get_proc_address(
     _: *mut c_void,
     name: *const c_char,
@@ -248,13 +263,20 @@ pub(crate) unsafe extern "C" fn get_proc_address(
     if name.is_null() {
         return ptr::null_mut();
     }
+    // SAFETY: `name` was checked non-null and is NUL-terminated by
+    // contract. wglGetProcAddress may return the documented 1/2/3/-1
+    // sentinels, which are rejected below.
     let wgl = unsafe { wglGetProcAddress(name) };
     if !wgl.is_null() && !matches!(wgl as isize, 1 | 2 | 3 | -1) {
         return wgl;
     }
     let module_name = CString::new("opengl32.dll").expect("literal has no NUL");
+    // SAFETY: the module name is a NUL-terminated literal. opengl32.dll is
+    // already loaded because this process created a WGL context.
     let module = unsafe { GetModuleHandleA(module_name.as_ptr()) };
     if !module.is_null() {
+        // SAFETY: `module` was checked non-null and `name` is NUL-terminated
+        // by this function's contract.
         unsafe { GetProcAddress(module, name) }
     } else {
         ptr::null_mut()
@@ -341,10 +363,14 @@ impl CaptionTexture {
             return Err("Caption texture pixels are invalid.".into());
         }
         let mut id = 0;
+        // SAFETY: the caller holds the current GL context, and the out pointer
+        // is a live u32 for exactly the one name requested.
         unsafe { glGenTextures(1, &mut id) };
         if id == 0 {
             return Err("Could not allocate a native caption texture.".into());
         }
+        // SAFETY: `id` is the texture just allocated, and `pixels` was checked
+        // above to hold exactly width * height * 4 bytes for this upload.
         unsafe {
             glBindTexture(GL_TEXTURE_2D, id);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -362,6 +388,8 @@ impl CaptionTexture {
             );
         }
         if let Some(previous) = previous {
+            // SAFETY: the previous texture belongs to this same GL context and is
+            // replaced here, so its name is deleted exactly once.
             unsafe { glDeleteTextures(1, &previous.id) };
         }
         Ok(Self {
@@ -383,6 +411,8 @@ impl CaptionTexture {
             + (self.x + self.width) as f32 / self.width as f32 * viewport.width as f32;
         let bottom = viewport.y as f32
             + (self.y + self.height) as f32 / self.height as f32 * viewport.height as f32;
+        // SAFETY: the caller holds the current GL context. Every push below is
+        // matched by a pop before this block returns.
         unsafe {
             glPushAttrib(GL_ALL_ATTRIB_BITS);
             glMatrixMode(GL_PROJECTION);
@@ -432,12 +462,16 @@ impl CaptionTexture {
 impl Drop for CaptionTexture {
     fn drop(&mut self) {
         // The render worker drops this texture before it releases WGL.
+        // SAFETY: the render worker drops this texture while its GL context is
+        // still current, so the name is deleted exactly once and in context.
         unsafe { glDeleteTextures(1, &self.id) };
     }
 }
 
 impl Drop for WglContext {
     fn drop(&mut self) {
+        // SAFETY: the context is detached before deletion, and both handles
+        // are owned by `self`, so each is released exactly once.
         unsafe {
             let _ = wglMakeCurrent(ptr::null_mut(), ptr::null_mut());
             let _ = wglDeleteContext(self.context);
@@ -454,6 +488,8 @@ mod tests {
     #[test]
     fn resolves_a_system_opengl_entry_point_without_a_webview() {
         let name = CString::new("glClear").expect("literal has no NUL");
+        // SAFETY: the name is a NUL-terminated literal. This resolves a core
+        // opengl32 entry point, which needs no current context.
         let resolved = unsafe { get_proc_address(ptr::null_mut(), name.as_ptr()) };
         assert!(!resolved.is_null());
     }

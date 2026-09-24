@@ -89,14 +89,23 @@ pub struct LibMpvPlayer {
     render_context: Option<*mut c_void>,
 }
 
-// Access is serialized by AppState's player mutex. libmpv permits client API
-// calls from application threads once its instance has been initialized.
+// SAFETY: the handle and render context are only reachable through this
+// type's own methods, and AppState's player mutex serializes those calls.
+// libmpv allows client API use from one thread at a time once the instance
+// is initialized. The render context is the exception and is only touched
+// by the render worker, which keeps the matching GL context current for
+// that context's whole lifetime.
 unsafe impl Send for LibMpvPlayer {}
 
 impl LibMpv {
     pub fn load(path: &Path) -> Result<Self, String> {
+        // SAFETY: loading a library runs its initializers. `path` is the pinned
+        // runtime resolved by the caller, not an arbitrary filename.
         let library = unsafe { Library::new(path) }
             .map_err(|error| format!("Could not load libmpv at {}: {error}", path.display()))?;
+        // SAFETY: each symbol is read from the library that is then moved into the
+        // returned value, so no function pointer outlives the loaded image. The
+        // declared signatures match libmpv's client and render ABI for the pin.
         unsafe {
             Ok(Self {
                 create: *library.get(b"mpv_create\0").map_err(symbol_error)?,
@@ -158,6 +167,8 @@ pub fn render_api_available(path: &Path) -> Result<bool, String> {
 impl LibMpvPlayer {
     pub fn start(library_path: &Path, window_id: isize, source: &Path) -> Result<Self, String> {
         let api = LibMpv::load(library_path)?;
+        // SAFETY: mpv_create takes no arguments and returns an owned handle or
+        // null, which is checked immediately below.
         let handle = unsafe { (api.create)() };
         if handle.is_null() {
             return Err("libmpv could not allocate a playback instance.".into());
@@ -182,6 +193,8 @@ impl LibMpvPlayer {
         player.set_option("sub-auto", "no")?;
         player.set_option("sub-visibility", "no")?;
         player.set_option("terminal", "no")?;
+        // SAFETY: `player.handle` came from mpv_create above and is non-null.
+        // All options were set before initialization, as libmpv requires.
         if unsafe { (player.api.initialize)(player.handle) } < 0 {
             return Err("libmpv could not initialize the native playback instance.".into());
         }
@@ -192,6 +205,11 @@ impl LibMpvPlayer {
     /// Starts the OpenGL render API before loading a media source. The caller
     /// must keep the matching OpenGL context current for this player's entire
     /// render-context lifetime, including `destroy_render_context`.
+    /// # Safety
+    ///
+    /// `get_proc_address` must resolve OpenGL symbols for a context that is
+    /// current on the calling thread, and that context must stay current for
+    /// the returned player's whole render-context lifetime.
     pub unsafe fn start_render(
         library_path: &Path,
         source: &Path,
@@ -201,6 +219,7 @@ impl LibMpvPlayer {
         if !api.supports_render_api() {
             return Err("This libmpv runtime does not expose the complete render API.".into());
         }
+        // SAFETY: as above, mpv_create returns an owned handle or null.
         let handle = unsafe { (api.create)() };
         if handle.is_null() {
             return Err("libmpv could not allocate a render playback instance.".into());
@@ -225,6 +244,7 @@ impl LibMpvPlayer {
         player.set_option("sub-auto", "no")?;
         player.set_option("sub-visibility", "no")?;
         player.set_option("terminal", "no")?;
+        // SAFETY: `player.handle` is the non-null handle from mpv_create.
         if unsafe { (player.api.initialize)(player.handle) } < 0 {
             return Err("libmpv could not initialize the OpenGL playback instance.".into());
         }
@@ -252,6 +272,9 @@ impl LibMpvPlayer {
             .api
             .render_context_create
             .expect("checked render api");
+        // SAFETY: `params` is a NUL-terminated array that outlives this call,
+        // `player.handle` is live, and the caller guarantees a current GL
+        // context per this function's contract.
         let result = unsafe { create(&mut context, player.handle, params.as_mut_ptr().cast()) };
         if result < 0 || context.is_null() {
             return Err(format!(
@@ -260,6 +283,8 @@ impl LibMpvPlayer {
         }
         player.render_context = Some(context);
         if let Err(error) = player.command(&["loadfile", &source.to_string_lossy(), "replace"]) {
+            // SAFETY: the render context was just created and the caller's GL
+            // context is still current, which is what destroying it requires.
             unsafe { player.destroy_render_context() };
             return Err(error);
         }
@@ -269,6 +294,10 @@ impl LibMpvPlayer {
     /// Draws an mpv frame into the current default OpenGL framebuffer.
     /// `force` redraws the last video frame so a low-frequency caption-plane
     /// change is visible even while video playback is paused.
+    /// # Safety
+    ///
+    /// The OpenGL context passed to `start_render` must be current on the
+    /// calling thread, and the default framebuffer must be bound.
     pub unsafe fn render_frame(
         &self,
         width: i32,
@@ -282,6 +311,7 @@ impl LibMpvPlayer {
             return Ok(false);
         };
         let update = self.api.render_context_update.expect("checked render api");
+        // SAFETY: `context` is this player's live render context.
         if !force && unsafe { update(context) } & MPV_RENDER_UPDATE_FRAME == 0 {
             return Ok(false);
         }
@@ -307,6 +337,8 @@ impl LibMpvPlayer {
             },
         ];
         let render = self.api.render_context_render.expect("checked render api");
+        // SAFETY: `params` is NUL-terminated and outlives the call, `context`
+        // is live, and the caller guarantees a current GL context.
         let result = unsafe { render(context, params.as_mut_ptr().cast()) };
         if result < 0 {
             return Err(format!("libmpv OpenGL frame rendering failed ({result})."));
@@ -316,8 +348,14 @@ impl LibMpvPlayer {
 
     /// Reports a completed platform-buffer swap to libmpv. This must happen
     /// after `SwapBuffers`, not merely after drawing into the WGL back buffer.
+    /// # Safety
+    ///
+    /// Call only from the thread whose GL context is current, right after
+    /// that context's buffer swap.
     pub unsafe fn report_swap(&self) {
         if let Some(context) = self.render_context {
+            // SAFETY: `context` is this player's live render context and the caller
+            // guarantees its GL context is current, per this method's contract.
             unsafe {
                 (self
                     .api
@@ -329,8 +367,14 @@ impl LibMpvPlayer {
 
     /// # Safety
     /// The render API's OpenGL context must be current in this thread.
+    /// # Safety
+    ///
+    /// The GL context given to `start_render` must still be current: libmpv
+    /// releases GL resources inside this call.
     pub unsafe fn destroy_render_context(&mut self) {
         if let Some(context) = self.render_context.take() {
+            // SAFETY: `context` is taken from `self`, so it is freed exactly once,
+            // and the caller guarantees the matching current GL context.
             unsafe { (self.api.render_context_free.expect("checked render api"))(context) };
         }
     }
@@ -341,6 +385,8 @@ impl LibMpvPlayer {
         let values = values.map_err(|_| "libmpv command contains an interior NUL.".to_string())?;
         let mut pointers: Vec<*const c_char> = values.iter().map(|value| value.as_ptr()).collect();
         pointers.push(std::ptr::null());
+        // SAFETY: `pointers` is a NUL-terminated argv whose CString backing
+        // store outlives this call, and `self.handle` is live.
         let result = unsafe { (self.api.command)(self.handle, pointers.as_ptr()) };
         (result >= 0)
             .then_some(())
@@ -399,13 +445,19 @@ impl LibMpvPlayer {
 
     fn string_property(&self, property: &str) -> Option<String> {
         let name = CString::new(property).ok()?;
+        // SAFETY: `name` is a NUL-terminated CString and `self.handle` is live.
+        // The returned pointer is owned by libmpv and freed below.
         let value = unsafe { (self.api.get_property_string)(self.handle, name.as_ptr()) };
         if value.is_null() {
             return None;
         }
+        // SAFETY: `value` was checked non-null and libmpv returns a
+        // NUL-terminated string that stays valid until mpv_free.
         let text = unsafe { CStr::from_ptr(value) }
             .to_string_lossy()
             .into_owned();
+        // SAFETY: `value` came from mpv_get_property_string, so mpv_free owns
+        // it, and the text was copied out above.
         unsafe { (self.api.free)(value.cast()) };
         (!text.trim().is_empty()).then_some(text)
     }
@@ -414,6 +466,8 @@ impl LibMpvPlayer {
         let name = CString::new(property)
             .map_err(|_| "libmpv property contains an interior NUL.".to_string())?;
         let mut value: f64 = 0.0;
+        // SAFETY: `name` is NUL-terminated, `self.handle` is live, and the out
+        // pointer is a live f64 matching the MPV_FORMAT_DOUBLE request.
         let result = unsafe {
             (self.api.get_property)(
                 self.handle,
@@ -433,6 +487,8 @@ impl LibMpvPlayer {
         let name = CString::new(name).map_err(|_| "Invalid libmpv option name.".to_string())?;
         let value = CString::new(value).map_err(|_| "Invalid libmpv option value.".to_string())?;
         let result =
+            // SAFETY: both CStrings are NUL-terminated and outlive the call, and
+            // `self.handle` is live.
             unsafe { (self.api.set_option_string)(self.handle, name.as_ptr(), value.as_ptr()) };
         (result >= 0)
             .then_some(())
@@ -453,6 +509,9 @@ impl Drop for LibMpvPlayer {
             tracing_fallback_render_context_drop();
         }
         if !self.handle.is_null() {
+            // SAFETY: `self.handle` is non-null here and is nulled immediately
+            // after, so it is destroyed exactly once. `self.api` still owns the
+            // loaded library at this point because Drop runs before field drops.
             unsafe { (self.api.terminate_destroy)(self.handle) };
             self.handle = std::ptr::null_mut();
         }

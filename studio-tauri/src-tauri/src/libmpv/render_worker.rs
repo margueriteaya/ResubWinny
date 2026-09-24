@@ -237,6 +237,8 @@ fn render_worker_main(
     ready: mpsc::SyncSender<Result<(), String>>,
     stats: Arc<Mutex<RenderWorkerStats>>,
 ) {
+    // SAFETY: `hwnd` is the preview child window this worker was started
+    // for, and it outlives the worker thread.
     let surface = match unsafe { crate::windows_gl::WglContext::create(hwnd) } {
         Ok(surface) => surface,
         Err(error) => {
@@ -244,6 +246,8 @@ fn render_worker_main(
             return;
         }
     };
+    // SAFETY: the WGL context created above is current on this thread and
+    // stays current until the render context is destroyed below.
     let mut player = match unsafe {
         LibMpvPlayer::start_render(&library_path, &source, crate::windows_gl::get_proc_address)
     } {
@@ -383,6 +387,8 @@ fn render_worker_main(
                 }
             }
         }
+        // SAFETY: this thread's WGL context is current and the default
+        // framebuffer is bound.
         match unsafe { player.render_frame(width, height, caption_dirty) } {
             Ok(true) => {
                 if let Some(caption) = caption.as_ref()
@@ -401,6 +407,8 @@ fn render_worker_main(
                     record_render_error(&stats, "Could not present the native libmpv frame.");
                     break;
                 }
+                // SAFETY: called on the render thread immediately after its own
+                // buffer swap, with the WGL context still current.
                 unsafe { player.report_swap() };
                 #[cfg(test)]
                 if let Some(reply) = pending_capture.take() {
@@ -447,6 +455,8 @@ fn render_worker_main(
             "The native preview stopped before presenting its first video frame.".into(),
         ));
     }
+    // SAFETY: the WGL context is still current here; it is only dropped
+    // after this call returns.
     unsafe { player.destroy_render_context() };
 }
 

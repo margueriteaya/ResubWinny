@@ -20,18 +20,23 @@ use windows::{
     core::w,
 };
 
+// SAFETY: invoked by the window manager with the arguments it documents
+// for a window procedure; every argument is forwarded unchanged.
 unsafe extern "system" fn preview_window_proc(
     hwnd: HWND,
     message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    // SAFETY: forwards the window manager's own arguments unchanged to the
+    // default handler.
     unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
 }
 
 fn preview_window_instance() -> Result<HINSTANCE, String> {
     static INSTANCE: std::sync::OnceLock<Result<isize, String>> = std::sync::OnceLock::new();
     let instance = INSTANCE.get_or_init(|| {
+        // SAFETY: passing None asks for this process's own module handle.
         let module = unsafe { GetModuleHandleW(None) }
             .map_err(|error| format!("Could not locate the application module: {error}"))?;
         let instance = HINSTANCE(module.0);
@@ -45,6 +50,8 @@ fn preview_window_instance() -> Result<HINSTANCE, String> {
             // after SwapBuffers and leave an apparently healthy black player.
             ..Default::default()
         };
+        // SAFETY: `class` is fully initialized and its name string outlives
+        // the call.
         if unsafe { RegisterClassW(&class) } == 0 {
             return Err("Could not register the native preview window class.".into());
         }
@@ -61,6 +68,7 @@ fn preview_screen_origin(owner: HWND, rect: &PreviewRect) -> Result<POINT, Strin
         x: rect.x,
         y: rect.y,
     };
+    // SAFETY: `owner` is a live window handle and `origin` is a live point.
     if unsafe { ClientToScreen(owner, &mut origin) }.as_bool() {
         Ok(origin)
     } else {
@@ -77,11 +85,15 @@ fn stop_host(state: &AppState) {
     {
         // The host is above WebView2. Hide it before libmpv teardown
         // so it cannot cover a newly selected Svelte page.
+        // SAFETY: `player.host` is the preview window this state created and
+        // has not destroyed yet.
         unsafe {
             let _ = ShowWindow(HWND(player.host as *mut _), SW_HIDE);
         }
         let _ = fs::remove_file(&player.overlay_path);
         player.player.stop();
+        // SAFETY: the host window is owned by this state and taken out of the
+        // slot above, so it is destroyed exactly once.
         unsafe {
             let _ = DestroyWindow(HWND(player.host as *mut _));
         }
@@ -117,6 +129,8 @@ fn start_preview_impl(
         .map_err(|e| format!("Could not access the native window: {e}"))?;
     let instance = preview_window_instance()?;
     let origin = preview_screen_origin(parent, &rect)?;
+    // SAFETY: the class was registered above, and `parent` is the live main
+    // window handle obtained from Tauri.
     let host = unsafe {
         CreateWindowExW(
             WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
@@ -134,6 +148,7 @@ fn start_preview_impl(
         )
     }
     .map_err(|e| format!("Could not create the native preview surface: {e}"))?;
+    // SAFETY: `host` is the window just created and still live.
     unsafe {
         SetWindowPos(
             host,
@@ -187,6 +202,8 @@ fn start_preview_impl(
     let (player, render_fallback_reason) = match startup {
         Ok(startup) => startup,
         Err(error) => {
+            // SAFETY: startup failed after creating `host`, so this destroys it
+            // exactly once before returning the error.
             unsafe {
                 let _ = DestroyWindow(host);
             }
@@ -244,6 +261,7 @@ pub fn resize_preview(state: State<'_, Arc<AppState>>, rect: PreviewRect) -> Res
         .as_mut()
     {
         let origin = preview_screen_origin(HWND(player.owner as *mut _), &rect)?;
+        // SAFETY: `player.host` is the live preview window owned by this state.
         unsafe {
             SetWindowPos(
                 HWND(player.host as *mut _),
