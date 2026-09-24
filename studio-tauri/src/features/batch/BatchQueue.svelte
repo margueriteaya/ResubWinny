@@ -135,7 +135,7 @@
                 ><b>{item.inspection.service}</b><small
                   >{item.inspection.container}</small
                 ></span
-              ><span class="queue-formats">{#if selectedFormatOptions.length}<span class="format-icons">{#each selectedFormatOptions as format (format.name)}<span class={`format-icon ${format.color ?? "blue"}`} data-tooltip={format.description}>{#if format.icon}<svelte:component this={format.icon} size={13} />{/if}</span>{/each}</span><b>{selectedFormatOptions.map((format) => format.name).join(" · ")}</b>{:else}<b>—</b>{/if}<small>{t("batch.faithfulLayout")}</small></span
+              ><span class="queue-formats">{#if selectedFormatOptions.length}<span class="format-icons">{#each selectedFormatOptions as format (format.name)}<span class={`format-icon ${format.color ?? "blue"}`} data-tooltip={format.description}>{#if format.icon}<format.icon size={13} />{/if}</span>{/each}</span><b>{selectedFormatOptions.map((format) => format.name).join(" · ")}</b>{:else}<b>—</b>{/if}<small>{t("batch.faithfulLayout")}</small></span
               ><span
                 class:finished={isStatus(item, "completed")}
                 class:issue={isStatus(item, "warning")}
@@ -210,7 +210,7 @@
       <section class="batch-options">
         <h2>{t("workspace.outputFormat")}</h2>
         <div class="batch-format-list">
-          {#each formats as item}<div class="batch-format-option" class:checked={selectedFormats.has(item.name)}><MacCheckbox checked={selectedFormats.has(item.name)} label={item.name} onChange={() => onToggleFormat(item.name)} /><span class={`format-icon ${item.color ?? "blue"}`}>{#if item.icon}<svelte:component this={item.icon} size={13} />{/if}</span><span class="format-copy"><b>{item.name}</b><small>{item.description}</small></span></div>{/each}
+          {#each formats as item}<div class="batch-format-option" class:checked={selectedFormats.has(item.name)}><MacCheckbox checked={selectedFormats.has(item.name)} label={item.name} onChange={() => onToggleFormat(item.name)} /><span class={`format-icon ${item.color ?? "blue"}`}>{#if item.icon}<item.icon size={13} />{/if}</span><span class="format-copy"><b>{item.name}</b><small>{item.description}</small></span></div>{/each}
         </div>
         <h2>{t("workspace.preserveFeatures")}</h2>
         <div class="batch-preserve-list">

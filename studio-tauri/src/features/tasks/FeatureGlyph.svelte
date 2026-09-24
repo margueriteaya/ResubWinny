@@ -13,7 +13,7 @@
   {#if visual.kind === "asset"}
     <span class="feature-glyph-mask" style={`--feature-glyph: url("${visual.asset}")`}></span>
   {:else}
-    <svelte:component this={visual.icon} {size} {stroke} />
+    <visual.icon {size} {stroke} />
   {/if}
 </span>
 

@@ -1064,7 +1064,7 @@
       />
     {:else if page === "tasks"}
       {#if TaskWorkspaceComponent}
-      <svelte:component this={TaskWorkspaceComponent}
+      <TaskWorkspaceComponent
         {inspection}
         userMode={appSettings.userMode}
         {isInspecting}
@@ -1132,7 +1132,7 @@
       {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
     {:else if page === "batch"}
       {#if BatchPageComponent}
-      <svelte:component this={BatchPageComponent}
+      <BatchPageComponent
         items={batchInputs}
         running={batchRunning}
         paused={isPaused}
@@ -1153,7 +1153,7 @@
       {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
     {:else if page === "drcs"}
       {#if DrcsPageComponent}
-      <svelte:component this={DrcsPageComponent}
+      <DrcsPageComponent
         glyphs={drcsGlyphs}
         message={drcsMessage}
         canRefresh={Boolean(inspection)}
@@ -1170,7 +1170,7 @@
         </div>
       </header>
       {#if SettingsPageComponent}
-      <svelte:component this={SettingsPageComponent}
+      <SettingsPageComponent
         bind:panel={settingsPanel}
         {saveCaptionFont}
         persistSettings={(settings: AppSettings) => preferencesSession.persist(settings)}

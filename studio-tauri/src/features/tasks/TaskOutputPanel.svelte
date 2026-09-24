@@ -53,7 +53,7 @@
       {#each formats as item}
         <div class="format-option" class:checked={selectedFormats.has(item.name)}>
           <MacCheckbox checked={selectedFormats.has(item.name)} label={item.name} onChange={() => onToggleFormat(item.name)} />
-          <span class={`format-option-icon ${item.color ?? "blue"}`}>{#if item.icon}<svelte:component this={item.icon} size={15} />{/if}</span>
+          <span class={`format-option-icon ${item.color ?? "blue"}`}>{#if item.icon}<item.icon size={15} />{/if}</span>
           <span class="format-option-copy"><b>{item.name}</b></span>
         </div>
       {/each}

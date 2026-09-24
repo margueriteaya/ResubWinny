@@ -36,7 +36,7 @@
   {#if size !== "toolbar"}<span class="segment-indicator" aria-hidden="true"></span>{/if}
   {#each options as option, index (option.value)}
     <button class:liquid-control={size === "toolbar"} class:selected={value === option.value} data-tooltip={iconOnly ? option.label : undefined} aria-label={iconOnly ? option.label : undefined} type="button" role="radio" aria-checked={value === option.value} tabindex={disabled ? -1 : selectedIndex === index ? 0 : -1} {disabled} onclick={() => { value = option.value; onChange(value); }} onkeydown={(event) => handleKeydown(event, index)}>
-      {#if option.icon}<svelte:component this={option.icon} size={14} strokeWidth={1.8} />{/if}{#if !iconOnly}<span>{option.label}</span>{/if}
+      {#if option.icon}<option.icon size={14} strokeWidth={1.8} />{/if}{#if !iconOnly}<span>{option.label}</span>{/if}
     </button>
   {/each}
 </div>

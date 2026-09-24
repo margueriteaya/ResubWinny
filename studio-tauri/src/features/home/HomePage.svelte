@@ -125,7 +125,7 @@
                 {@const signal = formatSignal(format)}
                 <div class="format-option" class:selected={settings.exportPreferences.formats.includes(format)} class:explained={explainedFormat === format}>
                   <button type="button" class="format-inspect" class:selected={settings.exportPreferences.formats.includes(format)} class:explained={explainedFormat === format} aria-current={explainedFormat === format ? "true" : undefined} aria-label={t("home.formatInspectAria").replace("{format}", format)} title={formatSummary} onclick={() => inspectFormat(format)}>
-                    <span class="format-symbol" aria-hidden="true"><svelte:component this={visual.icon} size={18} stroke={1.8} /></span>
+                    <span class="format-symbol" aria-hidden="true"><visual.icon size={18} stroke={1.8} /></span>
                     <span class="format-name"><b>{format}</b><small>{visual.extension}</small></span>
                     <span class={`format-risk level-${signal.tone}`} aria-hidden="true"><i></i>{signal.count > 0 ? t(signal.label).replace("{count}", String(signal.count)) : t(signal.label)}</span>
                   </button>
