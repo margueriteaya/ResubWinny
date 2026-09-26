@@ -34,8 +34,8 @@
     sidebarCollapsed?: boolean;
     page?: "home" | "tasks" | "batch" | "drcs" | "settings";
     workspaceLayout?: WorkspaceLayoutSettings;
-    sourceInspectorCollapsed?: unknown;
-    outputInspectorCollapsed?: unknown;
+    sourceInspectorCollapsed?: boolean;
+    outputInspectorCollapsed?: boolean;
     minimal?: boolean;
     hasTask?: boolean;
     onWindowAction?: (action: "minimize" | "maximize" | "close") => void;

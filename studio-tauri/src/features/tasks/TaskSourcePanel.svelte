@@ -4,20 +4,31 @@
   import { t } from "../../i18n";
   import { trackDisplayDetail, trackDisplayLabel, trackKey } from "../tracks";
 
-  export let inspection: Inspection;
-  export let userMode: UserMode = "normie";
-  export let routeLabel = "";
-  export let selectedTrackKeys: Set<string> = new Set();
-  export let selectionDisabled = false;
-  export let onSelectTrack: (track: Track) => void = () => {};
+  let {
+    inspection,
+    userMode = "normie",
+    routeLabel = "",
+    selectedTrackKeys = new Set(),
+    selectionDisabled = false,
+    onSelectTrack = () => {},
+  }: {
+    inspection: Inspection;
+    userMode?: UserMode;
+    routeLabel?: string;
+    selectedTrackKeys?: Set<string>;
+    selectionDisabled?: boolean;
+    onSelectTrack?: (track: Track) => void;
+  } = $props();
 
   const bytes = (value: number) => value ? `${(value / 1024 ** 3).toFixed(value > 100 * 1024 ** 3 ? 1 : 2)} GB` : "-";
-  $: serviceName = inspection.tracks[0]?.serviceName;
-  $: networkName = inspection.broadcast.networkName;
-  $: programmeName = inspection.broadcast.programmeName;
-  $: programmeDescription = inspection.broadcast.programmeDescription;
-  $: broadcastTime = inspection.broadcast.broadcastTimeUtc;
-  $: hasBroadcastInformation = Boolean(serviceName || networkName || programmeName || programmeDescription || broadcastTime);
+  const serviceName = $derived(inspection.tracks[0]?.serviceName);
+  const networkName = $derived(inspection.broadcast.networkName);
+  const programmeName = $derived(inspection.broadcast.programmeName);
+  const programmeDescription = $derived(inspection.broadcast.programmeDescription);
+  const broadcastTime = $derived(inspection.broadcast.broadcastTimeUtc);
+  const hasBroadcastInformation = $derived(
+    Boolean(serviceName || networkName || programmeName || programmeDescription || broadcastTime),
+  );
 </script>
 
 <section class="source-panel">
