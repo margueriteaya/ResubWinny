@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from "svelte";
+  import { onMount, onDestroy, tick, untrack } from "svelte";
   import { TriangleAlert, X } from "@lucide/svelte";
   import { noticeIn, noticeOut } from "./lib/motion";
   import HomePage from "./features/home/HomePage.svelte";
@@ -76,26 +76,37 @@
   import { restoreCachedTheme } from "./features/settings/preferences";
   import { PreferencesSession } from "./features/settings/session";
 
-  let page: Page = "home";
+  let page: Page = $state("home");
+  // The session only needs the page the shell starts on.
+  /* svelte-ignore state_referenced_locally */
   const navigationSession = new NavigationSession(page);
-  let TaskWorkspaceComponent: any = null;
-  let BatchPageComponent: any = null;
-  let DrcsPageComponent: any = null;
-  let SettingsPageComponent: any = null;
-  let onboardingVisible = false;
-  let onboardingRequired = false;
-  let onboardingSaving = false;
-  let onboardingError = "";
-  let startupReady = false;
+  let TaskWorkspaceComponent: any = $state(null);
+  let BatchPageComponent: any = $state(null);
+  let DrcsPageComponent: any = $state(null);
+  let SettingsPageComponent: any = $state(null);
+  let onboardingVisible = $state(false);
+  let onboardingRequired = $state(false);
+  let onboardingSaving = $state(false);
+  let onboardingError = $state("");
+  let startupReady = $state(false);
   const sidebarCompactQuery = "(max-width: 1250px)";
   const layoutSession = new LayoutSession(typeof window !== "undefined" && window.matchMedia(sidebarCompactQuery).matches);
-  let { sidebarCollapsed, sidebarAutoCollapsed, compactTaskViewport, compactSourceOpen, compactOutputOpen } = layoutSession.state;
+  let sidebarCollapsed = $state(layoutSession.state.sidebarCollapsed);
+  let sidebarAutoCollapsed = $state(layoutSession.state.sidebarAutoCollapsed);
+  let compactTaskViewport = $state(layoutSession.state.compactTaskViewport);
+  let compactSourceOpen = $state(layoutSession.state.compactSourceOpen);
+  let compactOutputOpen = $state(layoutSession.state.compactOutputOpen);
   function syncLayout() {
-    ({ sidebarCollapsed, sidebarAutoCollapsed, compactTaskViewport, compactSourceOpen, compactOutputOpen } = layoutSession.state);
+    const next = layoutSession.state;
+    sidebarCollapsed = next.sidebarCollapsed;
+    sidebarAutoCollapsed = next.sidebarAutoCollapsed;
+    compactTaskViewport = next.compactTaskViewport;
+    compactSourceOpen = next.compactSourceOpen;
+    compactOutputOpen = next.compactOutputOpen;
   }
-  let inspection: Inspection | null = null;
-  let error = "";
-  let isInspecting = false;
+  let inspection: Inspection | null = $state(null);
+  let error = $state("");
+  let isInspecting = $state(false);
   const exportSession = new ExportSession({
     beginExport: () => {
       isExporting = true;
@@ -173,28 +184,28 @@
     },
     refreshBatch: () => void refreshBatchJobs(),
   });
-  let isExporting = false;
-  let previewIndexing = false;
-  let exportPending = false;
-  let isPaused = false;
-  let logs: string[] = [];
+  let isExporting = $state(false);
+  let previewIndexing = $state(false);
+  let exportPending = $state(false);
+  let isPaused = $state(false);
+  let logs: string[] = $state([]);
   let lastLoggedProgressBucket = -1;
-  let progress = 0;
-  let bytesRead = 0;
-  let warnings = 0;
-  let captions = 0;
-  let featureKnowledge: Record<string, FeatureKnowledge> = {};
-  let exportConflicts: Record<string, RuntimeExportConflicts> = {};
-  let selectedFormats = new Set<ExportFormat>(["ASS"]);
-  let preservation: ExportPreservation = {
+  let progress = $state(0);
+  let bytesRead = $state(0);
+  let warnings = $state(0);
+  let captions = $state(0);
+  let featureKnowledge: Record<string, FeatureKnowledge> = $state({});
+  let exportConflicts: Record<string, RuntimeExportConflicts> = $state({});
+  let selectedFormats = $state(new Set<ExportFormat>(["ASS"]));
+  let preservation: ExportPreservation = $state({
     position: true,
     color: true,
     ruby: true,
     drcs: true,
     gaiji: true,
     accessibility: true,
-  };
-  let appSettings: AppSettings = {
+  });
+  let appSettings: AppSettings = $state({
     uiFont: "system",
     captionFont: "arib",
     defaultFormat: "ASS",
@@ -209,38 +220,41 @@
       outputCollapsed: false,
     },
     onboardingVersion: 0,
-  };
-  let settingsPanel: "general" | "typography" | "output" | "playback" | "about" | "licenses" = "general";
-  let outputDirectory = "";
-  let taskTab: "preview" | "events" | "diagnostics" = "preview";
-  let currentJobId = "";
-  let canResumeCurrentJob = false;
-  let resumeBusy = false;
-  let diagnosticsCount = 0;
-  let selectedTracks = new Set<string>();
-  let history: TaskRecord[] = [];
-  let savedDrcsMappings: Record<string, SavedDrcsMapping> = {};
+  });
+  let settingsPanel: "general" | "typography" | "output" | "playback" | "about" | "licenses" = $state("general");
+  let outputDirectory = $state("");
+  let taskTab: "preview" | "events" | "diagnostics" = $state("preview");
+  let currentJobId = $state("");
+  let canResumeCurrentJob = $state(false);
+  let resumeBusy = $state(false);
+  let diagnosticsCount = $state(0);
+  let selectedTracks = $state(new Set<string>());
+  let history: TaskRecord[] = $state([]);
+  let savedDrcsMappings: Record<string, SavedDrcsMapping> = $state({});
   // This node exists only while the Tasks preview tab is mounted.  Keeping a
   // nullable reference prevents a destroyed page's host from being reused by
   // a later native-preview start.
-  let nativePreview: HTMLDivElement | null = null;
-  let playerRunning = false;
-  let playerPaused = true;
-  let previewAvailable: boolean | null = null;
-  let projectCursorMs: ProjectTimeMs = asProjectTimeMs(0);
-  let renderBusy = false;
-  let archivePath = "";
-  let playbackMapping: PlaybackTimeMapping = {
+  let nativePreview: HTMLDivElement | null = $state(null);
+  let playerRunning = $state(false);
+  let playerPaused = $state(true);
+  let previewAvailable: boolean | null = $state(null);
+  let projectCursorMs: ProjectTimeMs = $state(asProjectTimeMs(0));
+  let renderBusy = $state(false);
+  let archivePath = $state("");
+  let playbackMapping: PlaybackTimeMapping = $state({
     segmentId: "recording-origin",
     mediaAnchorMs: 0,
     projectAnchorMs: 0,
     rateNumerator: 1,
     rateDenominator: 1,
-  };
-  let appliedPlaybackMapping: PlaybackTimeMapping = { ...playbackMapping };
-  let playbackMappingBusy = false;
-  let mediaTimeMs: MediaTimeMs | null = null;
-  let previewDurationMs: MediaTimeMs | null = null;
+  });
+  // Seeded from the initial mapping; from then on it tracks what the backend
+  // last accepted, which is deliberately not the edited mapping.
+  /* svelte-ignore state_referenced_locally */
+  let appliedPlaybackMapping: PlaybackTimeMapping = $state({ ...playbackMapping });
+  let playbackMappingBusy = $state(false);
+  let mediaTimeMs: MediaTimeMs | null = $state(null);
+  let previewDurationMs: MediaTimeMs | null = $state(null);
   const runtimeSession = new TaskRuntimeSession({
     setEventState: (state) => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings, featureKnowledge, exportConflicts } = state),
     setMediaTime: (value) => (mediaTimeMs = value),
@@ -284,27 +298,32 @@
     });
   }
 
-  $: if (page === "batch" && !BatchPageComponent)
-    void import("./features/batch/BatchPage.svelte").then((module) => BatchPageComponent = module.default);
-  $: if (page === "tasks" && !TaskWorkspaceComponent)
-    void import("./features/tasks/TaskWorkspace.svelte").then((module) => TaskWorkspaceComponent = module.default);
-  $: if (page === "drcs" && !DrcsPageComponent)
-    void import("./features/drcs/DrcsPage.svelte").then((module) => DrcsPageComponent = module.default);
-  $: if (page === "settings" && !SettingsPageComponent)
-    void import("./features/settings/SettingsPage.svelte").then((module) => SettingsPageComponent = module.default);
+  $effect(() => {
+    if (page === "batch" && !BatchPageComponent)
+      void import("./features/batch/BatchPage.svelte").then((module) => BatchPageComponent = module.default);
+    if (page === "tasks" && !TaskWorkspaceComponent)
+      void import("./features/tasks/TaskWorkspace.svelte").then((module) => TaskWorkspaceComponent = module.default);
+    if (page === "drcs" && !DrcsPageComponent)
+      void import("./features/drcs/DrcsPage.svelte").then((module) => DrcsPageComponent = module.default);
+    if (page === "settings" && !SettingsPageComponent)
+      void import("./features/settings/SettingsPage.svelte").then((module) => SettingsPageComponent = module.default);
+  });
   // mpv owns a native surface. Once it starts, remove the WebView placeholder
   // so the instructional layer cannot be mistaken for video state.
-  $: if (nativePreview)
-    nativePreview.classList.toggle("native-preview-active", playerRunning);
+  $effect(() => {
+    nativePreview?.classList.toggle("native-preview-active", playerRunning);
+  });
   // A language switch deliberately remounts the WebView page tree so every
   // legacy translation call refreshes.  Rebind the native child HWND to the
   // replacement placeholder immediately instead of leaving a stale rectangle.
-  $: if (playerRunning && nativePreview) void resizePreview();
-  let batchInputs: BatchItem[] = [];
-  let batchRunning = false;
-  let multiTaskOutputDirectory = "";
-  let drcsGlyphs: DrcsGlyph[] = [];
-  let drcsMessage = t("drcs.selectTask");
+  $effect(() => {
+    if (playerRunning && nativePreview) untrack(() => void resizePreview());
+  });
+  let batchInputs: BatchItem[] = $state([]);
+  let batchRunning = $state(false);
+  let multiTaskOutputDirectory = $state("");
+  let drcsGlyphs: DrcsGlyph[] = $state([]);
+  let drcsMessage = $state(t("drcs.selectTask"));
   // `isTauri()` is the supported runtime probe.  Inspecting private
   // `__TAURI_INTERNALS__.metadata` is not stable across Tauri/WebView2
   // releases and can incorrectly disable every real desktop action.
@@ -367,14 +386,14 @@
 
   const saveCaptionFont = (font: string) => preferencesSession.saveCaptionFont(font);
 
-  let supportedFormats = formatOptions(t);
-  $: {
-    $localeRevision;
+  let supportedFormats = $state(formatOptions(t));
+  $effect(() => {
+    void $localeRevision;
     supportedFormats = formatOptions(t);
-  }
+  });
 
   const bytes = formatBytes;
-  $: routeDisplayLabel = routeLabel(inspection?.routeCode, t);
+  const routeDisplayLabel = $derived.by(() => routeLabel(inspection?.routeCode, t));
   function savedPreferences(): AppSettings {
     return appSettings;
   }
@@ -432,8 +451,12 @@
     selectView("settings");
   }
 
-  $: sourceInspectorCollapsed = compactTaskViewport ? !compactSourceOpen : appSettings.workspaceLayout.sourceCollapsed;
-  $: outputInspectorCollapsed = compactTaskViewport ? !compactOutputOpen : appSettings.workspaceLayout.outputCollapsed;
+  const sourceInspectorCollapsed = $derived(
+    compactTaskViewport ? !compactSourceOpen : appSettings.workspaceLayout.sourceCollapsed,
+  );
+  const outputInspectorCollapsed = $derived(
+    compactTaskViewport ? !compactOutputOpen : appSettings.workspaceLayout.outputCollapsed,
+  );
 
   function toggleSourceInspector() {
     if (compactTaskViewport) {

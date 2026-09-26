@@ -5,15 +5,17 @@
   import { t } from '../../i18n'
   import { isDesktopRuntime } from '../../shell/desktop'
 
-  let documents: LegalDocumentSummary[] = []
-  let selected: LegalDocumentContent | null = null
-  let selectedId: LegalDocumentId | null = null
-  let query = ''
-  let loading = false
-  let error = ''
+  let documents: LegalDocumentSummary[] = $state([])
+  let selected: LegalDocumentContent | null = $state(null)
+  let selectedId: LegalDocumentId | null = $state(null)
+  let query = $state('')
+  let loading = $state(false)
+  let error = $state('')
   let request = 0
-  $: normalizedQuery = query.trim().toLocaleLowerCase()
-  $: visibleDocuments = documents.filter((document) => `${document.title} ${document.category} ${document.license}`.toLocaleLowerCase().includes(normalizedQuery))
+  const normalizedQuery = $derived(query.trim().toLocaleLowerCase())
+  const visibleDocuments = $derived(
+    documents.filter((document) => `${document.title} ${document.category} ${document.license}`.toLocaleLowerCase().includes(normalizedQuery)),
+  )
 
   async function selectDocument(id: LegalDocumentId) {
     const currentRequest = ++request
