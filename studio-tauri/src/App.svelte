@@ -5,6 +5,7 @@
   import HomePage from "./features/home/HomePage.svelte";
   import OnboardingPage from "./features/onboarding/OnboardingPage.svelte";
   import { OnboardingSession } from "./features/onboarding/session";
+  import { PreviewNavigationSession } from "./features/tasks/preview-navigation-session";
   import { PreviewSession } from "./features/tasks/preview-session";
   import { SourceSession } from "./features/tasks/source-session";
   import { ExportSession } from "./features/tasks/export-session";
@@ -725,49 +726,24 @@
     return previewSession.queueStop(stopPreview);
   }
 
-  async function seekRunningPreview(
-    milliseconds: MediaTimeMs,
-    waitForReady = false,
-    isCurrent: () => boolean = () => true,
-  ) {
-    await previewSession.seekMedia(milliseconds, waitForReady, isCurrent);
-  }
-
-  async function seekRunningPreviewProject(
-    milliseconds: ProjectTimeMs,
-    waitForReady = false,
-    final = true,
-    intent = previewSession.currentIntent(),
-  ) {
-    await previewSession.seekProject(milliseconds, waitForReady, final, intent);
-  }
+  const previewNavigation = new PreviewNavigationSession(previewSession, {
+    desktopRuntime: () => desktopRuntime,
+    tab: () => taskTab,
+    setTab: (next) => (taskTab = next),
+    tasksVisible: () => page === "tasks",
+    hasSource: () => inspection != null,
+    running: () => playerRunning,
+    layoutReady: async () => {
+      await tick();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    },
+    start: startPreview,
+    stop: queuePreviewStop,
+    onError: reportBackendFailure,
+  });
 
   function switchTaskTab(next: typeof taskTab) {
-    if (next === taskTab) return;
-    const generation = previewSession.beginPageTransition(next !== "preview");
-    taskTab = next;
-    if (next !== "preview") {
-      void queuePreviewStop();
-      return;
-    }
-    if (inspection) void activateTabPreview(generation);
-  }
-
-  async function activateTabPreview(generation: number) {
-    await previewSession.whenStopped();
-    await tick();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    if (!previewSession.isCurrentPageTransition(generation) || taskTab !== "preview" || page !== "tasks") return;
-    const resumeAt = previewSession.resumeTime();
-    await startPreview();
-    if (resumeAt != null && resumeAt > 0 && previewSession.isCurrentPageTransition(generation) && playerRunning) {
-      await seekRunningPreview(
-        resumeAt,
-        true,
-        () => previewSession.isCurrentPageTransition(generation) && taskTab === "preview" && page === "tasks",
-      );
-      previewSession.clearResumeTime();
-    }
+    previewNavigation.switchTab(next);
   }
 
   async function playerCommand(command: PreviewCommand) {
@@ -794,24 +770,7 @@
   }
 
   async function performSeekPreviewProject(milliseconds: ProjectTimeMs, final = true, intent = previewSession.currentIntent()) {
-    if (!desktopRuntime) return;
-    let restarted = false;
-    if (taskTab !== "preview") {
-      const generation = previewSession.beginPageTransition(false);
-      taskTab = "preview";
-      await tick();
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      if (!previewSession.isCurrentPageTransition(generation) || page !== "tasks" || !previewSession.isCurrentIntent(intent)) return;
-      await previewSession.whenStopped();
-      await startPreview();
-      restarted = true;
-    }
-    if (!playerRunning || !previewSession.isCurrentIntent(intent)) return;
-    try {
-      await seekRunningPreviewProject(milliseconds, restarted, final, intent);
-    } catch (reason) {
-      reportBackendFailure(reason);
-    }
+    await previewNavigation.seek(milliseconds, final, intent);
   }
   async function setPreviewVolume(volume: number) {
     await previewSession.setVolume(volume);
@@ -980,20 +939,7 @@
   }
 
   async function activateTaskPreview(generation: number) {
-    await previewSession.whenStopped();
-    await tick();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    if (!navigationSession.isCurrent(generation, "tasks") || page !== "tasks" || taskTab !== "preview") return;
-    const resumeAt = previewSession.resumeTime();
-    await startPreview();
-    if (resumeAt != null && resumeAt > 0 && navigationSession.isCurrent(generation, "tasks") && playerRunning) {
-      await seekRunningPreview(
-        resumeAt,
-        true,
-        () => navigationSession.isCurrent(generation, "tasks") && page === "tasks" && taskTab === "preview",
-      );
-      previewSession.clearResumeTime();
-    }
+    await previewNavigation.activate(() => navigationSession.isCurrent(generation, "tasks"));
   }
 
   onMount(() => {

@@ -1,3 +1,4 @@
+import { PreviewNavigationSession } from '../studio-tauri/src/features/tasks/preview-navigation-session.ts'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { emptyTaskEventState, featureCountSummary, invalidateRuntimeFeatureConflict, reduceTaskEvent } from '../studio-tauri/src/features/tasks/event-state.ts'
@@ -313,4 +314,65 @@ test('DRCS stays conditional until target-specific resolution is known', () => {
   const dropped = assessExports(['SRT'], { ...preservation, drcs: false }, knowledge)
   assert.deepEqual(dropped.formats.SRT.dropped.map((item) => item.feature), ['drcs'])
   assert.equal(dropped.hasConflict, false)
+})
+
+function previewNavigationFixture() {
+  let release
+  const stopped = new Promise((resolve) => { release = resolve })
+  const state = { current: true, tab: 'events', starts: 0, seeks: 0, cleared: 0 }
+  const preview = {
+    beginPageTransition: () => 1,
+    isCurrentPageTransition: () => state.current,
+    whenStopped: () => stopped,
+    resumeTime: () => 1200,
+    clearResumeTime: () => state.cleared++,
+    seekMedia: async () => { state.seeks++ },
+    seekProject: async () => { state.seeks++ },
+    currentIntent: () => 1,
+    isCurrentIntent: () => state.current,
+  }
+  const bindings = {
+    desktopRuntime: () => true,
+    tab: () => state.tab,
+    setTab: (tab) => { state.tab = tab },
+    tasksVisible: () => state.current,
+    hasSource: () => true,
+    running: () => true,
+    layoutReady: async () => {},
+    start: async () => { state.starts++ },
+    stop: async () => {},
+    onError: (reason) => { throw reason },
+  }
+  return { state, release, bindings, session: new PreviewNavigationSession(preview, bindings) }
+}
+
+test('preview navigation does not restart a host abandoned while its previous player stops', async () => {
+  const f = previewNavigationFixture()
+  const pending = f.session.seek(5000)
+  await Promise.resolve()
+  f.state.current = false
+  f.release()
+  await pending
+  assert.equal(f.state.starts, 0)
+  assert.equal(f.state.seeks, 0)
+})
+
+test('preview activation restores the saved media position after host layout', async () => {
+  const f = previewNavigationFixture()
+  f.state.tab = 'preview'
+  f.release()
+  await f.session.activate(() => f.state.current)
+  assert.equal(f.state.starts, 1)
+  assert.equal(f.state.seeks, 1)
+  assert.equal(f.state.cleared, 1)
+})
+
+test('preview activation leaves resume state intact if navigation changes during startup', async () => {
+  const f = previewNavigationFixture()
+  f.state.tab = 'preview'
+  f.bindings.start = async () => { f.state.current = false }
+  f.release()
+  await f.session.activate(() => f.state.current)
+  assert.equal(f.state.seeks, 0)
+  assert.equal(f.state.cleared, 0)
 })
