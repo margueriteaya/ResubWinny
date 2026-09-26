@@ -10,56 +10,99 @@
   import { projectRangeForMedia, projectTimeMs as asProjectTimeMs, type MediaTimeMs, type ProjectTimeMs } from "./time-mapping";
 
   type TaskTab = "preview" | "events" | "diagnostics";
-  export let taskTab: TaskTab = "preview";
-  export let userMode: UserMode = "normie";
-  export let currentJobId = "";
-  export let desktopRuntime = false;
-  export let archivePath = "";
-  export let logs: string[] = [];
-  export let captions = 0;
-  export let warnings = 0;
-  export let selectedTrackCount = 0;
-  export let diagnosticsCount = 0;
-  export let bytesRead = 0;
-  export let progress = 0;
-  export let isExporting = false;
-  export let previewIndexing = false;
-  export let compactViewport = false;
-  export let playerRunning = false;
-  export let playerPaused = true;
-  export let previewAvailable: boolean | null = null;
-  export let nativePreview: HTMLDivElement | null = null;
-  export let playbackMapping: PlaybackTimeMapping;
-  export let appliedPlaybackMapping: PlaybackTimeMapping;
-  export let playbackMappingBusy = false;
-  export let projectTimeMs: ProjectTimeMs = 0 as ProjectTimeMs;
-  export let durationMs: MediaTimeMs | null = null;
-  export let trackLabel = "";
-  export let trackName = "";
-  export let trackDetail = "";
-  export let onSelectTab: (tab: TaskTab) => void = () => {};
-  export let onPlayerCommand: (command: PreviewCommand) => void = () => {};
-  export let onStartPreview: () => void = () => {};
-  export let onStopPreview: () => void = () => {};
-  export let onResizePreview: () => void = () => {};
-  export let onSeekProject: (milliseconds: ProjectTimeMs, final?: boolean) => void | Promise<void> = () => {};
-  export let onSeekTarget: (milliseconds: ProjectTimeMs, final?: boolean) => void = () => {};
-  export let onSetVolume: (volume: number) => void = () => {};
-  export let onSaveMapping: () => void = () => {};
-  export let onDiagnosticsCount: (count: number) => void = () => {};
-  export let onError: (message: string) => void = () => {};
-  let playbackMappingDetails: HTMLDetailsElement;
-  let scrubberActive = false;
-  let scrubberTargetMs = 0;
+  let {
+    taskTab = "preview",
+    userMode = "normie",
+    currentJobId = "",
+    desktopRuntime = false,
+    archivePath = "",
+    logs = [],
+    captions = 0,
+    warnings = 0,
+    selectedTrackCount = 0,
+    diagnosticsCount = 0,
+    bytesRead = 0,
+    progress = 0,
+    isExporting = false,
+    previewIndexing = false,
+    compactViewport = false,
+    playerRunning = false,
+    playerPaused = true,
+    previewAvailable = null,
+    nativePreview = $bindable(null),
+    playbackMapping = $bindable(),
+    appliedPlaybackMapping,
+    playbackMappingBusy = false,
+    projectTimeMs = 0 as ProjectTimeMs,
+    durationMs = null,
+    trackLabel = "",
+    trackName = "",
+    trackDetail = "",
+    onSelectTab = () => {},
+    onPlayerCommand = () => {},
+    onStartPreview = () => {},
+    onStopPreview = () => {},
+    onResizePreview = () => {},
+    onSeekProject = () => {},
+    onSeekTarget = () => {},
+    onSetVolume = () => {},
+    onSaveMapping = () => {},
+    onDiagnosticsCount = () => {},
+    onError = () => {},
+  }: {
+    taskTab?: TaskTab;
+    userMode?: UserMode;
+    currentJobId?: string;
+    desktopRuntime?: boolean;
+    archivePath?: string;
+    logs?: string[];
+    captions?: number;
+    warnings?: number;
+    selectedTrackCount?: number;
+    diagnosticsCount?: number;
+    bytesRead?: number;
+    progress?: number;
+    isExporting?: boolean;
+    previewIndexing?: boolean;
+    compactViewport?: boolean;
+    playerRunning?: boolean;
+    playerPaused?: boolean;
+    previewAvailable?: boolean | null;
+    nativePreview?: HTMLDivElement | null;
+    playbackMapping: PlaybackTimeMapping;
+    appliedPlaybackMapping: PlaybackTimeMapping;
+    playbackMappingBusy?: boolean;
+    projectTimeMs?: ProjectTimeMs;
+    durationMs?: MediaTimeMs | null;
+    trackLabel?: string;
+    trackName?: string;
+    trackDetail?: string;
+    onSelectTab?: (tab: TaskTab) => void;
+    onPlayerCommand?: (command: PreviewCommand) => void;
+    onStartPreview?: () => void;
+    onStopPreview?: () => void;
+    onResizePreview?: () => void;
+    onSeekProject?: (milliseconds: ProjectTimeMs, final?: boolean) => void | Promise<void>;
+    onSeekTarget?: (milliseconds: ProjectTimeMs, final?: boolean) => void;
+    onSetVolume?: (volume: number) => void;
+    onSaveMapping?: () => void;
+    onDiagnosticsCount?: (count: number) => void;
+    onError?: (message: string) => void;
+  } = $props();
+  let playbackMappingDetails: HTMLDetailsElement | undefined = $state();
+  let scrubberActive = $state(false);
+  let scrubberTargetMs = $state(0);
   let scrubberFrame: number | undefined;
   let pendingScrubberTarget: number | null = null;
 
   function openPlaybackMapping() {
-    playbackMappingDetails.open = true;
+    const details = playbackMappingDetails;
+    if (!details) return;
+    details.open = true;
     requestAnimationFrame(() => {
       const behavior = matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-      playbackMappingDetails.scrollIntoView({ block: "nearest", behavior });
-      playbackMappingDetails.querySelector<HTMLElement>("summary")?.focus();
+      details.scrollIntoView({ block: "nearest", behavior });
+      details.querySelector<HTMLElement>("summary")?.focus();
     });
   }
 
@@ -111,26 +154,32 @@
     if (!scrubberActive) return;
     queueScrubberSeek(scrubberTargetMs, true);
   }
-  $: taskTabOptions = [
+  const taskTabOptions = $derived([
     { value: "preview", label: t("workspace.captionPreview"), icon: SquarePlay },
     { value: "events", label: `${t("workspace.eventList")} · ${captions.toLocaleString()}`, icon: ListVideo },
     { value: "diagnostics", label: `${t("workspace.diagnostics")} · ${diagnosticsCount}`, icon: Stethoscope },
-  ].filter((option) => option.value !== "diagnostics" || userMode === "nerd" || diagnosticsCount > 0 || warnings > 0);
-  $: projectRange = projectRangeForMedia(durationMs, appliedPlaybackMapping);
-  $: scrubberValueMs = scrubberActive ? scrubberTargetMs : projectTimeMs;
-  $: mappingIsAutomatic = playbackMapping.segmentId === "recording-origin"
-    && playbackMapping.mediaAnchorMs === 0
-    && playbackMapping.projectAnchorMs === 0
-    && playbackMapping.rateNumerator === 1
-    && playbackMapping.rateDenominator === 1;
-  $: mappingStatus = mappingIsAutomatic ? t("preview.mappingAuto") : t("preview.mappingAdjusted");
-  $: workbenchStatus = isExporting
-    ? t("task.statusExporting").replace("{0}", progress.toFixed(0))
-    : previewIndexing
-      ? t("task.statusIndexing").replace("{0}", progress.toFixed(0))
-      : diagnosticsCount || warnings
-        ? t("task.statusWarnings").replace("{0}", String(Math.max(diagnosticsCount, warnings)))
-        : t("task.statusReady").replace("{0}", String(selectedTrackCount));
+  ].filter((option) => option.value !== "diagnostics" || userMode === "nerd" || diagnosticsCount > 0 || warnings > 0));
+  const projectRange = $derived(projectRangeForMedia(durationMs, appliedPlaybackMapping));
+  const scrubberValueMs = $derived(scrubberActive ? scrubberTargetMs : projectTimeMs);
+  const mappingIsAutomatic = $derived(
+    playbackMapping.segmentId === "recording-origin"
+      && playbackMapping.mediaAnchorMs === 0
+      && playbackMapping.projectAnchorMs === 0
+      && playbackMapping.rateNumerator === 1
+      && playbackMapping.rateDenominator === 1,
+  );
+  const mappingStatus = $derived(
+    mappingIsAutomatic ? t("preview.mappingAuto") : t("preview.mappingAdjusted"),
+  );
+  const workbenchStatus = $derived(
+    isExporting
+      ? t("task.statusExporting").replace("{0}", progress.toFixed(0))
+      : previewIndexing
+        ? t("task.statusIndexing").replace("{0}", progress.toFixed(0))
+        : diagnosticsCount || warnings
+          ? t("task.statusWarnings").replace("{0}", String(Math.max(diagnosticsCount, warnings)))
+          : t("task.statusReady").replace("{0}", String(selectedTrackCount)),
+  );
   onDestroy(() => {
     if (scrubberFrame !== undefined) cancelAnimationFrame(scrubberFrame);
     if (scrubberActive || pendingScrubberTarget !== null) {

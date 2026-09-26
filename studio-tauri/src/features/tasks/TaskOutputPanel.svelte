@@ -10,35 +10,66 @@
 
   type Format = { name: ExportFormat; description: string; icon?: any; color?: string };
   type Feature = keyof ExportPreservation;
-  export let inspection: Inspection;
-  export let userMode: UserMode = "normie";
-  export let formats: Format[] = [];
-  export let selectedFormats = new Set<ExportFormat>(["ASS"]);
-  export let preservation: ExportPreservation;
-  export let featureKnowledge: FeatureKnowledge = {};
-  export let runtimeConflicts: RuntimeExportConflicts = {};
-  export let error = "";
-  export let isExporting = false;
-  export let exportPending = false;
-  export let hasSelectedTrack = false;
-  export let onToggleFormat: (format: ExportFormat) => void = () => {};
-  export let onTogglePreservation: (feature: Feature) => void = () => {};
-  export let onOpenDrcsMapping: () => void = () => {};
-  export let onStartExport: () => void = () => {};
-  export let outputDirectory = "";
-  export let onChooseOutputDirectory: () => void = () => {};
-  export let canResume = false;
-  export let resumeBusy = false;
-  export let onResume: () => void = () => {};
+  let {
+    inspection,
+    userMode = "normie",
+    formats = [],
+    selectedFormats = new Set<ExportFormat>(["ASS"]),
+    preservation,
+    featureKnowledge = {},
+    runtimeConflicts = {},
+    error = "",
+    isExporting = false,
+    exportPending = false,
+    hasSelectedTrack = false,
+    onToggleFormat = () => {},
+    onTogglePreservation = () => {},
+    onOpenDrcsMapping = () => {},
+    onStartExport = () => {},
+    outputDirectory = $bindable(""),
+    onChooseOutputDirectory = () => {},
+    canResume = false,
+    resumeBusy = false,
+    onResume = () => {},
+  }: {
+    inspection: Inspection;
+    userMode?: UserMode;
+    formats?: Format[];
+    selectedFormats?: Set<ExportFormat>;
+    preservation: ExportPreservation;
+    featureKnowledge?: FeatureKnowledge;
+    runtimeConflicts?: RuntimeExportConflicts;
+    error?: string;
+    isExporting?: boolean;
+    exportPending?: boolean;
+    hasSelectedTrack?: boolean;
+    onToggleFormat?: (format: ExportFormat) => void;
+    onTogglePreservation?: (feature: Feature) => void;
+    onOpenDrcsMapping?: () => void;
+    onStartExport?: () => void;
+    outputDirectory?: string;
+    onChooseOutputDirectory?: () => void;
+    canResume?: boolean;
+    resumeBusy?: boolean;
+    onResume?: () => void;
+  } = $props();
   const features: Feature[] = ["position", "color", "ruby", "gaiji", "drcs", "accessibility"];
-  $: limitations = [...selectedFormats].filter((format) => formatCapabilities(format).some((item) => item.level === "unsupported"));
-  $: assessment = assessExports(selectedFormats, preservation, featureKnowledge, runtimeConflicts);
-  $: assessmentRows = [...selectedFormats].map((format) => ({ format, result: assessment.formats[format] })).filter((item) => item.result);
-  $: observedFeatures = features.map((feature) => ({
-    feature,
-    summary: featureCountSummary(featureKnowledge[feature]),
-    details: userMode === "nerd" ? featureDetailKeys(feature, featureKnowledge[feature]) : [],
-  })).filter((item) => item.summary);
+  const limitations = $derived(
+    [...selectedFormats].filter((format) => formatCapabilities(format).some((item) => item.level === "unsupported")),
+  );
+  const assessment = $derived(assessExports(selectedFormats, preservation, featureKnowledge, runtimeConflicts));
+  const assessmentRows = $derived(
+    [...selectedFormats].map((format) => ({ format, result: assessment.formats[format] })).filter((item) => item.result),
+  );
+  const observedFeatures = $derived(
+    features
+      .map((feature) => ({
+        feature,
+        summary: featureCountSummary(featureKnowledge[feature]),
+        details: userMode === "nerd" ? featureDetailKeys(feature, featureKnowledge[feature]) : [],
+      }))
+      .filter((item) => item.summary),
+  );
 
   function chooseAss(format: ExportFormat) {
     if (!selectedFormats.has("ASS")) onToggleFormat("ASS");
