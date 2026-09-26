@@ -19,7 +19,7 @@ Tauri/Svelte UI は Rust バックエンドのクライアントです。TS/TLV 
 
 |コマンド |責任 |
 | --- | --- |
-| `inspect_source` |録音およびキャプショントラックの検出の境界付きプローブ |
+| `inspect_source` |範囲を限定した録画の検査と字幕トラックの検出 |
 | `start_export` |ストリーミングワーカーを開始し、`task-event` の進行状況を出力します。オプションの検証済み `trackId` を受け入れます。 |
 | `cancel_export` |現在のワーカープロセスを停止します。 |
 | `pause_export` / `resume_export` |協調制御メッセージをワーカーに送信します。 |
@@ -32,7 +32,7 @@ Tauri/Svelte UI は Rust バックエンドのクライアントです。TS/TLV 
 | `get_job_checkpoint` |タスクの最新の制限された進行状況チェックポイントを返します。 |
 | `pause_queue` / `resume_queue` / `queue_is_paused` |スーパーバイザキューを制御し、そのアクティブなワーカーを連携して一時停止/再開します。 |
 | `load_drcs_report` |ワーカーが作成した DRCS レポートを読み取り、表示可能なグリフイメージを返します。 |
-| `get_settings` / `update_settings` |検証済みの UI を読み取りまたはアトミックに更新し、app-data `settings.json` のデフォルトをエクスポートします。 |
+| `get_settings` / `update_settings` |app-data `settings.json` に保存された検証済みの UI 設定とエクスポートの既定値を読み取り、またはアトミックに更新します。 |
 | `list_language_packs` |固定された app-data `language-packs/` ディレクトリから制限された JSON 言語ファイルを再スキャンします。ブラウザーが提供する任意のディレクトリは受け入れられません。 |
 | `open_language_pack_directory` |必要に応じてその固定ディレクトリを作成し、プラットフォームファイルマネージャーで開きます。 |
 | `start_preview` / `resize_preview` / `stop_preview` |現在のインプロセス libmpv ビデオサーフェスを制御します。 |
@@ -44,14 +44,14 @@ Tauri/Svelte UI は Rust バックエンドのクライアントです。TS/TLV 
 | `sync_preview_overlay` |埋め込まれた libmpv 時間を読み取り、境界のあるネイティブプレーンをレンダリングし、WebView のタイミングやレイアウトを使用せずに Windows オーバーレイを適用、クリア、または重複排除します。 |
 | `get_playback_time_mapping` / `update_playback_time_mapping` |ネイティブキャプションプレビューで使用される検証済みのメディア時間 → プロジェクト時間セグメントマッピングを取得または置換します。 |
 | `get_timeline_window` / `get_timeline_window_filtered` |完了したタスクを参照するために、制限されたアーカイブページをストリーミングします。 |
-| `get_timeline_recent_window_filtered` |完全な JSONL レコードを増分的に末尾化し、最新の境界付きライブイベントページのみを返します。 |
+| `get_timeline_recent_window_filtered` |追記された完全な JSONL レコードを順次読み取り、最新の境界付きライブイベントページのみを返します。 |
 | `get_timeline_time_window` |エディターのタイムラインの制限されたプリフェッチ時間範囲を返し、追加されたレコードを増分的に読み取ります。 |
 
 `render_at` は、アーカイブのエクスポートが完了するとタスクワークスペースに公開されます。UI は時間クエリを明示的かつ限定的に保ち、アーカイブに B24 レンダリングフレームが含まれている場合、実際の RGBA 派生 PNG を表示します。バックエンドは `planeWidth`、`planeHeight`、`composedPngBase64`、および `activeLayerCount` を返します。合成された画像は、CSS や WebView テキストレイアウトではなく、境界付きのネイティブキャプションプレーンコンポジターによって生成されます。境界付きレイアウトフィールドを持つ TTML 間隔は、バンドルされている ARIB フォントの Rounded M+ 1m を使用して、バックエンドでラスタライズされた 1920×1080 RGBA プレーンを返すことができます。有効に宣言された表示範囲は、ソースジオメトリとピクセル長をその論理プレーン上で正規化します。不在範囲のデフォルトは論理 2K であり、少なくとも 1 つの軸で論理 2K を超え、その平面に適合する完全なピクセル領域ジオメトリから正規の 4K/8K のみを推測します。同等の 2K/4K/8K レイアウトは、曖昧なソースを推測することなく、同じ視聴者相対サイズを維持します。境界付きリッチボディパーサーは、スパン/ルビタグの外側のテキストを保持し、明示的なスパンの色、サイズ、間隔、不透明度をマップします。ネイティブの水平パスは明示的な改行を保持し、解決された `textAlign`、`displayAlign`、および `lineHeight` を適用します。単純な水平方向の `tts:ruby` ベース/テキストペアが 0.5 スケールでラスタライズされ、ベーススパンの中央に配置されます。明示的に関連付けられた垂直ルビも同様に、自動列折り返しが発生する場合の有界継続を含め、基本セルの横に 0.5 スケールでラスタライズされます。どちらも `captionPlaneMode=ttml-vertical-ruby-basic-native` と `renderedRubyCount` を報告します。この継続では、一般的な B62 ルビのグループ化やソース固有の配置は実装されていません。垂直レンダラーは、バンドルされた ARIB フォントにマップされたグリフが含まれている場合にのみ、Unicode 垂直表示句読点を使用します。ラテン語の回転や縦中横を近似するものではありません。直接 `tts:textOutline` は、`none`、TTML 名前付き色、または完全な `#RRGGBB[AA]` と `px` 幅のみを受け入れ、その後、境界付きのネイティブアウトラインを適用します。`arib-tt:border` は意図的に変換されません。完全な B62 グリフの方向、標準の B62 ストローク動作、非 PNG リソース、およびレンダリング不可能または欠落しているグリフには、依然として明示的な制限があります。サポートされていないレコードは、捏造された画像ではなく構造プレビューのままになります。
 
 TLV アーカイブには、サイズや件数に上限を設けた `asset_evidence` と `resource_evidence` レコードが含まれる場合があります。各 `resource_evidence` は、可逆な Base64 ペイロード、形式の検証結果、`subt://` 参照との照合に使う正確な `packet_id + mpu_sequence_number + subsample_number` キーを保持します。プレビューリーダーは最大 64 件を保持し、同じ MPU 内で一致したものだけを表示中の字幕に関連付けます。検証済みの小さな PNG の `preview_data_uri` は `resourcePreviews` として公開します。フォント、PNG 以外のリソース、欠落したリソース、不完全な対応関係は証拠として保持し、描画済みの字幕テキストとして扱いません。
 
-`asset_evidence` は、入力で実際に確認した MPT 信令のみを記録します。記録するのは `packet_id`、ソース TLV オフセット、`asset_type`、記述子タグ、通知された MPU NTP 値です。これらは将来の `subt://` リソース対応付けに使う証拠であり、デコード済みの画像やフォントのバイト列ではありません。
+`asset_evidence` は、入力で実際に確認した MPT シグナリングのみを記録します。記録するのは `packet_id`、ソース TLV オフセット、`asset_type`、記述子タグ、通知された MPU NTP 値です。これらは将来の `subt://` リソース対応付けに使う証拠であり、デコード済みの画像やフォントのバイト列ではありません。
 
 `resource_reference` は、元の `packet_id + mpu_sequence_number` スコープを保持します。数値の `subt://` インデックスをグローバルな MPT パケット ID として扱うことはありません。同じ MPU に上限内のサブサンプルが存在する場合は、関連を `same-mpu-evidence` として元のリソースレコードに結び付けます。それ以外は明示的に `unresolved` のまま保持します。
 
