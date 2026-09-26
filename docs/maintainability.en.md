@@ -75,8 +75,10 @@ global store.
 
 `PreviewNavigationSession` coordinates preview tab changes, playback restoration after host layout, and seeking across tabs. It rechecks request validity after waiting for the previous player to stop. UI state remains in the Svelte shell.
 
+`ExportWorkflow` owns export validation and the transition from index cancellation to export, rejecting stale requests after a source change. `BatchTaskSession` opens batch tasks and prevents old archive queries from overwriting new tasks. `OnboardingSession` owns saving, failure handling and retry during onboarding. The shell provides state access and UI event bindings.
+
 The largest production files are now Worker `exporters/ass.rs` (about 1,536
-lines), desktop `timeline.rs` (about 1,443), `App.svelte` (about 1,167), Worker
+lines), desktop `timeline.rs` (about 1,443), `App.svelte` (about 1,129), Worker
 `caption/ttml.rs` (about 1,220), `caption/ruby.rs` (about 1,111), frontend
 `features/tasks/TaskTimeline.svelte` (about 895), desktop
 `jobs/repository.rs` (about 763), and frontend
@@ -120,7 +122,7 @@ with a coordinated frontend contract migration.
   and performance tests remain
   opt-in because they need a Windows desktop session, a legal recording or
   archive path, and route-specific performance thresholds.
-- The frontend contract check currently covers 62 typed commands, 80 source
+- The frontend contract check currently covers 62 typed commands, 82 source
   files, and four complete built-in locale files; Svelte builds with no
   diagnostics.
 - `scripts/check.ps1` is the single local entry point for formatting, Worker

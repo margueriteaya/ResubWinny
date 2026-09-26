@@ -4,10 +4,12 @@
   import { noticeIn, noticeOut } from "./lib/motion";
   import HomePage from "./features/home/HomePage.svelte";
   import OnboardingPage from "./features/onboarding/OnboardingPage.svelte";
+  import { BatchTaskSession } from "./features/batch/task-session";
   import { OnboardingSession } from "./features/onboarding/session";
   import { PreviewNavigationSession } from "./features/tasks/preview-navigation-session";
   import { PreviewSession } from "./features/tasks/preview-session";
   import { SourceSession } from "./features/tasks/source-session";
+  import { ExportWorkflow } from "./features/tasks/export-workflow";
   import { ExportSession } from "./features/tasks/export-session";
   import { TaskEventSession } from "./features/tasks/event-session";
   import type { FeatureKnowledge, RuntimeExportConflicts } from "./features/tasks/export-assessment";
@@ -430,21 +432,17 @@
     onboardingVisible = true;
   }
 
-  async function completeOnboarding(userMode: AppSettings["userMode"]) {
-    if (!onboardingRequired) { onboardingVisible = false; return; }
-    onboardingSaving = true;
-    onboardingError = "";
-    try {
-      const next = onboardingSession.completed({ ...appSettings, userMode });
-      appSettings = desktopRuntime ? await backend.updateSettings(next) : next;
-      onboardingSession.cacheCompletion();
-      onboardingVisible = false;
-      onboardingRequired = false;
-      page = "home";
-    } catch (reason) {
-      onboardingError = formatMessage("onboarding.saveFailed", { message: String(reason) });
-    } finally { onboardingSaving = false; }
-  }
+  const completeOnboarding = (userMode: AppSettings["userMode"]) => onboardingSession.finish(userMode, {
+    required: () => onboardingRequired,
+    settings: () => appSettings,
+    persist: (next) => backend.updateSettings(next),
+    setSettings: (next) => (appSettings = next),
+    setSaving: (value) => (onboardingSaving = value),
+    clearError: () => (onboardingError = ""),
+    fail: (reason) => (onboardingError = formatMessage("onboarding.saveFailed", { message: String(reason) })),
+    close: () => (onboardingVisible = false),
+    completed: () => { onboardingVisible = false; onboardingRequired = false; page = "home"; },
+  });
 
   function openOnboardingAbout() {
     onboardingVisible = false;
@@ -587,50 +585,30 @@
     await refreshResumeAvailability();
   }
 
-  async function startExport() {
-    if (!desktopRuntime) {
-      error = t("error.desktopExport");
-      return;
-    }
-    if (!inspection || isExporting || exportPending) return;
-    const activeInspection = inspection;
-    error = "";
-    if (!outputDirectory.trim()) {
-      error = t("workspace.outputDirectoryRequired");
-      return;
-    }
-    const plan = createExportPlan(activeInspection, selectedFormats, preservation, selectedTracks, outputDirectory);
-    logs = [
-      ...logs,
-      formatMessage("notice.exportStarted", { format: plan?.formats.join(", ") ?? "" }),
-      formatMessage("notice.exportOptions"),
-    ];
-    lastLoggedProgressBucket = -1;
-    if (!plan) {
-      error = t("tracks.selectionRequired");
-      return;
-    }
-    if (previewIndexing) {
-      exportPending = true;
-      try {
-        await exportSession.cancel(() => backend.cancelExportAndWait());
-        previewIndexing = false;
-      } catch (reason) {
-        exportPending = false;
-        reportBackendFailure(reason);
-        return;
-      }
-    }
-    exportPending = false;
-    await exportSession.runExport(
-      (onCreated) => startTaskExport(
-          activeInspection,
-          plan,
-          exportMappings(),
-          onCreated,
-      ),
-    );
-  }
+  const exportWorkflow = new ExportWorkflow(exportSession, {
+    desktopRuntime: () => desktopRuntime,
+    inspection: () => inspection,
+    sourceGeneration: () => sourceSession.currentGeneration(),
+    exporting: () => isExporting,
+    pending: () => exportPending,
+    indexing: () => previewIndexing,
+    outputDirectory: () => outputDirectory,
+    plan: (source) => createExportPlan(source, selectedFormats, preservation, selectedTracks, outputDirectory),
+    setPending: (value) => (exportPending = value),
+    setIndexing: (value) => (previewIndexing = value),
+    error: (code) => (error = t(code)),
+    clearError: () => (error = ""),
+    started: (plan) => {
+      logs = [...logs, formatMessage("notice.exportStarted", { format: plan.formats.join(", ") }), formatMessage("notice.exportOptions")];
+      lastLoggedProgressBucket = -1;
+    },
+    fail: reportBackendFailure,
+    cancelIndex: () => backend.cancelExportAndWait(),
+    start: (source, plan, onCreated) => startTaskExport(source, plan, exportMappings(), onCreated),
+    index: (source) => backend.startPreviewIndex(source.path, taskTrackId(source.tracks.find((track) => selectedTracks.has(taskTrackKey(track))))),
+  });
+
+  const startExport = () => exportWorkflow.start();
 
   async function chooseOutputDirectory() {
     if (!desktopRuntime || !inspection) return;
@@ -638,17 +616,7 @@
     if (selected) outputDirectory = selected;
   }
 
-  async function startPreviewIndex(expectedPath = inspection?.path ?? "") {
-    if (!desktopRuntime || !inspection || isExporting || exportPending || previewIndexing) return;
-    if (!expectedPath || inspection.path !== expectedPath) return;
-    const sourcePath = inspection.path;
-    const selected = inspection.tracks.find((track) => selectedTracks.has(taskTrackKey(track)));
-    await exportSession.runPreviewIndex(
-        () => backend.startPreviewIndex(sourcePath, taskTrackId(selected)),
-        () => inspection?.path === sourcePath,
-        () => backend.cancelExportAndWait(),
-    );
-  }
+  const startPreviewIndex = (expectedPath = inspection?.path ?? "") => exportWorkflow.index(expectedPath);
 
   async function cancelExport() {
     if (!desktopRuntime) return;
@@ -830,40 +798,34 @@
     if (selected) multiTaskOutputDirectory = selected;
   }
 
-  async function openMultiTaskItem(item: BatchItem) {
-    const generation = sourceSession.begin();
-    await stopPreview();
-    if (!sourceSession.isCurrent(generation)) return;
-    inspection = item.inspection;
-    currentJobId = item.jobId ?? "";
-    batchController.beginEditing(item);
-    selectedTracks = item.inspection.tracks[0]
-      ? selectionSession.singleTrack(item.selectedTrackKey ?? taskTrackKey(item.inspection.tracks[0]))
-      : new Set();
-    taskTab = "preview";
-    page = "tasks";
-    applyRuntimeReset(resetTaskRuntime({
-      progress: item.progress,
-      bytesRead: Math.round((item.progress / 100) * item.inspection.size),
-      warnings: item.warnings,
-      isExporting: item.status === "Processing",
-    }));
-    if (item.jobId) {
-      try {
-        const artifacts = await backend.getJobArtifacts(item.jobId);
-        const archive = artifacts.find(
-          (artifact) => artifact.kind === "archive" && artifact.status === "completed",
-        );
-        if (archive) archivePath = archive.path;
-      } catch {
-        // A queued or running task may not have published an artifact yet.
-      }
-    }
-    await tick();
-    if (!sourceSession.isCurrent(generation)) return;
-    void startPreview();
-    if (!batchRunning && !archivePath) void startPreviewIndex(item.inspection.path);
-  }
+  const batchTaskSession = new BatchTaskSession(sourceSession, {
+    stopPreview,
+    apply: (item) => {
+      inspection = item.inspection;
+      currentJobId = item.jobId ?? "";
+      batchController.beginEditing(item);
+      selectedTracks = item.inspection.tracks[0]
+        ? selectionSession.singleTrack(item.selectedTrackKey ?? taskTrackKey(item.inspection.tracks[0]))
+        : new Set();
+      taskTab = "preview";
+      page = "tasks";
+      applyRuntimeReset(resetTaskRuntime({
+        progress: item.progress,
+        bytesRead: Math.round((item.progress / 100) * item.inspection.size),
+        warnings: item.warnings,
+        isExporting: item.status === "Processing",
+      }));
+    },
+    archive: async (jobId) => (await backend.getJobArtifacts(jobId)).find(
+      (artifact) => artifact.kind === "archive" && artifact.status === "completed",
+    )?.path,
+    setArchive: (path) => (archivePath = path),
+    layoutReady: tick,
+    startPreview,
+    needsIndex: () => !batchRunning && !archivePath,
+    startIndex: (path) => startPreviewIndex(path),
+  });
+  const openMultiTaskItem = (item: BatchItem) => batchTaskSession.open(item);
   const drcsController = new DrcsDictionaryController({
     desktopRuntime,
     sourcePath: () =>

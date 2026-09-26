@@ -1,3 +1,6 @@
+import { BatchTaskSession } from '../studio-tauri/src/features/batch/task-session.ts'
+import { OnboardingSession } from '../studio-tauri/src/features/onboarding/session.ts'
+import { ExportWorkflow } from '../studio-tauri/src/features/tasks/export-workflow.ts'
 import { PreviewNavigationSession } from '../studio-tauri/src/features/tasks/preview-navigation-session.ts'
 import assert from 'node:assert/strict'
 import test from 'node:test'
@@ -375,4 +378,114 @@ test('preview activation leaves resume state intact if navigation changes during
   await f.session.activate(() => f.state.current)
   assert.equal(f.state.seeks, 0)
   assert.equal(f.state.cleared, 0)
+})
+
+function exportWorkflowFixture() {
+  const state = { source: { path: 'a.ts' }, generation: 0, pending: false, indexing: true, starts: 0, notices: 0, errors: [] }
+  let release
+  const stopped = new Promise((resolve) => { release = resolve })
+  const session = {
+    cancel: (operation) => operation(),
+    runExport: (operation) => operation(() => {}),
+    runPreviewIndex: async () => {},
+  }
+  const bindings = {
+    desktopRuntime: () => true, inspection: () => state.source,
+    sourceGeneration: () => state.generation,
+    exporting: () => false, pending: () => state.pending, indexing: () => state.indexing,
+    outputDirectory: () => 'output', plan: () => ({ formats: ['ASS'] }),
+    setPending: (value) => { state.pending = value },
+    setIndexing: (value) => { state.indexing = value },
+    error: (code) => state.errors.push(code), clearError: () => {},
+    started: () => { state.notices++ }, fail: (error) => state.errors.push(error),
+    cancelIndex: () => stopped,
+    start: async () => { state.starts++; return 'job' },
+    index: async () => ({ archivePath: 'archive' }),
+  }
+  return { state, release, bindings, workflow: new ExportWorkflow(session, bindings) }
+}
+
+test('export workflow drops an old source request after index cancellation', async () => {
+  const f = exportWorkflowFixture()
+  const pending = f.workflow.start()
+  f.state.source = { path: 'b.ts' }
+  f.release()
+  await pending
+  assert.equal(f.state.starts, 0)
+  assert.equal(f.state.notices, 0)
+  assert.equal(f.state.pending, false)
+})
+
+test('export workflow prevents duplicate exports while stopping the index', async () => {
+  const f = exportWorkflowFixture()
+  const pending = f.workflow.start()
+  await f.workflow.start()
+  assert.equal(f.state.starts, 0)
+  f.release()
+  await pending
+  assert.equal(f.state.starts, 1)
+  assert.equal(f.state.notices, 1)
+})
+
+test('invalid export selection emits no started notice', async () => {
+  const f = exportWorkflowFixture()
+  f.bindings.plan = () => null
+  await f.workflow.start()
+  assert.deepEqual(f.state.errors, ['tracks.selectionRequired'])
+  assert.equal(f.state.notices, 0)
+  assert.equal(f.state.starts, 0)
+})
+
+test('reopening the same source invalidates an export waiting for cancellation', async () => {
+  const f = exportWorkflowFixture()
+  const pending = f.workflow.start()
+  f.state.generation++
+  f.release()
+  await pending
+  assert.equal(f.state.starts, 0)
+  assert.equal(f.state.pending, false)
+})
+
+test('batch task artifact lookup cannot overwrite a newly selected task', async () => {
+  let generation = 0
+  let release
+  const archive = new Promise((resolve) => { release = resolve })
+  const writes = []
+  const session = new BatchTaskSession({ begin: () => ++generation, isCurrent: (value) => value === generation }, {
+    stopPreview: async () => {}, apply: () => {}, archive: () => archive,
+    setArchive: (path) => writes.push(path), layoutReady: async () => {},
+    startPreview: async () => writes.push('preview'), needsIndex: () => true,
+    startIndex: async () => writes.push('index'),
+  })
+  const pending = session.open({ jobId: 'old', inspection: { path: 'old.ts' } })
+  await Promise.resolve()
+  generation++
+  release('old.archive.jsonl')
+  await pending
+  assert.deepEqual(writes, [])
+})
+
+test('failed onboarding save leaves completion uncommitted and allows retry', async () => {
+  const session = new OnboardingSession(true)
+  let saved = null
+  let complete = 0
+  const busy = []
+  const errors = []
+  const bindings = {
+    required: () => true, settings: () => ({ onboardingVersion: 0 }),
+    persist: async () => { throw new Error('disk full') },
+    setSettings: (next) => { saved = next }, setSaving: (value) => busy.push(value),
+    clearError: () => {}, fail: (error) => errors.push(error.message), close: () => {},
+    completed: () => complete++,
+  }
+  await session.finish('normie', bindings)
+  assert.equal(saved, null)
+  assert.equal(complete, 0)
+  assert.deepEqual(busy, [true, false])
+  assert.deepEqual(errors, ['disk full'])
+  bindings.persist = async (next) => next
+  await session.finish('normie', bindings)
+  assert.equal(saved.onboardingVersion, 3)
+  assert.equal(saved.userMode, 'normie')
+  assert.equal(complete, 1)
 })
