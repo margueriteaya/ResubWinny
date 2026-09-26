@@ -23,22 +23,41 @@
   import PopupButton from "../../components/PopupButton.svelte";
   import { hasCaptionTrack } from "../tasks/export-eligibility";
 
-  export let items: BatchItem[] = [];
-  export let running = false;
-  export let paused = false;
-  export let addFiles: () => void;
-  export let clearQueue: () => void | Promise<void>;
-  export let startQueue: () => void;
-  export let pauseQueue: () => void;
-  export let clearCompleted: () => void | Promise<void>;
-  export let openItem: (item: BatchItem) => void;
-  export let outputDirectory = "";
-  export let chooseOutputDirectory: () => void;
-  export let formats: { name: ExportFormat; description: string; icon?: any; color?: string }[] = [];
-  export let selectedFormats = new Set<ExportFormat>(["ASS"]);
-  export let preservation: ExportPreservation;
-  export let onToggleFormat: (format: ExportFormat) => void = () => {};
-  export let onTogglePreservation: (feature: keyof ExportPreservation) => void = () => {};
+  let {
+    items = [],
+    running = false,
+    paused = false,
+    addFiles,
+    clearQueue,
+    startQueue,
+    pauseQueue,
+    clearCompleted,
+    openItem,
+    outputDirectory = "",
+    chooseOutputDirectory,
+    formats = [],
+    selectedFormats = new Set<ExportFormat>(["ASS"]),
+    preservation,
+    onToggleFormat = () => {},
+    onTogglePreservation = () => {},
+  }: {
+    items?: BatchItem[];
+    running?: boolean;
+    paused?: boolean;
+    addFiles: () => void;
+    clearQueue: () => void | Promise<void>;
+    startQueue: () => void;
+    pauseQueue: () => void;
+    clearCompleted: () => void | Promise<void>;
+    openItem: (item: BatchItem) => void;
+    outputDirectory?: string;
+    chooseOutputDirectory: () => void;
+    formats?: { name: ExportFormat; description: string; icon?: any; color?: string }[];
+    selectedFormats?: Set<ExportFormat>;
+    preservation: ExportPreservation;
+    onToggleFormat?: (format: ExportFormat) => void;
+    onTogglePreservation?: (feature: keyof ExportPreservation) => void;
+  } = $props();
   const preservationKeys: (keyof ExportPreservation)[] = ["position", "color", "ruby", "gaiji", "drcs", "accessibility"];
 
   const bytes = (value: number) =>
@@ -71,18 +90,20 @@
   };
   const isStatus = (item: BatchItem, code: string) => statusCode(item.status) === code;
   const statusLabel = (status: string) => t(`batch.status.${statusCode(status)}`, status);
-  let preset = "custom";
-  $: selectedFormatOptions = formats.filter((format) => selectedFormats.has(format.name));
-  $: destinationLabel = outputDirectory.trim() || t("batch.sameFolder");
-  $: queueSummary = items.reduce(
-    (summary, item) => {
-      const status = statusCode(item.status);
-      if (status === "running") summary.running += 1;
-      else if (status === "queued" && hasCaptionTrack(item.inspection.tracks)) summary.queued += 1;
-      else if (status === "completed") summary.completed += 1;
-      return summary;
-    },
-    { running: 0, queued: 0, completed: 0 },
+  let preset = $state("custom");
+  const selectedFormatOptions = $derived(formats.filter((format) => selectedFormats.has(format.name)));
+  const destinationLabel = $derived(outputDirectory.trim() || t("batch.sameFolder"));
+  const queueSummary = $derived(
+    items.reduce(
+      (summary, item) => {
+        const status = statusCode(item.status);
+        if (status === "running") summary.running += 1;
+        else if (status === "queued" && hasCaptionTrack(item.inspection.tracks)) summary.queued += 1;
+        else if (status === "completed") summary.completed += 1;
+        return summary;
+      },
+      { running: 0, queued: 0, completed: 0 },
+    ),
   );
 </script>
 

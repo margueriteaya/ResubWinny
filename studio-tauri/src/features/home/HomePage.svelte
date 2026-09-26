@@ -20,13 +20,23 @@
     jobId?: string;
   };
 
-  export let history: HistoryItem[] = [];
-  export let isInspecting = false;
-  export let onChooseSource: () => void = () => {};
-  export let onOpenHistory: (item: HistoryItem) => void = () => {};
-  export let onNavigate: (target: "batch" | "drcs") => void = () => {};
-  export let settings: AppSettings;
-  export let onSettingsChange: (settings: AppSettings) => void = () => {};
+  let {
+    history = [],
+    isInspecting = false,
+    onChooseSource = () => {},
+    onOpenHistory = () => {},
+    onNavigate = () => {},
+    settings,
+    onSettingsChange = () => {},
+  }: {
+    history?: HistoryItem[];
+    isInspecting?: boolean;
+    onChooseSource?: () => void;
+    onOpenHistory?: (item: HistoryItem) => void;
+    onNavigate?: (target: "batch" | "drcs") => void;
+    settings: AppSettings;
+    onSettingsChange?: (settings: AppSettings) => void;
+  } = $props();
   const formats: ExportFormat[] = ["ASS", "TTML", "SRT", "WebVTT", "JSON", "Raw Data"];
   const formatGroups: { label: string; formats: ExportFormat[] }[] = [
     { label: "home.formatGroup.subtitle", formats: formats.filter((format) => formatVisuals[format].group === "subtitle") },
@@ -39,21 +49,27 @@
   function toggleFormat(format: ExportFormat) {
     const nextFormats = togglePreferredFormat(settings.exportPreferences.formats, format);
     if (!nextFormats.includes(explainedFormat)) {
-      explainedFormat = nextFormats[0] ?? "ASS";
-      activeCapabilityFeature = preferredCapability(explainedFormat);
+      const nextExplained = nextFormats[0] ?? "ASS";
+      inspectedFormat = nextExplained;
+      activeCapabilityFeature = preferredCapability(nextExplained);
     }
     updatePreferences({ formats: nextFormats });
   }
   function inspectFormat(format: ExportFormat) {
-    explainedFormat = format;
+    inspectedFormat = format;
     activeCapabilityFeature = preferredCapability(format);
   }
   function togglePreservation(key: keyof ExportPreservation) {
     updatePreferences({ preservation: { ...settings.exportPreferences.preservation, [key]: !settings.exportPreferences.preservation[key] } });
   }
-  let noticeExpanded = false;
-  let explainedFormat: ExportFormat = settings.exportPreferences.formats[0] ?? "ASS";
-  let activeCapabilityFeature = "drcs";
+  let noticeExpanded = $state(false);
+  // Which format card is being inspected. Null means "whichever is selected
+  // first", so the panel follows the preferences until the reader picks a card.
+  let inspectedFormat: ExportFormat | null = $state(null);
+  const explainedFormat = $derived(
+    inspectedFormat ?? settings.exportPreferences.formats[0] ?? "ASS",
+  );
+  let activeCapabilityFeature = $state("drcs");
   const capabilityPriority: CapabilityLevel[] = ["conditional", "unsupported", "approximated", "preserved"];
   const capabilityLegend = [
     { tone: "preserved", label: "home.capability.preserved", detail: "home.capability.preservedDetail" },
@@ -81,13 +97,25 @@
     if (approximated) return { tone: "approximated", count: approximated, label: "home.formatConvertible" } as const;
     return { tone: "preserved", count: 0, label: "home.formatAllPreserved" } as const;
   };
-  $: selectedUnsupportedCount = settings.exportPreferences.formats.reduce((count, format) => count + levelCount(format, "unsupported"), 0);
-  $: selectedConditionalCount = settings.exportPreferences.formats.reduce((count, format) => count + levelCount(format, "conditional"), 0);
-  $: selectedLimitCount = selectedUnsupportedCount + selectedConditionalCount;
-  $: selectedLimitTone = selectedUnsupportedCount > 0 ? "unsupported" : selectedConditionalCount > 0 ? "conditional" : "preserved";
-  $: explainedCapabilities = formatCapabilities(explainedFormat);
-  $: if (!explainedCapabilities.some((entry) => entry.feature === activeCapabilityFeature)) activeCapabilityFeature = preferredCapability(explainedFormat);
-  $: activeCapability = explainedCapabilities.find((entry) => entry.feature === activeCapabilityFeature) ?? explainedCapabilities[0];
+  const selectedUnsupportedCount = $derived(
+    settings.exportPreferences.formats.reduce((count, format) => count + levelCount(format, "unsupported"), 0),
+  );
+  const selectedConditionalCount = $derived(
+    settings.exportPreferences.formats.reduce((count, format) => count + levelCount(format, "conditional"), 0),
+  );
+  const selectedLimitCount = $derived(selectedUnsupportedCount + selectedConditionalCount);
+  const selectedLimitTone = $derived(
+    selectedUnsupportedCount > 0 ? "unsupported" : selectedConditionalCount > 0 ? "conditional" : "preserved",
+  );
+  const explainedCapabilities = $derived(formatCapabilities(explainedFormat));
+  // Keep the inspected feature valid for the format being explained.
+  $effect(() => {
+    if (!explainedCapabilities.some((entry) => entry.feature === activeCapabilityFeature))
+      activeCapabilityFeature = preferredCapability(explainedFormat);
+  });
+  const activeCapability = $derived(
+    explainedCapabilities.find((entry) => entry.feature === activeCapabilityFeature) ?? explainedCapabilities[0],
+  );
 
   const historyStatus = (item: HistoryItem) => {
     if (item.warnings) return `${item.warnings} ${t("home.warnings")}`;
