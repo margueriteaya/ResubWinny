@@ -36,7 +36,7 @@
 成功檢查後的預設值由純工作設定轉換產生；殼層不再逐欄位重建輸出路徑、初始軌道/格式選擇或來源通知。批次控制器負責佇列生命週期和編輯專案軌道投影，而跨功能工作啟用仍在組合根中。
 `HistorySession` 負責有界工作歷程持久化，`LayoutSession` 負責回應式殼層轉換。`runtime-session.ts` 集中管理工作執行階段重設；`feedback-session.ts` 集中管理有界通知和後端錯誤訊息；`selection-session.ts` 集中管理輸出格式、保留和軌道選擇轉換；`bootstrap-session.ts` 載入彼此獨立的桌面啟動資源；`application-lifecycle-session.ts` 負責桌面事件訂閱和清除；`recovery-session.ts` 負責檢查點資格判定和重播。這些工作階段將結果投影到 Svelte 值中，但不會成為第二個全域存放區。
 
-目前最大的正式環境檔案是 Worker `exporters/ass.rs`（約 1,185 行）、`caption/ruby.rs`（約 1,080 行）、`App.svelte`（約 1,100 行）、Worker `caption/ttml.rs`（約 764 行）、桌面端 `jobs/repository.rs`（約 720 行）以及前端 `features/batch/BatchQueue.svelte`（約 632 行）。匯出器、工作和預覽進入模組現在是小型所有權邊界，而非實作收納容器。進一步拆分應遵循 ASS 事件建構、Ruby 關聯/版面配置、應用程式工作階段生命週期、儲存庫關注點以及多工作表格/預設關注點，而不是任意的行數門檻。
+目前最大的正式環境檔案是 Worker `exporters/ass.rs`（約 1,536 行）、桌面端 `timeline.rs`（約 1,443 行）、`App.svelte`（約 1,221 行）、Worker `caption/ttml.rs`（約 1,220 行）、`caption/ruby.rs`（約 1,111 行）、前端 `features/tasks/TaskTimeline.svelte`（約 895 行）、桌面端 `jobs/repository.rs`（約 763 行）以及前端 `features/batch/BatchQueue.svelte`（約 676 行）。匯出器、工作和預覽進入模組現在是小型所有權邊界，而非實作收納容器。進一步拆分應遵循 ASS 事件建構、Ruby 關聯/版面配置、應用程式工作階段生命週期、儲存庫關注點以及多工作表格/預設關注點，而不是任意的行數門檻。
 
 時間領域在其所有權邊界上均為明確。前端和桌面對應層區分媒體毫秒與專案毫秒，而 Worker 將 33 位元 MPEG PES 時鐘表示為 `Pts90k`，並僅在進入字幕 IR、證據或時間軸處理時將其轉換為毫秒。MMT 呈現 NTP 仍是獨立的傳輸概念。
 

@@ -36,7 +36,7 @@
 成功检查后的默认值由纯任务设置转换产生；外壳不再逐字段重建输出路径、初始轨道/格式选择或源通知。批处理控制器负责队列生命周期和编辑项轨道投影，而跨功能任务激活仍在组合根中。
 `HistorySession` 负责有界任务历史持久化，`LayoutSession` 负责响应式外壳转换。`runtime-session.ts` 集中管理任务运行时重置；`feedback-session.ts` 集中管理有界通知和后端错误消息；`selection-session.ts` 集中管理输出格式、保留和轨道选择转换；`bootstrap-session.ts` 加载相互独立的桌面启动资源；`application-lifecycle-session.ts` 负责桌面事件订阅和清理；`recovery-session.ts` 负责检查点资格判定和重放。这些会话将结果投影到 Svelte 值中，但不会成为第二个全局存储。
 
-目前最大的生产文件是 Worker `exporters/ass.rs`（约 1,185 行）、`caption/ruby.rs`（约 1,080 行）、`App.svelte`（约 1,100 行）、Worker `caption/ttml.rs`（约 764 行）、桌面端 `jobs/repository.rs`（约 720 行）以及前端 `features/batch/BatchQueue.svelte`（约 632 行）。导出器、任务和预览入口模块现在是小型所有权边界，而非实现收纳桶。进一步拆分应遵循 ASS 事件构造、Ruby 关联/布局、应用会话生命周期、仓库关注点以及多任务表格/预设关注点，而不是任意的行数阈值。
+目前最大的生产文件是 Worker `exporters/ass.rs`（约 1,536 行）、桌面端 `timeline.rs`（约 1,443 行）、`App.svelte`（约 1,221 行）、Worker `caption/ttml.rs`（约 1,220 行）、`caption/ruby.rs`（约 1,111 行）、前端 `features/tasks/TaskTimeline.svelte`（约 895 行）、桌面端 `jobs/repository.rs`（约 763 行）以及前端 `features/batch/BatchQueue.svelte`（约 676 行）。导出器、任务和预览入口模块现在是小型所有权边界，而非实现收纳桶。进一步拆分应遵循 ASS 事件构造、Ruby 关联/布局、应用会话生命周期、仓库关注点以及多任务表格/预设关注点，而不是任意的行数阈值。
 
 时间域在其所有权边界上均为显式。前端和桌面映射层区分媒体毫秒与项目毫秒，而 Worker 将 33 位 MPEG PES 时钟表示为 `Pts90k`，并仅在进入字幕 IR、证据或时间线处理时将其转换为毫秒。MMT 呈现 NTP 仍是独立的传输概念。
 

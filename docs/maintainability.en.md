@@ -73,10 +73,12 @@ teardown; and `recovery-session.ts` owns checkpoint eligibility and replay.
 These sessions project results into Svelte values but do not become a second
 global store.
 
-The largest production files are now Worker `exporters/ass.rs` (about 1,185
-lines), `caption/ruby.rs` (about 1,080), `App.svelte` (about 1,100), Worker
-`caption/ttml.rs` (about 764), desktop `jobs/repository.rs` (about 720), and
-frontend `features/batch/BatchQueue.svelte` (about 632). The exporter, job, and
+The largest production files are now Worker `exporters/ass.rs` (about 1,536
+lines), desktop `timeline.rs` (about 1,443), `App.svelte` (about 1,221), Worker
+`caption/ttml.rs` (about 1,220), `caption/ruby.rs` (about 1,111), frontend
+`features/tasks/TaskTimeline.svelte` (about 895), desktop
+`jobs/repository.rs` (about 763), and frontend
+`features/batch/BatchQueue.svelte` (about 676). The exporter, job, and
 preview entry modules are now small ownership boundaries rather than
 implementation buckets. Further splits should follow ASS event construction,
 ruby association/layout, application session lifecycle, repository concerns,
