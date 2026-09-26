@@ -73,8 +73,10 @@ teardown; and `recovery-session.ts` owns checkpoint eligibility and replay.
 These sessions project results into Svelte values but do not become a second
 global store.
 
+`PreviewNavigationSession` coordinates preview tab changes, playback restoration after host layout, and seeking across tabs. It rechecks request validity after waiting for the previous player to stop. UI state remains in the Svelte shell.
+
 The largest production files are now Worker `exporters/ass.rs` (about 1,536
-lines), desktop `timeline.rs` (about 1,443), `App.svelte` (about 1,221), Worker
+lines), desktop `timeline.rs` (about 1,443), `App.svelte` (about 1,167), Worker
 `caption/ttml.rs` (about 1,220), `caption/ruby.rs` (about 1,111), frontend
 `features/tasks/TaskTimeline.svelte` (about 895), desktop
 `jobs/repository.rs` (about 763), and frontend
@@ -118,7 +120,7 @@ with a coordinated frontend contract migration.
   and performance tests remain
   opt-in because they need a Windows desktop session, a legal recording or
   archive path, and route-specific performance thresholds.
-- The frontend contract check currently covers 62 typed commands, 79 source
+- The frontend contract check currently covers 62 typed commands, 80 source
   files, and four complete built-in locale files; Svelte builds with no
   diagnostics.
 - `scripts/check.ps1` is the single local entry point for formatting, Worker
@@ -170,7 +172,7 @@ with a coordinated frontend contract migration.
   for Signed Stable releases, but not for an explicitly disclosed Unsigned
   Windows Alpha that satisfies the source, hash, provenance, and license gates.
 - Remove claims in architecture documents that no longer match the actual
-  implementation and ensure all three language versions describe the same
+  implementation and ensure all four language versions describe the same
   verified and experimental capability boundaries.
 
 ## Recommended order

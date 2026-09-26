@@ -36,7 +36,9 @@
 成功检查后的默认值由纯任务设置转换产生；外壳不再逐字段重建输出路径、初始轨道/格式选择或源通知。批处理控制器负责队列生命周期和编辑项轨道投影，而跨功能任务激活仍在组合根中。
 `HistorySession` 负责有界任务历史持久化，`LayoutSession` 负责响应式外壳转换。`runtime-session.ts` 集中管理任务运行时重置；`feedback-session.ts` 集中管理有界通知和后端错误消息；`selection-session.ts` 集中管理输出格式、保留和轨道选择转换；`bootstrap-session.ts` 加载相互独立的桌面启动资源；`application-lifecycle-session.ts` 负责桌面事件订阅和清理；`recovery-session.ts` 负责检查点资格判定和重放。这些会话将结果投影到 Svelte 值中，但不会成为第二个全局存储。
 
-目前最大的生产文件是 Worker `exporters/ass.rs`（约 1,536 行）、桌面端 `timeline.rs`（约 1,443 行）、`App.svelte`（约 1,221 行）、Worker `caption/ttml.rs`（约 1,220 行）、`caption/ruby.rs`（约 1,111 行）、前端 `features/tasks/TaskTimeline.svelte`（约 895 行）、桌面端 `jobs/repository.rs`（约 763 行）以及前端 `features/batch/BatchQueue.svelte`（约 676 行）。导出器、任务和预览入口模块现在是小型所有权边界，而非实现收纳桶。进一步拆分应遵循 ASS 事件构造、Ruby 关联/布局、应用会话生命周期、仓库关注点以及多任务表格/预设关注点，而不是任意的行数阈值。
+`PreviewNavigationSession` 负责预览标签切换、宿主布局完成后的播放恢复和跨标签跳转，并在等待旧播放器停止后再次检查请求是否仍有效。界面状态继续保留在 Svelte 外壳中。
+
+目前最大的生产文件是 Worker `exporters/ass.rs`（约 1,536 行）、桌面端 `timeline.rs`（约 1,443 行）、`App.svelte`（约 1,167 行）、Worker `caption/ttml.rs`（约 1,220 行）、`caption/ruby.rs`（约 1,111 行）、前端 `features/tasks/TaskTimeline.svelte`（约 895 行）、桌面端 `jobs/repository.rs`（约 763 行）以及前端 `features/batch/BatchQueue.svelte`（约 676 行）。导出器、任务和预览入口模块现在是小型所有权边界，而非实现收纳桶。进一步拆分应遵循 ASS 事件构造、Ruby 关联/布局、应用会话生命周期、仓库关注点以及多任务表格/预设关注点，而不是任意的行数阈值。
 
 时间域在其所有权边界上均为显式。前端和桌面映射层区分媒体毫秒与项目毫秒，而 Worker 将 33 位 MPEG PES 时钟表示为 `Pts90k`，并仅在进入字幕 IR、证据或时间线处理时将其转换为毫秒。MMT 呈现 NTP 仍是独立的传输概念。
 
@@ -50,7 +52,7 @@
 - `scripts/clean.ps1` 会移除当前输出以及过时的根目录、模糊测试、Vite 和 Tauri 输出位置。`-Dependencies` 还会移除 `node_modules`。
 - Worker 和桌面 Clippy 在 CI 中使用 `-D warnings` 运行。
 - 当前已验证基线为 202 项 Worker 测试、18 项共享字幕语义测试和 134 项通过的桌面测试。五项真实录像/归档环境及性能测试仍为选择性启用，因为它们需要 Windows 桌面会话、合法录像或归档路径，以及路径特定的性能阈值。
-- 前端契约检查目前覆盖 62 个有类型命令、79 个源文件和四个完整的内置区域设置文件；Svelte 构建无诊断信息。
+- 前端契约检查目前覆盖 62 个有类型命令、80 个源文件和四个完整的内置区域设置文件；Svelte 构建无诊断信息。
 - `scripts/check.ps1` 是格式化、Worker 和桌面测试/lint、前端构建、模糊测试编译及生成依赖许可证清单的唯一本地入口点。
 - `scripts/build.ps1` 是唯一打包入口点。其 Windows 默认值为捆绑配置，该配置会显式安装并验证固定版本的运行时；`-Libmpv External` 会生成不含 libmpv 的包，并要求用户提供兼容运行时。Tauri 基础配置本身不会静默捆绑运行时。
 - 常规 CI 路径有四个聚焦作业：一个共享静态质量门槛、一个三平台 Rust 测试矩阵、模糊测试目标编译和依赖审计。每周计划工作流会对每个模糊测试目标执行有界的 30 秒运行；拉取请求保留仅编译的模糊测试覆盖。`cargo-deny` 对 Worker、桌面端和模糊测试清单强制执行已签入的许可证/来源策略。耗时较长的 LGPL libmpv 构建为手动执行，并与拉取请求 CI 隔离。它直接在 GitHub Ubuntu 运行器上运行，并在相应源代码归档旁记录完整的工具/包环境。
@@ -66,7 +68,7 @@
 - 必须确保字体旁的 Rounded M+ 1m for ARIB 来源/许可证文件包含在每个安装程序和二进制归档中。已通过 SHA-256 将捆绑二进制文件与其记录的上游文件匹配。
 - `CONTRIBUTING.md`、`SECURITY.md` 和受支持的工具链策略现已存在。Windows Alpha 候选工作流会运行完整打包门槛并写入安装程序哈希，但不会创建公开发布。
 - 必须记录行为准则决定。Signed Stable 发布需要受保护的签名身份，但明确披露且满足源代码、哈希、来源和许可证门槛的 Unsigned Windows Alpha 不需要。
-- 必须移除架构文档中不再符合实际实现的声明，并确保全部三种语言版本描述相同的已验证及实验性能力边界。
+- 必须移除架构文档中不再符合实际实现的声明，并确保全部四种语言版本描述相同的已验证及实验性能力边界。
 
 ## 建议顺序
 

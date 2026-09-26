@@ -36,7 +36,9 @@
 成功檢查後的預設值由純工作設定轉換產生；殼層不再逐欄位重建輸出路徑、初始軌道/格式選擇或來源通知。批次控制器負責佇列生命週期和編輯專案軌道投影，而跨功能工作啟用仍在組合根中。
 `HistorySession` 負責有界工作歷程持久化，`LayoutSession` 負責回應式殼層轉換。`runtime-session.ts` 集中管理工作執行階段重設；`feedback-session.ts` 集中管理有界通知和後端錯誤訊息；`selection-session.ts` 集中管理輸出格式、保留和軌道選擇轉換；`bootstrap-session.ts` 載入彼此獨立的桌面啟動資源；`application-lifecycle-session.ts` 負責桌面事件訂閱和清除；`recovery-session.ts` 負責檢查點資格判定和重播。這些工作階段將結果投影到 Svelte 值中，但不會成為第二個全域存放區。
 
-目前最大的正式環境檔案是 Worker `exporters/ass.rs`（約 1,536 行）、桌面端 `timeline.rs`（約 1,443 行）、`App.svelte`（約 1,221 行）、Worker `caption/ttml.rs`（約 1,220 行）、`caption/ruby.rs`（約 1,111 行）、前端 `features/tasks/TaskTimeline.svelte`（約 895 行）、桌面端 `jobs/repository.rs`（約 763 行）以及前端 `features/batch/BatchQueue.svelte`（約 676 行）。匯出器、工作和預覽進入模組現在是小型所有權邊界，而非實作收納容器。進一步拆分應遵循 ASS 事件建構、Ruby 關聯/版面配置、應用程式工作階段生命週期、儲存庫關注點以及多工作表格/預設關注點，而不是任意的行數門檻。
+`PreviewNavigationSession` 負責預覽分頁切換、宿主版面配置完成後的播放恢復與跨分頁跳轉，並在等待舊播放器停止後再次檢查請求是否仍有效。介面狀態繼續保留在 Svelte 外殼中。
+
+目前最大的正式環境檔案是 Worker `exporters/ass.rs`（約 1,536 行）、桌面端 `timeline.rs`（約 1,443 行）、`App.svelte`（約 1,167 行）、Worker `caption/ttml.rs`（約 1,220 行）、`caption/ruby.rs`（約 1,111 行）、前端 `features/tasks/TaskTimeline.svelte`（約 895 行）、桌面端 `jobs/repository.rs`（約 763 行）以及前端 `features/batch/BatchQueue.svelte`（約 676 行）。匯出器、工作和預覽進入模組現在是小型所有權邊界，而非實作收納容器。進一步拆分應遵循 ASS 事件建構、Ruby 關聯/版面配置、應用程式工作階段生命週期、儲存庫關注點以及多工作表格/預設關注點，而不是任意的行數門檻。
 
 時間領域在其所有權邊界上均為明確。前端和桌面對應層區分媒體毫秒與專案毫秒，而 Worker 將 33 位元 MPEG PES 時鐘表示為 `Pts90k`，並僅在進入字幕 IR、證據或時間軸處理時將其轉換為毫秒。MMT 呈現 NTP 仍是獨立的傳輸概念。
 
@@ -50,7 +52,7 @@
 - `scripts/clean.ps1` 會移除目前輸出以及過時的根目錄、模糊測試、Vite 和 Tauri 輸出位置。`-Dependencies` 還會移除 `node_modules`。
 - Worker 和桌面 Clippy 在 CI 中使用 `-D warnings` 執行。
 - 目前已驗證基準為 202 項 Worker 測試、18 項共享字幕語意測試和 134 項透過的桌面測試。五項真實錄影/封存環境及效能測試仍為選擇性啟用，因為它們需要 Windows 桌面工作階段、合法錄影或封存路徑，以及路徑特定的效能門檻。
-- 前端合約檢查目前涵蓋 62 個具型別命令、79 個原始檔和四個完整的內建地區設定檔；Svelte 建置無診斷訊息。
+- 前端合約檢查目前涵蓋 62 個具型別命令、80 個原始檔和四個完整的內建地區設定檔；Svelte 建置無診斷訊息。
 - `scripts/check.ps1` 是格式化、Worker 和桌面測試/lint、前端建置、模糊測試編譯及產生依賴授權清單的唯一本機進入點。
 - `scripts/build.ps1` 是唯一封裝進入點。其 Windows 預設值為套件設定檔，該設定檔會明確安裝並驗證固定版本的執行階段；`-Libmpv External` 會產生不含 libmpv 的套件，並要求使用者提供相容執行階段。Tauri 基礎設定本身不會無提示地綑綁執行階段。
 - 一般 CI 路徑有四個聚焦工作：一個共用靜態品質關卡、一個三平臺 Rust 測試矩陣、模糊測試目標編譯和依賴稽核。每週排程工作流程會對每個模糊測試目標執行有界的 30 秒運作；提取要求保留僅編譯的模糊測試涵蓋。`cargo-deny` 對 Worker、桌面端和模糊測試資訊清單強制執行已簽入的授權/來源原則。耗時較長的 LGPL libmpv 建置為手動執行，並與提取要求 CI 隔離。它直接在 GitHub Ubuntu 執行器上執行，並在對應原始碼封存旁記錄完整的工具/套件環境。
@@ -66,7 +68,7 @@
 - 必須確保字型旁的 Rounded M+ 1m for ARIB 來源/授權檔包含在每個安裝程式和二進位封存中。已透過 SHA-256 將綑綁二進位檔與其記錄的上游檔案比對一致。
 - `CONTRIBUTING.md`、`SECURITY.md` 和支援的工具鏈原則現已存在。Windows Alpha 候選工作流程會執行完整封裝關卡並寫入安裝程式雜湊，但不會建立公開發布。
 - 必須記錄行為準則決定。Signed Stable 發布需要受保護的簽署身分，但明確揭露且滿足原始碼、雜湊、來源和授權關卡的 Unsigned Windows Alpha 不需要。
-- 必須移除架構檔案中不再符合實際實作的宣告，並確保全部三種語言版本描述相同的已驗證及實驗效能力邊界。
+- 必須移除架構檔案中不再符合實際實作的宣告，並確保全部四種語言版本描述相同的已驗證及實驗性能力邊界。
 
 ## 建議順序
 
