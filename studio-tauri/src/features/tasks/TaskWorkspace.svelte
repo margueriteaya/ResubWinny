@@ -12,94 +12,168 @@
 
   type Format = { name: ExportFormat; description: string };
   type TaskTab = "preview" | "events" | "diagnostics";
-  export let inspection: Inspection | null = null;
-  export let userMode: UserMode = "normie";
-  export let isInspecting = false;
-  export let previewIndexing = false;
-  export let routeLabel = "";
-  export let selectedTracks = new Set<string>();
-  export let taskTab: TaskTab = "preview";
-  export let currentJobId = "";
-  export let archivePath = "";
-  export let desktopRuntime = false;
-  export let logs: string[] = [];
-  export let captions = 0;
-  export let warnings = 0;
-  export let diagnosticsCount = 0;
-  export let bytesRead = 0;
-  export let progress = 0;
-  export let projectTimeMs: ProjectTimeMs = 0 as ProjectTimeMs;
-  export let durationMs: MediaTimeMs | null = null;
-  export let playerRunning = false;
-  export let playerPaused = true;
-  export let previewAvailable: boolean | null = null;
-  export let nativePreview: HTMLDivElement | null = null;
-  export let playbackMapping: PlaybackTimeMapping;
-  export let appliedPlaybackMapping: PlaybackTimeMapping;
-  export let playbackMappingBusy = false;
-  export let formats: Format[] = [];
-  export let selectedFormats = new Set<ExportFormat>(["ASS"]);
-  export let preservation: ExportPreservation;
-  export let featureKnowledge: FeatureKnowledge = {};
-  export let runtimeConflicts: RuntimeExportConflicts = {};
-  export let error = "";
-  export let isExporting = false;
-  export let exportPending = false;
-  export let subtitle: string = t("task.selectRecording");
-  export let onChooseSource: () => void = () => {};
-  export let onSelectTrack: (track: Track) => void = () => {};
-  export let onSelectTab: (tab: TaskTab) => void = () => {};
-  export let onPlayerCommand: (command: PreviewCommand) => void = () => {};
-  export let onStartPreview: () => void = () => {};
-  export let onStopPreview: () => void = () => {};
-  export let onResizePreview: () => void = () => {};
-  export let onSeekProject: (milliseconds: ProjectTimeMs, final?: boolean) => void | Promise<void> = () => {};
-  export let onSeekTarget: (milliseconds: ProjectTimeMs, final?: boolean) => void = () => {};
-  export let onSetVolume: (volume: number) => void = () => {};
-  export let onSaveMapping: () => void = () => {};
-  export let onDiagnosticsCount: (count: number) => void = () => {};
-  export let onError: (message: string) => void = () => {};
-  export let onStartExport: () => void = () => {};
-  export let outputDirectory = "";
-  export let onChooseOutputDirectory: () => void = () => {};
-  export let onToggleFormat: (format: ExportFormat) => void = () => {};
-  export let onTogglePreservation: (feature: keyof ExportPreservation) => void = () => {};
-  export let onOpenDrcsMapping: () => void = () => {};
-  export let canResume = false;
-  export let resumeBusy = false;
-  export let onResume: () => void = () => {};
-  export let workspaceLayout: WorkspaceLayoutSettings = { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false };
-  export let onWorkspaceLayoutChange: (layout: WorkspaceLayoutSettings) => void = () => {};
-  export let compactViewport = false;
-  export let compactSourceOpen = false;
-  export let compactOutputOpen = false;
-  export let onToggleCompactSource: () => void = () => {};
-  export let onToggleCompactOutput: () => void = () => {};
-  let sourceWidth = workspaceLayout.sourceWidth;
-  let outputWidth = workspaceLayout.outputWidth;
-  let sourceCollapsed = workspaceLayout.sourceCollapsed;
-  let outputCollapsed = workspaceLayout.outputCollapsed;
-  let lastWorkspaceLayout = workspaceLayout;
+  let {
+    inspection = null,
+    userMode = "normie",
+    isInspecting = false,
+    previewIndexing = false,
+    routeLabel = "",
+    selectedTracks = new Set<string>(),
+    taskTab = "preview",
+    currentJobId = "",
+    archivePath = "",
+    desktopRuntime = false,
+    logs = [],
+    captions = 0,
+    warnings = 0,
+    diagnosticsCount = 0,
+    bytesRead = 0,
+    progress = 0,
+    projectTimeMs = 0 as ProjectTimeMs,
+    durationMs = null,
+    playerRunning = false,
+    playerPaused = true,
+    previewAvailable = null,
+    nativePreview = null,
+    playbackMapping,
+    appliedPlaybackMapping,
+    playbackMappingBusy = false,
+    formats = [],
+    selectedFormats = new Set<ExportFormat>(["ASS"]),
+    preservation,
+    featureKnowledge = {},
+    runtimeConflicts = {},
+    error = "",
+    isExporting = false,
+    exportPending = false,
+    subtitle = t("task.selectRecording"),
+    onChooseSource = () => {},
+    onSelectTrack = () => {},
+    onSelectTab = () => {},
+    onPlayerCommand = () => {},
+    onStartPreview = () => {},
+    onStopPreview = () => {},
+    onResizePreview = () => {},
+    onSeekProject = () => {},
+    onSeekTarget = () => {},
+    onSetVolume = () => {},
+    onSaveMapping = () => {},
+    onDiagnosticsCount = () => {},
+    onError = () => {},
+    onStartExport = () => {},
+    outputDirectory = "",
+    onChooseOutputDirectory = () => {},
+    onToggleFormat = () => {},
+    onTogglePreservation = () => {},
+    onOpenDrcsMapping = () => {},
+    canResume = false,
+    resumeBusy = false,
+    onResume = () => {},
+    workspaceLayout = { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false },
+    onWorkspaceLayoutChange = () => {},
+    compactViewport = false,
+    compactSourceOpen = false,
+    compactOutputOpen = false,
+    onToggleCompactSource = () => {},
+    onToggleCompactOutput = () => {},
+  }: {
+    inspection?: Inspection | null;
+    userMode?: UserMode;
+    isInspecting?: boolean;
+    previewIndexing?: boolean;
+    routeLabel?: string;
+    selectedTracks?: Set<string>;
+    taskTab?: TaskTab;
+    currentJobId?: string;
+    archivePath?: string;
+    desktopRuntime?: boolean;
+    logs?: string[];
+    captions?: number;
+    warnings?: number;
+    diagnosticsCount?: number;
+    bytesRead?: number;
+    progress?: number;
+    projectTimeMs?: ProjectTimeMs;
+    durationMs?: MediaTimeMs | null;
+    playerRunning?: boolean;
+    playerPaused?: boolean;
+    previewAvailable?: boolean | null;
+    nativePreview?: HTMLDivElement | null;
+    playbackMapping: PlaybackTimeMapping;
+    appliedPlaybackMapping: PlaybackTimeMapping;
+    playbackMappingBusy?: boolean;
+    formats?: Format[];
+    selectedFormats?: Set<ExportFormat>;
+    preservation: ExportPreservation;
+    featureKnowledge?: FeatureKnowledge;
+    runtimeConflicts?: RuntimeExportConflicts;
+    error?: string;
+    isExporting?: boolean;
+    exportPending?: boolean;
+    subtitle?: string;
+    onChooseSource?: () => void;
+    onSelectTrack?: (track: Track) => void;
+    onSelectTab?: (tab: TaskTab) => void;
+    onPlayerCommand?: (command: PreviewCommand) => void;
+    onStartPreview?: () => void;
+    onStopPreview?: () => void;
+    onResizePreview?: () => void;
+    onSeekProject?: (milliseconds: ProjectTimeMs, final?: boolean) => void | Promise<void>;
+    onSeekTarget?: (milliseconds: ProjectTimeMs, final?: boolean) => void;
+    onSetVolume?: (volume: number) => void;
+    onSaveMapping?: () => void;
+    onDiagnosticsCount?: (count: number) => void;
+    onError?: (message: string) => void;
+    onStartExport?: () => void;
+    outputDirectory?: string;
+    onChooseOutputDirectory?: () => void;
+    onToggleFormat?: (format: ExportFormat) => void;
+    onTogglePreservation?: (feature: keyof ExportPreservation) => void;
+    onOpenDrcsMapping?: () => void;
+    canResume?: boolean;
+    resumeBusy?: boolean;
+    onResume?: () => void;
+    workspaceLayout?: WorkspaceLayoutSettings;
+    onWorkspaceLayoutChange?: (layout: WorkspaceLayoutSettings) => void;
+    compactViewport?: boolean;
+    compactSourceOpen?: boolean;
+    compactOutputOpen?: boolean;
+    onToggleCompactSource?: () => void;
+    onToggleCompactOutput?: () => void;
+  } = $props();
+  // Seeded from the incoming layout so the first paint is already correct; the
+  // effect below adopts every later change. Capturing only the initial value
+  // here is the intent, not an oversight.
+  /* svelte-ignore state_referenced_locally */
+  let sourceWidth = $state(workspaceLayout.sourceWidth);
+  /* svelte-ignore state_referenced_locally */
+  let outputWidth = $state(workspaceLayout.outputWidth);
+  /* svelte-ignore state_referenced_locally */
+  let sourceCollapsed = $state(workspaceLayout.sourceCollapsed);
+  /* svelte-ignore state_referenced_locally */
+  let outputCollapsed = $state(workspaceLayout.outputCollapsed);
   let dragFrame = 0;
   let pendingWidth = 0;
-  $: if (workspaceLayout !== lastWorkspaceLayout) {
-    lastWorkspaceLayout = workspaceLayout;
+  // Adopt a layout that arrives from settings. This effect depends only on the
+  // prop, so unlike the legacy reactive statement it needs no manual guard
+  // against unrelated invalidations.
+  $effect(() => {
     sourceWidth = workspaceLayout.sourceWidth;
     outputWidth = workspaceLayout.outputWidth;
     sourceCollapsed = workspaceLayout.sourceCollapsed;
     outputCollapsed = workspaceLayout.outputCollapsed;
-  }
-  $: selectedTrack = selectedCaptionTrack(inspection?.tracks ?? [], selectedTracks);
-  $: selectedTrackLabel = selectedTrack?.pid ?? "";
-  $: selectedTrackName = selectedTrack ? trackDisplayLabel(selectedTrack) : "";
-  $: selectedTrackDetail = selectedTrack ? trackDisplayDetail(selectedTrack) : "";
+  });
+  const selectedTrack = $derived(selectedCaptionTrack(inspection?.tracks ?? [], selectedTracks));
+  const selectedTrackLabel = $derived(selectedTrack?.pid ?? "");
+  const selectedTrackName = $derived(selectedTrack ? trackDisplayLabel(selectedTrack) : "");
+  const selectedTrackDetail = $derived(selectedTrack ? trackDisplayDetail(selectedTrack) : "");
 
   const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, Math.round(value)));
   function commitLayout() {
     onWorkspaceLayoutChange({ sourceWidth, outputWidth, sourceCollapsed, outputCollapsed });
   }
-  $: sourceIsCollapsed = compactViewport ? !compactSourceOpen : sourceCollapsed;
-  $: outputIsCollapsed = compactViewport ? !compactOutputOpen : outputCollapsed;
+  const sourceIsCollapsed = $derived(compactViewport ? !compactSourceOpen : sourceCollapsed);
+  const outputIsCollapsed = $derived(compactViewport ? !compactOutputOpen : outputCollapsed);
   function toggleSource() { if (compactViewport) onToggleCompactSource(); else { sourceCollapsed = !sourceCollapsed; commitLayout(); } }
   function toggleOutput() { if (compactViewport) onToggleCompactOutput(); else { outputCollapsed = !outputCollapsed; commitLayout(); } }
   function resizePane(side: "source" | "output", event: PointerEvent) {
@@ -157,6 +231,7 @@
     </div>
     {#if !sourceIsCollapsed}
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <div class="pane-separator source-separator" role="separator" aria-orientation="vertical" aria-label={t("workspace.resizeSource")} aria-valuemin="220" aria-valuemax="320" aria-valuenow={sourceWidth} tabindex="0" onpointerdown={(event) => resizePane("source", event)} onkeydown={(event) => resizeFromKeyboard("source", event)}></div>
     {/if}
     <TaskPreviewPanel
@@ -168,6 +243,7 @@
     />
     {#if !outputIsCollapsed}
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <div class="pane-separator output-separator" role="separator" aria-orientation="vertical" aria-label={t("workspace.resizeOutput")} aria-valuemin="280" aria-valuemax="380" aria-valuenow={outputWidth} tabindex="0" onpointerdown={(event) => resizePane("output", event)} onkeydown={(event) => resizeFromKeyboard("output", event)}></div>
     {/if}
     <div class="workspace-pane output-pane">
