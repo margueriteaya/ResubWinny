@@ -66,3 +66,20 @@ No recording bytes, captions, programme metadata, or screenshots published.
 ```
 
 只有在每個必要項目皆通過，或版本資訊明確指出 `release-checklist.md` 允許略過某個私有語料庫門檻時，才可繼續發布未簽署的 Windows Alpha 版。任何必要項目失敗都會阻止發布，不能以此為由降低矩陣要求。
+
+
+## 單一多語言安裝包
+
+發布附件只包含一個無語言標籤的 setup 與一個無語言標籤的 MSI，兩者皆為系統層級安裝。setup 依系統語言選擇英語、簡體中文、繁體中文或日語。MSI 預設使用英語介面，內嵌另外三種語言的轉換；直接按兩下不會自動選擇內嵌語言。需要指定語言時，在安裝命令中選擇一個轉換：
+
+```powershell
+msiexec /i "ResubWinny_VERSION_x64.msi" TRANSFORMS=:zh-CN.mst
+msiexec /i "ResubWinny_VERSION_x64.msi" TRANSFORMS=:zh-TW.mst
+msiexec /i "ResubWinny_VERSION_x64.msi" TRANSFORMS=:ja-JP.mst
+```
+
+請將範例檔名替換為實際 MSI 檔名。英語安裝省略 `TRANSFORMS`。語言轉換只改變安裝介面，不決定應用程式本身的語言設定。
+
+`scripts/build.ps1` 先產生四種語言的暫存 MSI，再呼叫 `merge-msi-languages.ps1` 合併為單一 MSI。合併會檢查產品身分、版本、安裝檔案與系統層級安裝範圍，並從最終檔案擷取三個轉換逐一套用驗證；通過後刪除各語言的暫存 MSI。`package-windows-alpha.ps1` 會再次檢查內嵌語言，並拒絕多個 MSI 或 setup。
+
+[Windows Installer 的內嵌轉換規則](https://learn.microsoft.com/en-us/windows/win32/msi/embedded-transforms).

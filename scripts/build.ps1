@@ -88,6 +88,10 @@ try {
         npm @tauriArguments
     }
 
+    if ($IsWindows -and $Target -eq 'Bundle') {
+        ./scripts/merge-msi-languages.ps1
+    }
+
     Write-Host "`nResubWinny build completed."
     Write-Host 'Executable: build/cargo/release/resubwinny-studio.exe'
     if ($Target -eq 'Bundle') {

@@ -66,3 +66,20 @@ No recording bytes, captions, programme metadata, or screenshots published.
 ```
 
 只有在每个必需行均通过，或发行说明明确指出 `release-checklist.md` 允许跳过某个私有语料库门禁时，才可以继续发布未签名的 Windows Alpha 版。任何必需行失败都会阻止发布，不能以此为由削弱矩阵要求。
+
+
+## 单个多语言安装包
+
+发布附件只包含一个无语言标签的 setup 和一个无语言标签的 MSI，均为系统级安装。setup 根据系统语言选择英语、简体中文、繁体中文或日语。MSI 以英语为默认界面，内嵌另外三种语言的转换；直接双击不会自动选择内嵌语言。需要指定语言时，在安装命令中选择一个转换：
+
+```powershell
+msiexec /i "ResubWinny_VERSION_x64.msi" TRANSFORMS=:zh-CN.mst
+msiexec /i "ResubWinny_VERSION_x64.msi" TRANSFORMS=:zh-TW.mst
+msiexec /i "ResubWinny_VERSION_x64.msi" TRANSFORMS=:ja-JP.mst
+```
+
+将示例文件名替换为实际 MSI 文件名。英语安装省略 `TRANSFORMS`。语言转换只改变安装界面，不决定应用自身的语言设置。
+
+`scripts/build.ps1` 先生成四种语言的临时 MSI，再调用 `merge-msi-languages.ps1` 合并为单个 MSI。合并检查产品身份、版本、安装文件与系统级安装范围，并从最终文件提取三个转换逐一应用验证；验证通过后删除按语言区分的临时 MSI。`package-windows-alpha.ps1` 会再次检查内嵌语言，并拒绝多个 MSI 或 setup。
+
+[Windows Installer 的内嵌转换规则](https://learn.microsoft.com/en-us/windows/win32/msi/embedded-transforms).

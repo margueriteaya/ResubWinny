@@ -66,3 +66,20 @@ No recording bytes, captions, programme metadata, or screenshots published.
 ```
 
 未署名 Windows Alpha を進められるのは、すべての必須行が合格した場合、または `release-checklist.md` で許可されたプライベートコーパスゲートのスキップをリリースノートで明示した場合に限ります。必須行の不合格はリリースを阻止する条件であり、マトリクスを緩和する理由にはなりません。
+
+
+## 形式ごとに一つの多言語インストーラーを配布する
+
+リリースには、言語名を付けない setup 実行ファイルと MSI を一つずつ含めます。どちらもコンピューター全体にインストールします。setup はシステム言語に応じて英語、簡体字中国語、繁体字中国語、日本語を選びます。MSI の既定の表示は英語で、ほかの三言語の変換を内蔵します。ダブルクリックでは内蔵言語を自動選択しません。言語を指定する場合は、インストールコマンドで変換を一つ選びます。
+
+```powershell
+msiexec /i "ResubWinny_VERSION_x64.msi" TRANSFORMS=:zh-CN.mst
+msiexec /i "ResubWinny_VERSION_x64.msi" TRANSFORMS=:zh-TW.mst
+msiexec /i "ResubWinny_VERSION_x64.msi" TRANSFORMS=:ja-JP.mst
+```
+
+例のファイル名を実際の MSI ファイル名に置き換えてください。英語では `TRANSFORMS` を省略します。この変換が変更するのはインストーラーの表示言語で、アプリの言語設定には影響しません。
+
+`scripts/build.ps1` は四言語の中間 MSI を生成し、`merge-msi-languages.ps1` で一つにまとめます。製品 ID、バージョン、インストールするファイル、コンピューター全体へのインストール設定を確認し、最終ファイルから三つの変換を取り出して適用します。検証に成功してから各言語の中間 MSI を削除します。`package-windows-alpha.ps1` でも内蔵言語を確認し、MSI または setup が複数あれば処理を中止します。
+
+[Windows Installer の内蔵変換の規則](https://learn.microsoft.com/en-us/windows/win32/msi/embedded-transforms).
