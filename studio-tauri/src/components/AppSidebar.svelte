@@ -4,19 +4,31 @@
   import { t } from "../i18n";
   import type { Page } from "./navigation";
 
-  export let page: Page = "home";
-  export let collapsed = false;
-  export let hasTask = false;
-  export let taskName = "";
-  export let busy = false;
-  export let userMode: 'normie' | 'nerd' = 'normie';
-  export let onNavigate: (page: Page) => void = () => {};
+  let {
+    page = "home",
+    collapsed = false,
+    hasTask = false,
+    taskName = "",
+    busy = false,
+    userMode = 'normie',
+    onNavigate = () => {},
+  }: {
+    page?: Page;
+    collapsed?: boolean;
+    hasTask?: boolean;
+    taskName?: string;
+    busy?: boolean;
+    userMode?: 'normie' | 'nerd';
+    onNavigate?: (page: Page) => void;
+  } = $props();
 
   const displayVersion = `v${packageMetadata.version.replace(/-alpha(?:\.\d+)?$/, "alpha")}`;
-  $: visiblePages = userMode === "nerd"
-    ? ["home", "tasks", "batch", "drcs", "settings"] satisfies Page[]
-    : ["home", "tasks", "settings"] satisfies Page[];
-  $: activeIndex = Math.max(0, visiblePages.indexOf(page));
+  const visiblePages = $derived(
+    userMode === "nerd"
+      ? (["home", "tasks", "batch", "drcs", "settings"] satisfies Page[])
+      : (["home", "tasks", "settings"] satisfies Page[]),
+  );
+  const activeIndex = $derived(Math.max(0, visiblePages.indexOf(page)));
 </script>
 
 <aside id="app-sidebar" class="sidebar" class:collapsed data-liquid-region>
@@ -135,7 +147,7 @@
     stroke-width: 1.8;
     transition: color var(--rw-motion-responsive) var(--rw-ease-out), transform var(--rw-motion-responsive) var(--rw-ease-out);
   }
-  .sidebar-navigation button.active :global(svg) { color: var(--rw-accent); transform: scale(1.04); }
+  .sidebar-navigation button.active :global(svg) { color: currentColor; }
   .sidebar-navigation em {
     position: absolute;
     z-index: 1;

@@ -232,14 +232,15 @@ build/cargo/release/bundle/
 ```text
 ResubWinny/
 ├── crates/
-│   └── arib-caption-worker/       # 串流偵測、解析、字幕模型、CLI 與匯出器
-│       ├── src/caption/           # B24、TTML/B62 與 Ruby 語意
-│       ├── src/transport/         # MPEG-TS、M2TS 與實驗性 TLV/MMTP
-│       ├── src/exporters/         # ASS、TTML、SRT、WebVTT、archive 等輸出
-│       └── src/tests/             # Worker 分模組迴歸測試
+│   ├── arib-caption-worker/       # 串流偵測、解析、字幕模型、CLI 與匯出器
+│   │   ├── src/caption/           # B24、TTML/B62 與 Ruby 語意
+│   │   ├── src/transport/         # MPEG-TS、M2TS 與實驗性 TLV/MMTP
+│   │   ├── src/exporters/         # ASS、TTML、SRT、WebVTT、archive 等輸出
+│   │   └── src/tests/             # Worker 分模組迴歸測試
+│   └── caption-semantics/         # Worker 與桌面後端共用的廣播字幕語意
 ├── native/
 │   └── aribcaption-bridge/        # libaribcaption 的窄幅 C ABI 橋接
-├── shared/                        # Worker 與桌面後端共用的辨識規則
+├── shared/                        # Worker 與前端共用的格式能力資料
 ├── studio-tauri/
 │   ├── src/                       # Svelte 前端
 │   │   ├── backend/               # typed Tauri API 與事件進入點

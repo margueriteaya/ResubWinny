@@ -4,20 +4,31 @@
   import { t } from "../../i18n";
   import { trackDisplayDetail, trackDisplayLabel, trackKey } from "../tracks";
 
-  export let inspection: Inspection;
-  export let userMode: UserMode = "normie";
-  export let routeLabel = "";
-  export let selectedTrackKeys: Set<string> = new Set();
-  export let selectionDisabled = false;
-  export let onSelectTrack: (track: Track) => void = () => {};
+  let {
+    inspection,
+    userMode = "normie",
+    routeLabel = "",
+    selectedTrackKeys = new Set(),
+    selectionDisabled = false,
+    onSelectTrack = () => {},
+  }: {
+    inspection: Inspection;
+    userMode?: UserMode;
+    routeLabel?: string;
+    selectedTrackKeys?: Set<string>;
+    selectionDisabled?: boolean;
+    onSelectTrack?: (track: Track) => void;
+  } = $props();
 
   const bytes = (value: number) => value ? `${(value / 1024 ** 3).toFixed(value > 100 * 1024 ** 3 ? 1 : 2)} GB` : "-";
-  $: serviceName = inspection.tracks[0]?.serviceName;
-  $: networkName = inspection.broadcast.networkName;
-  $: programmeName = inspection.broadcast.programmeName;
-  $: programmeDescription = inspection.broadcast.programmeDescription;
-  $: broadcastTime = inspection.broadcast.broadcastTimeUtc;
-  $: hasBroadcastInformation = Boolean(serviceName || networkName || programmeName || programmeDescription || broadcastTime);
+  const serviceName = $derived(inspection.tracks[0]?.serviceName);
+  const networkName = $derived(inspection.broadcast.networkName);
+  const programmeName = $derived(inspection.broadcast.programmeName);
+  const programmeDescription = $derived(inspection.broadcast.programmeDescription);
+  const broadcastTime = $derived(inspection.broadcast.broadcastTimeUtc);
+  const hasBroadcastInformation = $derived(
+    Boolean(serviceName || networkName || programmeName || programmeDescription || broadcastTime),
+  );
 </script>
 
 <section class="source-panel">
@@ -58,5 +69,5 @@
 
 <style>
   .source-checkmark{display:block;width:10px;height:10px;overflow:visible;filter:none}.source-checkmark path{fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-  .mode-section{margin:18px 0 8px;color:var(--rw-text);font-size:12px;font-weight:750}.evidence-list{display:grid;gap:7px;margin:0}.evidence-list div{display:grid;gap:2px;padding:7px 8px;border:1px solid var(--rw-border-subtle);border-radius:6px;background:var(--rw-content)}.evidence-list dt{color:var(--rw-muted);font-size:10px}.evidence-list dd{margin:0;overflow-wrap:anywhere;color:var(--rw-text-secondary);font:11px/1.4 "Cascadia Mono",monospace}
+  .mode-section{margin:18px 0 8px;color:var(--rw-text);font-size:12px;font-weight:750}.evidence-list{display:grid;gap:7px;margin:0}.evidence-list div{display:grid;gap:2px;padding:7px 8px;border:1px solid var(--rw-border-subtle);border-radius:6px;background:var(--rw-content)}.evidence-list dt{color:var(--rw-muted);font-size:11px}.evidence-list dd{margin:0;overflow-wrap:anywhere;color:var(--rw-text-secondary);font:11px/1.4 "Cascadia Mono",monospace}
 </style>

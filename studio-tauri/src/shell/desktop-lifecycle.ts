@@ -2,11 +2,13 @@ import {
   subscribeRecordingDrops,
   subscribeWindowMovement,
 } from "./desktop";
+import type { PreviewCommand } from "../backend";
+import { playerShortcut } from "./player-shortcuts";
 
 export interface DesktopLifecycleOptions {
   playerRunning: () => boolean;
   onRecordingDrop: (path: string) => void;
-  onPlayerCommand: (command: "toggle-pause" | "seek-back" | "seek-forward") => void;
+  onPlayerCommand: (command: PreviewCommand) => void;
   onSurfaceChange: () => void;
 }
 
@@ -36,17 +38,10 @@ export function installDesktopLifecycle(options: DesktopLifecycleOptions): () =>
     const target = event.target as HTMLElement | null;
     if (
       !options.playerRunning() ||
-      target?.matches('input, select, textarea, [contenteditable="true"]')
+      target?.closest('button, input, select, textarea, [contenteditable="true"], [role="button"], [role="slider"]')
     )
       return;
-    const command =
-      event.code === "Space"
-        ? "toggle-pause"
-        : event.code === "ArrowLeft"
-          ? "seek-back"
-          : event.code === "ArrowRight"
-            ? "seek-forward"
-            : null;
+    const command = playerShortcut(event);
     if (!command) return;
     event.preventDefault();
     options.onPlayerCommand(command);

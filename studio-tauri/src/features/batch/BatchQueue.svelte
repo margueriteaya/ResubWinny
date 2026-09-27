@@ -23,22 +23,41 @@
   import PopupButton from "../../components/PopupButton.svelte";
   import { hasCaptionTrack } from "../tasks/export-eligibility";
 
-  export let items: BatchItem[] = [];
-  export let running = false;
-  export let paused = false;
-  export let addFiles: () => void;
-  export let clearQueue: () => void | Promise<void>;
-  export let startQueue: () => void;
-  export let pauseQueue: () => void;
-  export let clearCompleted: () => void | Promise<void>;
-  export let openItem: (item: BatchItem) => void;
-  export let outputDirectory = "";
-  export let chooseOutputDirectory: () => void;
-  export let formats: { name: ExportFormat; description: string; icon?: any; color?: string }[] = [];
-  export let selectedFormats = new Set<ExportFormat>(["ASS"]);
-  export let preservation: ExportPreservation;
-  export let onToggleFormat: (format: ExportFormat) => void = () => {};
-  export let onTogglePreservation: (feature: keyof ExportPreservation) => void = () => {};
+  let {
+    items = [],
+    running = false,
+    paused = false,
+    addFiles,
+    clearQueue,
+    startQueue,
+    pauseQueue,
+    clearCompleted,
+    openItem,
+    outputDirectory = "",
+    chooseOutputDirectory,
+    formats = [],
+    selectedFormats = new Set<ExportFormat>(["ASS"]),
+    preservation,
+    onToggleFormat = () => {},
+    onTogglePreservation = () => {},
+  }: {
+    items?: BatchItem[];
+    running?: boolean;
+    paused?: boolean;
+    addFiles: () => void;
+    clearQueue: () => void | Promise<void>;
+    startQueue: () => void;
+    pauseQueue: () => void;
+    clearCompleted: () => void | Promise<void>;
+    openItem: (item: BatchItem) => void;
+    outputDirectory?: string;
+    chooseOutputDirectory: () => void;
+    formats?: { name: ExportFormat; description: string; icon?: any; color?: string }[];
+    selectedFormats?: Set<ExportFormat>;
+    preservation: ExportPreservation;
+    onToggleFormat?: (format: ExportFormat) => void;
+    onTogglePreservation?: (feature: keyof ExportPreservation) => void;
+  } = $props();
   const preservationKeys: (keyof ExportPreservation)[] = ["position", "color", "ruby", "gaiji", "drcs", "accessibility"];
 
   const bytes = (value: number) =>
@@ -71,18 +90,20 @@
   };
   const isStatus = (item: BatchItem, code: string) => statusCode(item.status) === code;
   const statusLabel = (status: string) => t(`batch.status.${statusCode(status)}`, status);
-  let preset = "custom";
-  $: selectedFormatOptions = formats.filter((format) => selectedFormats.has(format.name));
-  $: destinationLabel = outputDirectory.trim() || t("batch.sameFolder");
-  $: queueSummary = items.reduce(
-    (summary, item) => {
-      const status = statusCode(item.status);
-      if (status === "running") summary.running += 1;
-      else if (status === "queued" && hasCaptionTrack(item.inspection.tracks)) summary.queued += 1;
-      else if (status === "completed") summary.completed += 1;
-      return summary;
-    },
-    { running: 0, queued: 0, completed: 0 },
+  let preset = $state("custom");
+  const selectedFormatOptions = $derived(formats.filter((format) => selectedFormats.has(format.name)));
+  const destinationLabel = $derived(outputDirectory.trim() || t("batch.sameFolder"));
+  const queueSummary = $derived(
+    items.reduce(
+      (summary, item) => {
+        const status = statusCode(item.status);
+        if (status === "running") summary.running += 1;
+        else if (status === "queued" && hasCaptionTrack(item.inspection.tracks)) summary.queued += 1;
+        else if (status === "completed") summary.completed += 1;
+        return summary;
+      },
+      { running: 0, queued: 0, completed: 0 },
+    ),
   );
 </script>
 
@@ -135,7 +156,7 @@
                 ><b>{item.inspection.service}</b><small
                   >{item.inspection.container}</small
                 ></span
-              ><span class="queue-formats">{#if selectedFormatOptions.length}<span class="format-icons">{#each selectedFormatOptions as format (format.name)}<span class={`format-icon ${format.color ?? "blue"}`} data-tooltip={format.description}>{#if format.icon}<svelte:component this={format.icon} size={13} />{/if}</span>{/each}</span><b>{selectedFormatOptions.map((format) => format.name).join(" · ")}</b>{:else}<b>—</b>{/if}<small>{t("batch.faithfulLayout")}</small></span
+              ><span class="queue-formats">{#if selectedFormatOptions.length}<span class="format-icons">{#each selectedFormatOptions as format (format.name)}<span class={`format-icon ${format.color ?? "blue"}`} data-tooltip={format.description}>{#if format.icon}<format.icon size={13} />{/if}</span>{/each}</span><b>{selectedFormatOptions.map((format) => format.name).join(" · ")}</b>{:else}<b>—</b>{/if}<small>{t("batch.faithfulLayout")}</small></span
               ><span
                 class:finished={isStatus(item, "completed")}
                 class:issue={isStatus(item, "warning")}
@@ -210,7 +231,7 @@
       <section class="batch-options">
         <h2>{t("workspace.outputFormat")}</h2>
         <div class="batch-format-list">
-          {#each formats as item}<div class="batch-format-option" class:checked={selectedFormats.has(item.name)}><MacCheckbox checked={selectedFormats.has(item.name)} label={item.name} onChange={() => onToggleFormat(item.name)} /><span class={`format-icon ${item.color ?? "blue"}`}>{#if item.icon}<svelte:component this={item.icon} size={13} />{/if}</span><span class="format-copy"><b>{item.name}</b><small>{item.description}</small></span></div>{/each}
+          {#each formats as item}<div class="batch-format-option" class:checked={selectedFormats.has(item.name)}><MacCheckbox checked={selectedFormats.has(item.name)} label={item.name} onChange={() => onToggleFormat(item.name)} /><span class={`format-icon ${item.color ?? "blue"}`}>{#if item.icon}<item.icon size={13} />{/if}</span><span class="format-copy"><b>{item.name}</b><small>{item.description}</small></span></div>{/each}
         </div>
         <h2>{t("workspace.preserveFeatures")}</h2>
         <div class="batch-preserve-list">
@@ -438,7 +459,7 @@
   }
   .batch-options{margin-top:20px!important;padding:0!important;border:0!important;background:transparent!important}
   .batch-format-list,.batch-preserve-list{display:grid;gap:7px}
-  .batch-format-list b,.batch-format-list small{display:block}.batch-format-list small{margin-top:3px;color:#91a0b0;font-size:10px;line-height:1.3}
+  .batch-format-list b,.batch-format-list small{display:block}.batch-format-list small{margin-top:3px;color:#91a0b0;font-size:11px;line-height:1.3}
   .batch-preserve-list{grid-template-columns:1fr 1fr}
   .batch-summary h2,
   .preset-panel h2 {
@@ -625,10 +646,10 @@
   .add,.secondary{height:32px;min-height:32px;padding:0 10px;border:.5px solid var(--rw-glass-border);border-radius:8px;font-size:11px;box-shadow:var(--rw-control-shadow);backdrop-filter:blur(16px) saturate(1.2)}
   .add :global(svg),.secondary :global(svg){width:15px;height:15px;flex:0 0 15px}.output-directory{max-width:260px;min-width:0}.output-directory>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .batch-grid{grid-template-columns:minmax(0,1fr) 292px;min-height:520px;border-top:0}.queue-area{padding:10px;overflow:auto}.queue-table{min-width:820px;margin:0;border:1px solid var(--rw-border-subtle);border-radius:7px}
-  .queue-heading,.queue-row{grid-template-columns:minmax(190px,1.5fr) minmax(90px,.72fr) minmax(100px,.72fr) 86px 88px 60px minmax(100px,.8fr);gap:8px}.queue-heading{min-height:32px;padding:0 10px;color:var(--rw-muted);border-color:var(--rw-border-subtle);background:var(--rw-surface-muted);font-size:9px;font-weight:650}.queue-row{min-height:76px;padding:8px 10px;color:var(--rw-text);border-color:var(--rw-border-subtle);background:transparent;contain-intrinsic-size:auto 76px}@media(hover:hover) and (pointer:fine){.queue-row:hover{background:color-mix(in srgb,var(--rw-accent) 6%,transparent)}}
-  .file{gap:8px}.file-kind{position:relative;display:grid;place-items:center;width:30px;height:38px;flex:0 0 30px;border:1px solid var(--rw-border);border-radius:5px}.file-kind>small{position:absolute;right:-4px;bottom:-3px;margin:0;padding:0 2px;border:1px solid var(--rw-content);border-radius:3px;background:var(--rw-surface-muted);font-size:6px;line-height:9px;font-weight:700}.file strong{font-size:11px;line-height:14px}.queue-row b{font-size:10px;line-height:13px}.queue-row small{margin-top:2px;font-size:8px;line-height:11px}.job-status{padding-left:11px;font-size:10px}.job-status i{top:3px;width:6px;height:6px}.job-progress{width:70px;height:4px}.warnings,.destination{font-size:9px}
-  .queue-footer{height:28px;padding:0 3px;align-items:center;font-size:9px}.batch-summary{grid-template-columns:1.3fr 1fr 1fr;gap:8px;margin-top:10px}.batch-summary section{padding:10px;border-color:var(--rw-border-subtle);border-radius:7px;background:var(--rw-surface-muted)}.batch-summary h2{margin:0 0 9px;font-size:10px}.batch-summary section>div{gap:14px}.batch-summary span b{font-size:17px;line-height:20px}.batch-summary span small,.metric small{margin-top:2px;font-size:8px}.metric{grid-template-columns:21px 1fr!important}.metric :global(svg){width:18px;height:18px}.queue-empty{min-height:400px;gap:8px;border-color:color-mix(in srgb,var(--rw-accent) 48%,var(--rw-border));border-radius:8px;font-size:11px}.queue-empty h2{font-size:15px}.queue-empty p{font-size:11px}
-  .preset-panel{padding:12px;border-color:var(--rw-border-subtle);background:var(--rw-surface-muted)}.preset-panel>p{margin:0 0 5px;font-size:9px}.preset-panel>:global(.popup-button){margin-top:0}.preset-panel section{margin-top:14px;padding:10px;border-color:var(--rw-border-subtle);border-radius:7px;background:var(--rw-content)}.preset-panel h2{margin:0 0 9px;font-size:10px}.batch-options{margin-top:14px!important}.batch-format-list,.batch-preserve-list{gap:5px}.batch-format-option{padding:6px;border-color:var(--rw-border-subtle);border-radius:6px}.batch-format-option :global(.mac-checkbox){padding:6px}.batch-format-list b{font-size:10px}.batch-format-list small{margin-top:1px;font-size:8px}.batch-preserve-list :global(.mac-checkbox){font-size:9px;gap:6px}.preset-panel dl div{margin-bottom:10px}.preset-panel dt{font-size:8px}.preset-panel dd{margin-top:2px;font-size:9px}.quick-action{gap:7px;height:30px;padding:0;font-size:9px}.quick-action :global(svg){width:14px;height:14px}
+  .queue-heading,.queue-row{grid-template-columns:minmax(190px,1.5fr) minmax(90px,.72fr) minmax(100px,.72fr) 86px 88px 60px minmax(100px,.8fr);gap:8px}.queue-heading{min-height:32px;padding:0 10px;color:var(--rw-muted);border-color:var(--rw-border-subtle);background:var(--rw-surface-muted);font-size:11px;font-weight:650}.queue-row{min-height:76px;padding:8px 10px;color:var(--rw-text);border-color:var(--rw-border-subtle);background:transparent;contain-intrinsic-size:auto 76px}@media(hover:hover) and (pointer:fine){.queue-row:hover{background:color-mix(in srgb,var(--rw-accent) 6%,transparent)}}
+  .file{gap:8px}.file-kind{position:relative;display:grid;place-items:center;width:30px;height:38px;flex:0 0 30px;border:1px solid var(--rw-border);border-radius:5px}.file-kind>small{position:absolute;right:-4px;bottom:-3px;margin:0;padding:0 2px;border:1px solid var(--rw-content);border-radius:3px;background:var(--rw-surface-muted);font-size:11px;line-height:14px;font-weight:700}.file strong{font-size:11px;line-height:14px}.queue-row b{font-size:11px;line-height:14px}.queue-row small{margin-top:2px;font-size:11px;line-height:14px}.job-status{padding-left:11px;font-size:11px}.job-status i{top:3px;width:6px;height:6px}.job-progress{width:70px;height:4px}.warnings,.destination{font-size:11px}
+  .queue-footer{height:28px;padding:0 3px;align-items:center;font-size:11px}.batch-summary{grid-template-columns:1.3fr 1fr 1fr;gap:8px;margin-top:10px}.batch-summary section{padding:10px;border-color:var(--rw-border-subtle);border-radius:7px;background:var(--rw-surface-muted)}.batch-summary h2{margin:0 0 9px;font-size:11px}.batch-summary section>div{gap:14px}.batch-summary span b{font-size:17px;line-height:20px}.batch-summary span small,.metric small{margin-top:2px;font-size:11px}.metric{grid-template-columns:21px 1fr!important}.metric :global(svg){width:18px;height:18px}.queue-empty{min-height:400px;gap:8px;border-color:color-mix(in srgb,var(--rw-accent) 48%,var(--rw-border));border-radius:8px;font-size:11px}.queue-empty h2{font-size:15px}.queue-empty p{font-size:11px}
+  .preset-panel{padding:12px;border-color:var(--rw-border-subtle);background:var(--rw-surface-muted)}.preset-panel>p{margin:0 0 5px;font-size:11px}.preset-panel>:global(.popup-button){margin-top:0}.preset-panel section{margin-top:14px;padding:10px;border-color:var(--rw-border-subtle);border-radius:7px;background:var(--rw-content)}.preset-panel h2{margin:0 0 9px;font-size:11px}.batch-options{margin-top:14px!important}.batch-format-list,.batch-preserve-list{gap:5px}.batch-format-option{padding:6px;border-color:var(--rw-border-subtle);border-radius:6px}.batch-format-option :global(.mac-checkbox){padding:6px}.batch-format-list b{font-size:11px}.batch-format-list small{margin-top:1px;font-size:11px}.batch-preserve-list :global(.mac-checkbox){font-size:11px;gap:6px}.preset-panel dl div{margin-bottom:10px}.preset-panel dt{font-size:11px}.preset-panel dd{margin-top:2px;font-size:11px}.quick-action{gap:7px;height:30px;padding:0;font-size:11px}.quick-action :global(svg){width:14px;height:14px}
   @media(max-width:1180px){.batch-grid{grid-template-columns:minmax(0,1fr)}.preset-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;border-top:1px solid var(--rw-border-subtle);border-left:0}.preset-panel>p,.preset-panel>:global(.popup-button){grid-column:1/-1}.preset-panel section{margin-top:0}.batch-options{margin-top:0!important}}
   @media(max-width:760px){.batch-actions{padding:7px;flex-wrap:wrap}.batch-actions>span{display:none}.queue-area{padding:7px}.batch-summary,.preset-panel{grid-template-columns:1fr}.batch-preserve-list{grid-template-columns:1fr}.preset-panel>p,.preset-panel>:global(.popup-button){grid-column:auto}}
 
@@ -651,5 +672,5 @@
   @media(max-width:1180px){.batch-shell{height:auto}.batch-grid{overflow:visible}.preset-panel{overflow:visible;padding:12px 0 0;border-top:1px solid var(--rw-border-subtle);border-left:0;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}}
 
   /* Keep dense queues readable at normal desktop viewing distance. */
-  .add,.secondary{font-size:12px}.queue-table{min-width:960px}.queue-heading{min-height:34px;font-size:11px}.queue-row{min-height:84px;contain-intrinsic-size:auto 84px}.file-kind{width:34px;height:42px;flex-basis:34px}.file-kind>small{font-size:11px;line-height:12px}.file strong{font-size:13px;line-height:17px}.queue-row b{font-size:12px;line-height:16px}.queue-row small{font-size:11px;line-height:15px}.job-status,.warnings,.destination{font-size:12px}.queue-footer{height:32px;font-size:11px}.batch-summary h2,.preset-panel h2{font-size:12px}.batch-summary span small,.metric small,.preset-panel>p,.batch-format-list small{font-size:11px}.batch-format-list b{font-size:12px}.batch-preserve-list :global(.mac-checkbox){font-size:12px}.preset-panel dt{font-size:11px}.preset-panel dd{font-size:12px}.quick-action{height:34px;font-size:12px}.quick-action :global(svg){width:16px;height:16px}
+  .add,.secondary{font-size:12px}.queue-table{min-width:960px}.queue-heading{min-height:34px;font-size:11px}.queue-row{min-height:84px;contain-intrinsic-size:auto 84px}.file-kind{width:34px;height:42px;flex-basis:34px}.file-kind>small{font-size:11px;line-height:14px}.file strong{font-size:13px;line-height:17px}.queue-row b{font-size:12px;line-height:16px}.queue-row small{font-size:11px;line-height:15px}.job-status,.warnings,.destination{font-size:12px}.queue-footer{height:32px;font-size:11px}.batch-summary h2,.preset-panel h2{font-size:12px}.batch-summary span small,.metric small,.preset-panel>p,.batch-format-list small{font-size:11px}.batch-format-list b{font-size:12px}.batch-preserve-list :global(.mac-checkbox){font-size:12px}.preset-panel dt{font-size:11px}.preset-panel dd{font-size:12px}.quick-action{height:34px;font-size:12px}.quick-action :global(svg){width:16px;height:16px}
 </style>

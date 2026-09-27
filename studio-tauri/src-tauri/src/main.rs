@@ -1,8 +1,7 @@
 mod about;
-#[path = "../../../shared/arib_symbols.rs"]
-mod arib_symbols;
-#[path = "../../../shared/caption_features.rs"]
-mod caption_features;
+// Shared broadcast caption semantics live in their own crate so each item is
+// compiled once; re-export them under the paths the modules already use.
+use caption_semantics::{arib_symbols, caption_features};
 mod caption_renderer;
 mod drcs;
 mod export;
@@ -101,6 +100,12 @@ fn main() {
             timeline::get_timeline_recent_window_filtered,
             timeline::get_timeline_time_window
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running ResubWinny");
+        .build(tauri::generate_context!())
+        .expect("error while building ResubWinny")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                let state = app.state::<Arc<state::AppState>>();
+                preview::shutdown_preview(state.inner());
+            }
+        });
 }

@@ -67,9 +67,13 @@ try {
 
     $installers = @(Get-ChildItem -LiteralPath $installerPath -Recurse -File |
         Where-Object { $_.Extension -eq '.msi' -or $_.Name -like '*setup.exe' })
-    if (-not $installers) {
-        throw "Installer directory contains no MSI or setup executable: $installerPath"
+    $msi = @($installers | Where-Object Extension -eq '.msi')
+    $setup = @($installers | Where-Object Name -like '*setup.exe')
+    if ($msi.Count -ne 1 -or $setup.Count -ne 1) {
+        throw 'The candidate must contain exactly one MSI and one setup executable.'
     }
+    if ($msi[0].Name -match '_[a-z]{2}-[A-Z]{2}\.msi$') { throw 'MSI language variants must be merged before release assembly.' }
+    ./scripts/verify-msi-languages.ps1 -Path $msi[0].FullName
 
     $sourceArchive = Resolve-SingleFile $sourcePath 'resubwinny-*-source.zip' 'Source candidate directory'
     $sourceSums = Resolve-SingleFile $sourcePath 'SOURCE-SHA256SUMS.txt' 'Source candidate directory'
