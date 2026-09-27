@@ -157,14 +157,6 @@ export class NativePreviewController {
       this.lastCaptionSyncAt = 0;
       this.callbacks = callbacks;
       setMapping(mapping);
-      // A fresh libmpv host starts at its own default volume. Reapply the
-      // application-session value before its first playback sample is shown.
-      try {
-        await backend.setPreviewVolume(callbacks.volume());
-      } catch (reason) {
-        callbacks.onError(reason);
-      }
-      if (!this.isCurrent(callbacks, generation)) return false;
       this.stopSync();
       this.syncTimer = setInterval(() => {
         this.scheduleSync(callbacks, generation);
@@ -183,6 +175,10 @@ export class NativePreviewController {
         );
       }
       if (!this.isCurrent(callbacks, generation)) return false;
+      // Applying session volume must not delay the start acknowledgement.
+      void backend.setPreviewVolume(callbacks.volume()).catch((reason) => {
+        if (this.isCurrent(callbacks, generation)) callbacks.onError(reason);
+      });
       callbacks.onNotice("notice.previewStarted");
       return true;
     } finally {
