@@ -78,9 +78,7 @@ pub struct LanguagePack {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PreviewRect {
-    pub x: i32,
-    pub y: i32,
+pub struct PreviewSurfaceSize {
     pub width: i32,
     pub height: i32,
 }
@@ -95,8 +93,8 @@ pub struct PreviewCapabilities {
     pub available_caption_plane_modes: Vec<String>,
 }
 
-/// A platform-owned preview route. The WebView receives this only to present
-/// an honest capability state; it never owns the video or caption pixels.
+/// An in-process preview route. libmpv and Rust produce the composited frame;
+/// WebView2 presents that frame inside the player component's Canvas.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewSurfaceCapability {
@@ -122,7 +120,9 @@ pub struct PreviewRuntime {
 pub struct PreviewRenderDiagnostics {
     pub route: String,
     pub active: bool,
+    pub frames_rendered: u64,
     pub frames_presented: u64,
+    pub frames_dropped: u64,
     pub presents_per_second: f64,
     pub caption_texture_uploads: u64,
     pub caption_texture_clears: u64,
@@ -130,7 +130,6 @@ pub struct PreviewRenderDiagnostics {
     pub surface_width: Option<i32>,
     pub surface_height: Option<i32>,
     pub decoder_mode: Option<String>,
-    pub fallback_reason: Option<String>,
     pub last_error: Option<String>,
 }
 

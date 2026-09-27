@@ -134,6 +134,9 @@ mod tests {
                 kind: 0,
                 codepoint: '字' as u32,
                 pua_codepoint: 0,
+                source_graphic_set: 0,
+                source_ku: 0,
+                source_ten: 0,
                 drcs_code: 0,
                 x: 10,
                 y: 20,
@@ -150,6 +153,7 @@ mod tests {
                 enclosure_style: 0,
                 utf8: "字".into(),
             }],
+            accessibility_ranges: Vec::new(),
             drcs_glyphs: Vec::new(),
             ruby_binding: None,
         };
@@ -166,6 +170,8 @@ mod tests {
             drcs_uses: Vec::new(),
             ruby_bindings: Vec::new(),
             accessibility_cues: Vec::new(),
+            resolved_accessibility_ranges: Vec::new(),
+            broadcast_semantics_resolved: false,
             source_layout: None,
             source: None,
         };

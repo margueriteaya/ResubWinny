@@ -82,6 +82,7 @@ where
     let mut report_drcs_bytes = 0_usize;
     let mut have_drcs = false;
     let mut pending_unpositioned = Vec::<RegionInterval>::new();
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
     let mut last_scene_pid = track.caption_pid;
     let summary = match scan_b24(
         path,
@@ -118,7 +119,9 @@ where
                 scene.wait_duration_ms,
                 scene.pts_ms.saturating_add(5_000),
             );
-            for mut interval in apply_scene_intervals(&mut active_regions, &scene) {
+            for mut interval in
+                apply_scene_intervals(&mut active_regions, &scene, &mut semantic_state)
+            {
                 interval.source_pid = Some(source_pid);
                 if options.preserve_position {
                     write_ass_interval(&mut writer, &interval, &options)?;

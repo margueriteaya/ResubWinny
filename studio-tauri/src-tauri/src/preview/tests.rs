@@ -153,21 +153,6 @@ fn parses_mpv_time_only_from_successful_finite_responses() {
 }
 
 #[test]
-fn builds_documented_mpv_overlay_add_arguments() {
-    let command = super::mpv_overlay_command(
-        std::path::Path::new("C:\\Temp\\caption.bgra"),
-        12,
-        24,
-        960,
-        540,
-    );
-    assert_eq!(command["command"][0], "overlay-add");
-    assert_eq!(command["command"][4], "C:\\Temp\\caption.bgra");
-    assert_eq!(command["command"][6], "bgra");
-    assert_eq!(command["command"][9], 3_840);
-}
-
-#[test]
 fn reads_worker_jsonl_envelopes_for_active_scenes() {
     let _cache_guard = preview_archive_test_guard();
     let path =

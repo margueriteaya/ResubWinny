@@ -15,19 +15,37 @@
   } from "macos-traffic-lights";
   import { t } from "../i18n";
 
-  export let sidebarCollapsed = false;
-  export let page: "home" | "tasks" | "batch" | "drcs" | "settings" = "home";
-  export let workspaceLayout: WorkspaceLayoutSettings = { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false };
-  export let sourceInspectorCollapsed = workspaceLayout.sourceCollapsed;
-  export let outputInspectorCollapsed = workspaceLayout.outputCollapsed;
-  export let minimal = false;
-  export let onWindowAction: (action: "minimize" | "maximize" | "close") => void = () => {};
-  export let onBeginDrag: () => void = () => {};
-  export let onBeginResize: (direction: string) => void = () => {};
-  export let onToggleSidebar: () => void = () => {};
-  export let onChooseSource: () => void = () => {};
-  export let onToggleSourceInspector: () => void = () => {};
-  export let onToggleOutputInspector: () => void = () => {};
+  let {
+    sidebarCollapsed = false,
+    page = "home",
+    workspaceLayout = { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false },
+    sourceInspectorCollapsed = workspaceLayout.sourceCollapsed,
+    outputInspectorCollapsed = workspaceLayout.outputCollapsed,
+    minimal = false,
+    hasTask = false,
+    onWindowAction = () => {},
+    onBeginDrag = () => {},
+    onBeginResize = () => {},
+    onToggleSidebar = () => {},
+    onChooseSource = () => {},
+    onToggleSourceInspector = () => {},
+    onToggleOutputInspector = () => {},
+  }: {
+    sidebarCollapsed?: boolean;
+    page?: "home" | "tasks" | "batch" | "drcs" | "settings";
+    workspaceLayout?: WorkspaceLayoutSettings;
+    sourceInspectorCollapsed?: boolean;
+    outputInspectorCollapsed?: boolean;
+    minimal?: boolean;
+    hasTask?: boolean;
+    onWindowAction?: (action: "minimize" | "maximize" | "close") => void;
+    onBeginDrag?: () => void;
+    onBeginResize?: (direction: string) => void;
+    onToggleSidebar?: () => void;
+    onChooseSource?: () => void;
+    onToggleSourceInspector?: () => void;
+    onToggleOutputInspector?: () => void;
+  } = $props();
 
   const resizeDirections = [
     ["n", "North"], ["ne", "NorthEast"], ["e", "East"], ["se", "SouthEast"],
@@ -63,7 +81,7 @@
   </button>
   <div class="title-drag-region" role="presentation" onmousedown={onBeginDrag}></div>
   <div class="titlebar-tools">
-    {#if page === "tasks"}
+    {#if page === "tasks" && hasTask}
       <div class="titlebar-button-group" aria-label={t("workspace.panelControls")}>
         <button class="titlebar-icon liquid-control" aria-label={sourceInspectorCollapsed ? t("app.showSidebar") : t("app.hideSidebar")} data-tooltip={sourceInspectorCollapsed ? t("app.showSidebar") : t("app.hideSidebar")} onclick={onToggleSourceInspector}>{#if sourceInspectorCollapsed}<PanelLeftOpen size={16} />{:else}<PanelLeftClose size={16} />{/if}</button>
         <button class="titlebar-icon liquid-control" aria-label={outputInspectorCollapsed ? t("workspace.showOutput") : t("workspace.hideOutput")} data-tooltip={outputInspectorCollapsed ? t("workspace.showOutput") : t("workspace.hideOutput")} onclick={onToggleOutputInspector}>{#if outputInspectorCollapsed}<PanelRightOpen size={16} />{:else}<PanelRightClose size={16} />{/if}</button>

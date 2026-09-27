@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::ops::Range;
 
 use crate::ARIB_TTML_NAMESPACE;
 use crate::caption::ruby::TtmlRubyBinding;
@@ -116,6 +117,8 @@ pub struct CaptionFeatureSummary {
     pub feature_details: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(default)]
     pub complete: bool,
+    #[serde(skip)]
+    pub(crate) semantic_state: crate::caption_features::CaptionSequenceState,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -179,8 +182,19 @@ impl CaptionFeatureSummary {
 }
 
 impl CaptionFeatureSummary {
-    fn observe_accessibility(&mut self, evidence: &crate::caption_features::AccessibilityEvidence) {
-        self.observe_accessibility_excluding(evidence, &[]);
+    fn observe_semantics(&mut self, semantics: &crate::caption_features::CaptionSemantics) {
+        if !semantics.declared_accessibility_ranges.is_empty() {
+            self.accessibility = true;
+            self.mark_count(
+                "accessibility",
+                semantics.declared_accessibility_ranges.len(),
+            );
+            self.mark_detail_flag("accessibility", "semanticRole", true);
+        }
+        self.observe_accessibility_excluding(
+            &semantics.text_accessibility,
+            &semantics.declared_accessibility_ranges,
+        );
     }
 
     fn observe_accessibility_excluding(
@@ -211,6 +225,14 @@ impl CaptionFeatureSummary {
             evidence.leading_annotation,
         );
         self.mark_detail_flag("accessibility", "musicCue", evidence.music_cue);
+        self.mark_detail_flag("accessibility", "speakerCue", evidence.speaker_cue);
+        self.mark_detail_flag(
+            "accessibility",
+            "continuationCue",
+            evidence.continuation_cue,
+        );
+        self.mark_detail_flag("accessibility", "phoneCue", evidence.phone_cue);
+        self.mark_detail_flag("accessibility", "offscreenCue", evidence.offscreen_cue);
         self.mark_detail_flag(
             "accessibility",
             "narrationDelimiter",
@@ -290,16 +312,34 @@ impl CaptionFeatureSummary {
             self.mark_count("gaiji", gaiji_count);
             self.mark_detail_flag("gaiji", "aribAdditionalSymbol", true);
         }
-        for characters in scene.regions.iter().filter_map(|region| {
-            let start = region.first_character as usize;
-            let end = start.saturating_add(region.character_count as usize);
-            scene.characters.get(start..end)
-        }) {
-            let text = characters
-                .iter()
-                .map(|character| character.utf8.as_str())
-                .collect::<String>();
-            self.observe_accessibility(&crate::caption_features::accessibility_evidence(&text));
+        let texts = scene
+            .regions
+            .iter()
+            .filter_map(|region| {
+                let start = region.first_character as usize;
+                let end = start.saturating_add(region.character_count as usize);
+                scene.characters.get(start..end)
+            })
+            .map(|characters| {
+                characters
+                    .iter()
+                    .map(|character| character.utf8.as_str())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>();
+        let references = texts.iter().map(String::as_str).collect::<Vec<_>>();
+        let semantics = crate::caption_features::caption_group_semantics_with_state(
+            &references,
+            &[],
+            &mut self.semantic_state,
+        );
+        for fragment in &semantics.fragments {
+            self.observe_semantics(fragment);
+        }
+        if semantics.cross_fragment_delimiter_count > 0 {
+            self.accessibility = true;
+            self.mark_count("accessibility", semantics.cross_fragment_delimiter_count);
+            self.mark_detail_flag("accessibility", "narrationDelimiter", true);
         }
     }
 
@@ -386,16 +426,12 @@ impl CaptionFeatureSummary {
             .accessibility_cues
             .iter()
             .map(|cue| cue.start..cue.end)
+            .chain(caption.resolved_accessibility_ranges.iter().cloned())
             .collect::<Vec<_>>();
-        if !semantic_ranges.is_empty() {
-            self.accessibility = true;
-            self.mark_count("accessibility", semantic_ranges.len());
-            self.mark_detail_flag("accessibility", "semanticRole", true);
-        }
-        self.observe_accessibility_excluding(
-            &crate::caption_features::accessibility_evidence(&caption.text),
+        self.observe_semantics(&crate::caption_features::caption_semantics(
+            &caption.text,
             &semantic_ranges,
-        );
+        ));
     }
 }
 
@@ -460,8 +496,7 @@ fn ttml_outline_is_material(value: &str) -> bool {
 }
 
 pub(crate) fn b24_character_is_gaiji_source(character: &native_b24::CaptionCharacter) -> bool {
-    character.pua_codepoint != 0
-        && crate::arib_symbols::is_arib_additional_symbol_codepoint(character.pua_codepoint)
+    crate::arib_symbols::is_arib_additional_symbol_ku(character.source_ku)
 }
 
 #[cfg(test)]
@@ -473,6 +508,9 @@ mod feature_tests {
             kind: 0,
             codepoint: '字' as u32,
             pua_codepoint: 0,
+            source_graphic_set: 0,
+            source_ku: 0,
+            source_ten: 0,
             drcs_code: 0,
             x: 0,
             y: 0,
@@ -582,7 +620,9 @@ mod feature_tests {
     #[test]
     fn b24_gaiji_and_accessibility_use_shared_material_classifiers() {
         let mut character = b24_character();
-        character.pua_codepoint = '➡' as u32;
+        character.source_graphic_set = 16;
+        character.source_ku = 90;
+        character.source_ten = 1;
         character.utf8 = "♪".into();
         let scene = native_b24::CaptionScene {
             pts_ms: 0,
@@ -709,6 +749,56 @@ mod feature_tests {
     }
 
     #[test]
+    fn narration_delimiters_can_pair_across_b24_regions() {
+        let characters = "＜たった１錠。わたしオン！＞"
+            .chars()
+            .map(|text| {
+                let mut character = b24_character();
+                character.utf8 = text.to_string();
+                character
+            })
+            .collect::<Vec<_>>();
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![
+                native_b24::CaptionRegion {
+                    x: 0,
+                    y: 0,
+                    width: 960,
+                    height: 270,
+                    is_ruby: false,
+                    first_character: 0,
+                    character_count: 7,
+                },
+                native_b24::CaptionRegion {
+                    x: 0,
+                    y: 270,
+                    width: 960,
+                    height: 270,
+                    is_ruby: false,
+                    first_character: 7,
+                    character_count: (characters.len() - 7) as u32,
+                },
+            ],
+            characters,
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(
+            features.details("accessibility").unwrap()["narrationDelimiter"],
+            true
+        );
+    }
+
+    #[test]
     fn ttml_gaiji_and_accessibility_are_source_text_facts() {
         let caption = crate::parse_ttml_captions(
             "<tt><body><p begin='0s' end='1s'>➡♪〜本文</p></body></tt>",
@@ -722,13 +812,64 @@ mod feature_tests {
         assert!(features.gaiji);
         assert!(features.accessibility);
         assert_eq!(features.observed_counts["gaiji"], 1);
-        assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(features.observed_counts["accessibility"], 2);
         assert_eq!(
             features.details("gaiji").unwrap()["aribAdditionalSymbol"],
             true
         );
         assert_eq!(features.details("accessibility").unwrap()["textCue"], true);
         assert_eq!(features.details("accessibility").unwrap()["musicCue"], true);
+        assert_eq!(
+            features.details("accessibility").unwrap()["continuationCue"],
+            true
+        );
+    }
+
+    #[test]
+    fn b24_and_b62_text_use_the_same_broadcast_semantic_model() {
+        let text = "（拍手）本文➡";
+        let characters = text
+            .chars()
+            .map(|text| {
+                let mut character = b24_character();
+                character.utf8 = text.to_string();
+                character
+            })
+            .collect::<Vec<_>>();
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![native_b24::CaptionRegion {
+                x: 0,
+                y: 0,
+                width: 960,
+                height: 540,
+                is_ruby: false,
+                first_character: 0,
+                character_count: characters.len() as u32,
+            }],
+            characters,
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let caption = crate::parse_ttml_captions(
+            &format!("<tt><body><p begin='0s' end='1s'>{text}</p></body></tt>"),
+            0,
+        )
+        .remove(0);
+        let mut b24 = CaptionFeatureSummary::default();
+        let mut b62 = CaptionFeatureSummary::default();
+
+        b24.observe_b24_scene(&scene);
+        b62.observe_ttml(&caption);
+
+        assert_eq!(
+            b24.observed_counts["accessibility"],
+            b62.observed_counts["accessibility"]
+        );
+        assert_eq!(b24.details("accessibility"), b62.details("accessibility"));
     }
 
     #[test]
@@ -932,6 +1073,10 @@ pub(crate) struct TtmlCaption {
     pub(crate) ruby_bindings: Vec<TtmlRubyBinding>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) accessibility_cues: Vec<TtmlAccessibilityCue>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) resolved_accessibility_ranges: Vec<Range<usize>>,
+    #[serde(default)]
+    pub(crate) broadcast_semantics_resolved: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) source_layout: Option<TtmlSourceLayout>,
     pub(crate) source: Option<TtmlCaptionSource>,

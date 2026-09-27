@@ -120,6 +120,11 @@ typedef struct aribcc_caption_char_t {
      */
     uint32_t pua_codepoint;
 
+    /** Original ARIB graphic-set coordinates. ku/ten are one-based. */
+    uint32_t source_graphic_set;
+    uint32_t source_ku;
+    uint32_t source_ten;
+
     /**
      * DRCS character's code. Only appears if if CaptionCharType is kDRCS or kDRCSReplaced.
      * It is a private code which is unrelated to Unicode.

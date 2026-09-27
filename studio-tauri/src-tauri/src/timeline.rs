@@ -2,13 +2,14 @@ use std::{
     collections::BTreeSet,
     fs::File,
     io::{BufRead, BufReader, Seek},
+    ops::Range,
 };
 
 use serde::Serialize;
 
 use crate::{
     arib_symbols::{is_arib_additional_symbol, is_arib_additional_symbol_codepoint},
-    caption_features::{accessibility_ranges, gaiji_ranges},
+    caption_features::{caption_semantics, gaiji_ranges},
 };
 
 const MAX_WINDOW_SIZE: usize = 512;
@@ -540,13 +541,24 @@ fn event_presentation(
     }
     if let Some(source_text) = value.get("text").and_then(serde_json::Value::as_str) {
         let text = truncate(source_text);
-        add_text_features(&text, &mut features, &mut highlights);
-        add_structured_accessibility_features(
-            value,
-            source_text.chars().count().min(240),
-            &mut features,
-            &mut highlights,
-        );
+        add_gaiji_features(&text, &mut features, &mut highlights);
+        let accessibility_ranges = declared_accessibility_ranges(value);
+        let semantics_resolved = value
+            .get("broadcast_semantics_resolved")
+            .or_else(|| value.get("broadcastSemanticsResolved"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        if semantics_resolved {
+            add_accessibility_ranges(&accessibility_ranges, 0, &mut features, &mut highlights);
+        } else {
+            add_caption_semantics(
+                &text,
+                0,
+                &accessibility_ranges,
+                &mut features,
+                &mut highlights,
+            );
+        }
         if ruby && !text.is_empty() {
             highlights.push(TimelineHighlight {
                 start: 0,
@@ -572,6 +584,9 @@ fn event_presentation(
             colors.into_iter().collect(),
         );
     };
+    let has_source_coordinates = characters.iter().any(|character| {
+        character.get("source_ku").is_some() || character.get("sourceKu").is_some()
+    });
     let mut text = String::new();
     let mut character_boundaries = vec![0_usize];
     for character in characters {
@@ -599,17 +614,25 @@ fn event_presentation(
                 .or_else(|| character.get("drcsCode"))
                 .and_then(serde_json::Value::as_u64)
                 .is_some_and(|code| code != 0);
-        let displayed_gaiji = value.chars().any(is_arib_additional_symbol);
-        let source_gaiji = character
-            .get("pua_codepoint")
-            .or_else(|| character.get("puaCodepoint"))
-            .and_then(serde_json::Value::as_u64)
-            .and_then(|codepoint| u32::try_from(codepoint).ok())
-            .is_some_and(is_arib_additional_symbol_codepoint);
-        // Unicode symbols are classified once after the complete text is
-        // assembled. Source PUA evidence is needed only when that display
-        // character no longer identifies the additional-symbol row.
-        let gaiji = source_gaiji && !displayed_gaiji;
+        let gaiji = if has_source_coordinates {
+            character
+                .get("source_ku")
+                .or_else(|| character.get("sourceKu"))
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|ku| u32::try_from(ku).ok())
+                .is_some_and(crate::arib_symbols::is_arib_additional_symbol_ku)
+        } else {
+            let displayed_gaiji = value.chars().any(is_arib_additional_symbol);
+            let source_gaiji = character
+                .get("pua_codepoint")
+                .or_else(|| character.get("puaCodepoint"))
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|codepoint| u32::try_from(codepoint).ok())
+                .is_some_and(is_arib_additional_symbol_codepoint);
+            // Old archives do not contain source coordinates. Their Unicode
+            // symbols are classified once after the complete text is built.
+            source_gaiji && !displayed_gaiji
+        };
         let text_color = character
             .get("text_color")
             .or_else(|| character.get("textColor"))
@@ -641,8 +664,10 @@ fn event_presentation(
     for item in &mut highlights {
         item.end = item.end.min(text_len);
     }
-    add_gaiji_features(&text, &mut features, &mut highlights);
-    let mut classified_region = false;
+    if !has_source_coordinates {
+        add_gaiji_features(&text, &mut features, &mut highlights);
+    }
+    let mut region_fragments = Vec::new();
     if let Some(regions) = value.get("regions").and_then(serde_json::Value::as_array) {
         for region in regions {
             let first = region
@@ -679,12 +704,25 @@ fn event_presentation(
                 .skip(start_offset)
                 .take(end_offset - start_offset)
                 .collect::<String>();
-            add_accessibility_features(&region_text, start_offset, &mut features, &mut highlights);
-            classified_region = true;
+            region_fragments.push((region_text, start_offset));
         }
     }
-    if !classified_region {
-        add_accessibility_features(&text, 0, &mut features, &mut highlights);
+    if region_fragments.is_empty() {
+        add_caption_semantics(&text, 0, &[], &mut features, &mut highlights);
+    } else {
+        let references = region_fragments
+            .iter()
+            .map(|(text, _)| text.as_str())
+            .collect::<Vec<_>>();
+        let semantics = crate::caption_features::caption_group_semantics(&references, &[]);
+        for ((_, offset), fragment) in region_fragments.iter().zip(semantics.fragments) {
+            add_accessibility_ranges(
+                &fragment.removable_accessibility_ranges,
+                *offset,
+                &mut features,
+                &mut highlights,
+            );
+        }
     }
     (
         text,
@@ -702,15 +740,6 @@ fn normalize_ttml_color(value: &str) -> Option<String> {
     Some(format!("#{}", hex[..6].to_ascii_uppercase()))
 }
 
-fn add_text_features(
-    text: &str,
-    features: &mut BTreeSet<String>,
-    highlights: &mut Vec<TimelineHighlight>,
-) {
-    add_gaiji_features(text, features, highlights);
-    add_accessibility_features(text, 0, features, highlights);
-}
-
 fn add_gaiji_features(
     text: &str,
     features: &mut BTreeSet<String>,
@@ -726,13 +755,29 @@ fn add_gaiji_features(
     }
 }
 
-fn add_accessibility_features(
+fn add_caption_semantics(
     text: &str,
+    offset: usize,
+    declared_accessibility_ranges: &[Range<usize>],
+    features: &mut BTreeSet<String>,
+    highlights: &mut Vec<TimelineHighlight>,
+) {
+    let semantics = caption_semantics(text, declared_accessibility_ranges);
+    add_accessibility_ranges(
+        &semantics.removable_accessibility_ranges,
+        offset,
+        features,
+        highlights,
+    );
+}
+
+fn add_accessibility_ranges(
+    ranges: &[Range<usize>],
     offset: usize,
     features: &mut BTreeSet<String>,
     highlights: &mut Vec<TimelineHighlight>,
 ) {
-    for range in accessibility_ranges(text) {
+    for range in ranges {
         features.insert("accessibility".into());
         highlights.push(TimelineHighlight {
             start: offset + range.start,
@@ -742,45 +787,41 @@ fn add_accessibility_features(
     }
 }
 
-fn add_structured_accessibility_features(
-    value: &serde_json::Value,
-    text_len: usize,
-    features: &mut BTreeSet<String>,
-    highlights: &mut Vec<TimelineHighlight>,
-) {
-    let Some(cues) = value
+fn declared_accessibility_ranges(value: &serde_json::Value) -> Vec<Range<usize>> {
+    let mut ranges = value
         .get("accessibility_cues")
         .or_else(|| value.get("accessibilityCues"))
         .and_then(serde_json::Value::as_array)
-    else {
-        return;
-    };
-    for cue in cues {
-        let start = cue
-            .get("start")
-            .and_then(serde_json::Value::as_u64)
-            .and_then(|value| usize::try_from(value).ok())
-            .unwrap_or(0)
-            .min(text_len);
-        let end = cue
-            .get("end")
-            .and_then(serde_json::Value::as_u64)
-            .and_then(|value| usize::try_from(value).ok())
-            .unwrap_or(start)
-            .min(text_len);
-        if end <= start {
-            continue;
-        }
-        features.insert("accessibility".into());
-        highlights.retain(|highlight| {
-            highlight.feature != "accessibility" || highlight.end <= start || end <= highlight.start
-        });
-        highlights.push(TimelineHighlight {
-            start,
-            end,
-            feature: "accessibility".into(),
-        });
-    }
+        .into_iter()
+        .flatten()
+        .filter_map(|cue| {
+            let start = cue
+                .get("start")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok())?;
+            let end = cue
+                .get("end")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok())?;
+            (end > start).then_some(start..end)
+        })
+        .collect::<Vec<_>>();
+    ranges.extend(
+        value
+            .get("resolved_accessibility_ranges")
+            .or_else(|| value.get("resolvedAccessibilityRanges"))
+            .or_else(|| value.get("inferred_accessibility_ranges"))
+            .or_else(|| value.get("inferredAccessibilityRanges"))
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|range| {
+                let start = range.get("start")?.as_u64()?.try_into().ok()?;
+                let end = range.get("end")?.as_u64()?.try_into().ok()?;
+                (end > start).then_some(start..end)
+            }),
+    );
+    ranges
 }
 
 fn truncate(value: &str) -> String {
@@ -1140,6 +1181,36 @@ mod tests {
     }
 
     #[test]
+    fn highlights_inferred_b62_cross_fragment_ranges() {
+        let value = serde_json::json!({
+            "text": "わたしオン！＞",
+            "resolved_accessibility_ranges": [{ "start": 6, "end": 7 }],
+            "broadcast_semantics_resolved": true
+        });
+
+        let (_, features, highlights, _) = event_presentation(&value);
+
+        assert!(features.iter().any(|feature| feature == "accessibility"));
+        assert!(
+            highlights.iter().any(|item| {
+                item.feature == "accessibility" && (item.start, item.end) == (6, 7)
+            })
+        );
+
+        let (_, features, highlights, _) = event_presentation(&serde_json::json!({
+            "text": "（パリの空の下）」。",
+            "resolved_accessibility_ranges": [],
+            "broadcast_semantics_resolved": true
+        }));
+        assert!(!features.iter().any(|feature| feature == "accessibility"));
+        assert!(
+            !highlights
+                .iter()
+                .any(|item| item.feature == "accessibility")
+        );
+    }
+
+    #[test]
     fn structured_accessibility_replaces_overlapping_text_highlights() {
         let value = serde_json::json!({
             "text": "♪〜音楽",
@@ -1218,6 +1289,62 @@ mod tests {
     }
 
     #[test]
+    fn b24_accessibility_highlights_pair_delimiters_across_regions() {
+        let value = serde_json::json!({
+            "regions": [
+                { "first_character": 0, "character_count": 7 },
+                { "first_character": 7, "character_count": 7 }
+            ],
+            "characters": [
+                { "utf8": "＜" }, { "utf8": "た" }, { "utf8": "っ" },
+                { "utf8": "た" }, { "utf8": "１" }, { "utf8": "錠" },
+                { "utf8": "。" }, { "utf8": "わ" }, { "utf8": "た" },
+                { "utf8": "し" }, { "utf8": "オ" }, { "utf8": "ン" },
+                { "utf8": "！" }, { "utf8": "＞" }
+            ]
+        });
+        let (text, features, highlights, _) = event_presentation(&value);
+        assert_eq!(text, "＜たった１錠。わたしオン！＞");
+        assert!(features.iter().any(|feature| feature == "accessibility"));
+        let ranges = highlights
+            .iter()
+            .filter(|item| item.feature == "accessibility")
+            .map(|item| (item.start, item.end))
+            .collect::<Vec<_>>();
+        assert_eq!(ranges, vec![(0, 1), (13, 14)]);
+    }
+
+    #[test]
+    fn b24_quote_state_keeps_title_parentheses_out_of_accessibility_highlights() {
+        let first = "曲「スゥ・ル・シエル・ド・パリ";
+        let second = "（パリの空の下）」。";
+        let text = format!("{first}{second}");
+        let characters = text
+            .chars()
+            .map(|character| serde_json::json!({ "utf8": character.to_string() }))
+            .collect::<Vec<_>>();
+        let value = serde_json::json!({
+            "regions": [
+                { "first_character": 0, "character_count": first.chars().count() },
+                {
+                    "first_character": first.chars().count(),
+                    "character_count": second.chars().count()
+                }
+            ],
+            "characters": characters
+        });
+
+        let (_, features, highlights, _) = event_presentation(&value);
+
+        assert!(!features.iter().any(|feature| feature == "accessibility"));
+        assert!(
+            !highlights
+                .iter()
+                .any(|item| item.feature == "accessibility")
+        );
+    }
+
+    #[test]
     fn music_marker_includes_immediately_following_wave_marks() {
         let value = serde_json::json!({ "text": "♪～〜本文" });
         let (_, _, highlights, _) = event_presentation(&value);
@@ -1241,9 +1368,14 @@ mod tests {
         );
 
         for text in ["<語り", "続き>", "＜語り", "続き＞"] {
-            let (_, features, highlights, _) = event_presentation(&serde_json::json!({ "text": text }));
+            let (_, features, highlights, _) =
+                event_presentation(&serde_json::json!({ "text": text }));
             assert!(!features.iter().any(|feature| feature == "accessibility"));
-            assert!(!highlights.iter().any(|item| item.feature == "accessibility"));
+            assert!(
+                !highlights
+                    .iter()
+                    .any(|item| item.feature == "accessibility")
+            );
         }
     }
 
@@ -1287,5 +1419,25 @@ mod tests {
             .map(|item| (item.start, item.end))
             .collect::<Vec<_>>();
         assert_eq!(ranges, vec![(0, 1), (1, 2)]);
+    }
+
+    #[test]
+    fn b24_gaiji_highlights_use_original_arib_rows_when_available() {
+        let value = serde_json::json!({
+            "characters": [
+                { "utf8": "➡", "pua_codepoint": 0xE28F_u64, "source_ku": 85, "source_ten": 1 },
+                { "utf8": "X", "pua_codepoint": 0, "source_ku": 90, "source_ten": 1 },
+                { "utf8": "♬", "pua_codepoint": 0, "source_ku": 93, "source_ten": 90 }
+            ]
+        });
+        let (text, features, highlights, _) = event_presentation(&value);
+        assert_eq!(text, "➡X♬");
+        assert!(features.iter().any(|feature| feature == "gaiji"));
+        let ranges = highlights
+            .iter()
+            .filter(|item| item.feature == "gaiji")
+            .map(|item| (item.start, item.end))
+            .collect::<Vec<_>>();
+        assert_eq!(ranges, vec![(1, 2), (2, 3)]);
     }
 }

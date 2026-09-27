@@ -1,144 +1,145 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
-  import { ChevronRight, CircleCheck, CirclePlay, ListVideo, LoaderCircle, Maximize2, Pause, Play, Square, SquarePlay, Stethoscope, TriangleAlert, Volume2 } from "@lucide/svelte";
+  import { ChevronRight, CircleCheck, ListVideo, LoaderCircle, SquarePlay, Stethoscope, TriangleAlert } from "@lucide/svelte";
   import type { PlaybackTimeMapping, PreviewCommand, UserMode } from "../../backend";
   import { t } from "../../i18n";
   import TaskDiagnostics from "./TaskDiagnostics.svelte";
   import TaskTimeline from "./TaskTimeline.svelte";
-  import MacSlider from "../../components/MacSlider.svelte";
+  import PlayerControls from "./PlayerControls.svelte";
+  import PreviewCanvas from "./PreviewCanvas.svelte";
   import MacSegmentedControl from "../../components/MacSegmentedControl.svelte";
-  import { projectRangeForMedia, projectTimeMs as asProjectTimeMs, type MediaTimeMs, type ProjectTimeMs } from "./time-mapping";
+  import { projectRangeForMedia, type MediaTimeMs, type ProjectTimeMs } from "./time-mapping";
 
   type TaskTab = "preview" | "events" | "diagnostics";
-  export let taskTab: TaskTab = "preview";
-  export let userMode: UserMode = "normie";
-  export let currentJobId = "";
-  export let desktopRuntime = false;
-  export let archivePath = "";
-  export let logs: string[] = [];
-  export let captions = 0;
-  export let warnings = 0;
-  export let selectedTrackCount = 0;
-  export let diagnosticsCount = 0;
-  export let bytesRead = 0;
-  export let progress = 0;
-  export let isExporting = false;
-  export let previewIndexing = false;
-  export let compactViewport = false;
-  export let playerRunning = false;
-  export let playerPaused = true;
-  export let previewAvailable: boolean | null = null;
-  export let nativePreview: HTMLDivElement | null = null;
-  export let playbackMapping: PlaybackTimeMapping;
-  export let appliedPlaybackMapping: PlaybackTimeMapping;
-  export let playbackMappingBusy = false;
-  export let projectTimeMs: ProjectTimeMs = 0 as ProjectTimeMs;
-  export let durationMs: MediaTimeMs | null = null;
-  export let trackLabel = "";
-  export let trackName = "";
-  export let trackDetail = "";
-  export let onSelectTab: (tab: TaskTab) => void = () => {};
-  export let onPlayerCommand: (command: PreviewCommand) => void = () => {};
-  export let onStartPreview: () => void = () => {};
-  export let onStopPreview: () => void = () => {};
-  export let onResizePreview: () => void = () => {};
-  export let onSeekProject: (milliseconds: ProjectTimeMs, final?: boolean) => void | Promise<void> = () => {};
-  export let onSeekTarget: (milliseconds: ProjectTimeMs, final?: boolean) => void = () => {};
-  export let onSetVolume: (volume: number) => void = () => {};
-  export let onSaveMapping: () => void = () => {};
-  export let onDiagnosticsCount: (count: number) => void = () => {};
-  export let onError: (message: string) => void = () => {};
-  let playbackMappingDetails: HTMLDetailsElement;
-  let scrubberActive = false;
-  let scrubberTargetMs = 0;
-  let scrubberFrame: number | undefined;
-  let pendingScrubberTarget: number | null = null;
+  let {
+    taskTab = "preview",
+    userMode = "normie",
+    currentJobId = "",
+    desktopRuntime = false,
+    archivePath = "",
+    logs = [],
+    captions = 0,
+    warnings = 0,
+    selectedTrackCount = 0,
+    diagnosticsCount = 0,
+    bytesRead = 0,
+    progress = 0,
+    isExporting = false,
+    previewIndexing = false,
+    compactViewport = false,
+    playerRunning = false,
+    playerPaused = true,
+    previewAvailable = null,
+    previewVolume = 100,
+    nativePreview = $bindable(null),
+    playbackMapping = $bindable(),
+    appliedPlaybackMapping,
+    playbackMappingBusy = false,
+    projectTimeMs = 0 as ProjectTimeMs,
+    durationMs = null,
+    trackLabel = "",
+    trackName = "",
+    trackDetail = "",
+    onSelectTab = () => {},
+    onPlayerCommand = () => {},
+    onStartPreview = () => {},
+    onStopPreview = () => {},
+    onResizePreview = () => {},
+    onSeekProject = () => {},
+    onSeekTarget = () => {},
+    onSetVolume = () => {},
+    onToggleMute = () => {},
+    onSaveMapping = () => {},
+    onDiagnosticsCount = () => {},
+    onError = () => {},
+  }: {
+    taskTab?: TaskTab;
+    userMode?: UserMode;
+    currentJobId?: string;
+    desktopRuntime?: boolean;
+    archivePath?: string;
+    logs?: string[];
+    captions?: number;
+    warnings?: number;
+    selectedTrackCount?: number;
+    diagnosticsCount?: number;
+    bytesRead?: number;
+    progress?: number;
+    isExporting?: boolean;
+    previewIndexing?: boolean;
+    compactViewport?: boolean;
+    playerRunning?: boolean;
+    playerPaused?: boolean;
+    previewAvailable?: boolean | null;
+    previewVolume?: number;
+    nativePreview?: HTMLDivElement | null;
+    playbackMapping: PlaybackTimeMapping;
+    appliedPlaybackMapping: PlaybackTimeMapping;
+    playbackMappingBusy?: boolean;
+    projectTimeMs?: ProjectTimeMs;
+    durationMs?: MediaTimeMs | null;
+    trackLabel?: string;
+    trackName?: string;
+    trackDetail?: string;
+    onSelectTab?: (tab: TaskTab) => void;
+    onPlayerCommand?: (command: PreviewCommand) => void;
+    onStartPreview?: () => void;
+    onStopPreview?: () => void;
+    onResizePreview?: () => void;
+    onSeekProject?: (milliseconds: ProjectTimeMs, final?: boolean) => void | Promise<void>;
+    onSeekTarget?: (milliseconds: ProjectTimeMs, final?: boolean) => void;
+    onSetVolume?: (volume: number) => void;
+    onToggleMute?: () => void;
+    onSaveMapping?: () => void;
+    onDiagnosticsCount?: (count: number) => void;
+    onError?: (message: string) => void;
+  } = $props();
+  let playbackMappingDetails: HTMLDetailsElement | undefined = $state();
+
+  // Pane drags change the Canvas size without resizing the document or window.
+  // Keep the offscreen render target at the component's physical resolution.
+  $effect(() => {
+    if (!desktopRuntime || !nativePreview) return;
+    const observer = new ResizeObserver(() => onResizePreview());
+    observer.observe(nativePreview);
+    return () => observer.disconnect();
+  });
 
   function openPlaybackMapping() {
-    playbackMappingDetails.open = true;
+    const details = playbackMappingDetails;
+    if (!details) return;
+    details.open = true;
     requestAnimationFrame(() => {
       const behavior = matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-      playbackMappingDetails.scrollIntoView({ block: "nearest", behavior });
-      playbackMappingDetails.querySelector<HTMLElement>("summary")?.focus();
+      details.scrollIntoView({ block: "nearest", behavior });
+      details.querySelector<HTMLElement>("summary")?.focus();
     });
   }
 
-  const formatTime = (milliseconds: number) => {
-    const seconds = Math.max(0, Math.floor(milliseconds / 1000));
-    const hours = Math.floor(seconds / 3_600);
-    const minutes = Math.floor(seconds / 60) % 60;
-    const body = `${String(minutes).padStart(hours ? 2 : 1, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-    return hours ? `${hours}:${body}` : body;
-  };
-
-  function queueScrubberSeek(timeMs: number, final: boolean) {
-    scrubberTargetMs = Math.max(projectRange.startMs, Math.min(projectRange.endMs, Math.round(timeMs)));
-    onSeekTarget(asProjectTimeMs(scrubberTargetMs), final);
-    scrubberActive = !final;
-    if (final) {
-      pendingScrubberTarget = null;
-      if (scrubberFrame !== undefined) {
-        cancelAnimationFrame(scrubberFrame);
-        scrubberFrame = undefined;
-      }
-      dispatchScrubberSeek(scrubberTargetMs, true);
-      return;
-    }
-    pendingScrubberTarget = scrubberTargetMs;
-    if (scrubberFrame === undefined)
-      scrubberFrame = requestAnimationFrame(flushScrubberSeekFrame);
-  }
-
-  function dispatchScrubberSeek(timeMs: number, final: boolean) {
-    try {
-      const operation = onSeekProject(asProjectTimeMs(timeMs), final);
-      if (operation && typeof (operation as Promise<void>).catch === "function")
-        void Promise.resolve(operation).catch((reason) => onError(String(reason)));
-    } catch (reason) {
-      onError(String(reason));
-    }
-  }
-
-  function flushScrubberSeekFrame() {
-    scrubberFrame = undefined;
-    if (pendingScrubberTarget === null) return;
-    const target = pendingScrubberTarget;
-    pendingScrubberTarget = null;
-    dispatchScrubberSeek(target, false);
-  }
-
-  function cancelScrubber() {
-    if (!scrubberActive) return;
-    queueScrubberSeek(scrubberTargetMs, true);
-  }
-  $: taskTabOptions = [
+  const taskTabOptions = $derived([
     { value: "preview", label: t("workspace.captionPreview"), icon: SquarePlay },
     { value: "events", label: `${t("workspace.eventList")} · ${captions.toLocaleString()}`, icon: ListVideo },
     { value: "diagnostics", label: `${t("workspace.diagnostics")} · ${diagnosticsCount}`, icon: Stethoscope },
-  ].filter((option) => option.value !== "diagnostics" || userMode === "nerd" || diagnosticsCount > 0 || warnings > 0);
-  $: projectRange = projectRangeForMedia(durationMs, appliedPlaybackMapping);
-  $: scrubberValueMs = scrubberActive ? scrubberTargetMs : projectTimeMs;
-  $: mappingIsAutomatic = playbackMapping.segmentId === "recording-origin"
-    && playbackMapping.mediaAnchorMs === 0
-    && playbackMapping.projectAnchorMs === 0
-    && playbackMapping.rateNumerator === 1
-    && playbackMapping.rateDenominator === 1;
-  $: mappingStatus = mappingIsAutomatic ? t("preview.mappingAuto") : t("preview.mappingAdjusted");
-  $: workbenchStatus = isExporting
-    ? t("task.statusExporting").replace("{0}", progress.toFixed(0))
-    : previewIndexing
-      ? t("task.statusIndexing").replace("{0}", progress.toFixed(0))
-      : diagnosticsCount || warnings
-        ? t("task.statusWarnings").replace("{0}", String(Math.max(diagnosticsCount, warnings)))
-        : t("task.statusReady").replace("{0}", String(selectedTrackCount));
-  onDestroy(() => {
-    if (scrubberFrame !== undefined) cancelAnimationFrame(scrubberFrame);
-    if (scrubberActive || pendingScrubberTarget !== null) {
-      scrubberActive = false;
-      onSeekTarget(asProjectTimeMs(scrubberTargetMs), true);
-      dispatchScrubberSeek(scrubberTargetMs, true);
-    }
-  });
+  ].filter((option) => option.value !== "diagnostics" || userMode === "nerd" || diagnosticsCount > 0 || warnings > 0));
+  const projectRange = $derived(projectRangeForMedia(durationMs, appliedPlaybackMapping));
+  const mappingIsAutomatic = $derived(
+    playbackMapping.segmentId === "recording-origin"
+      && playbackMapping.mediaAnchorMs === 0
+      && playbackMapping.projectAnchorMs === 0
+      && playbackMapping.rateNumerator === 1
+      && playbackMapping.rateDenominator === 1,
+  );
+  const mappingStatus = $derived(
+    mappingIsAutomatic ? t("preview.mappingAuto") : t("preview.mappingAdjusted"),
+  );
+  const workbenchStatus = $derived(
+    isExporting
+      ? t("task.statusExporting").replace("{0}", progress.toFixed(0))
+      : previewIndexing
+        ? t("task.statusIndexing").replace("{0}", progress.toFixed(0))
+        : diagnosticsCount || warnings
+          ? t("task.statusWarnings").replace("{0}", String(Math.max(diagnosticsCount, warnings)))
+          : t("task.statusReady").replace("{0}", String(selectedTrackCount)),
+  );
 </script>
 
 <section class="preview-panel">
@@ -152,12 +153,10 @@
   </div>
   {#if taskTab === "preview"}
     <div class="player-shell">
-      <div class="native-preview" data-liquid-ignore bind:this={nativePreview}><div class="native-notice"><CirclePlay size={30} /><b>{playerRunning ? t("workspace.nativePreviewActive") : t("workspace.nativePreview")}</b><p>{playerRunning ? t("workspace.nativePreviewActiveDescription") : t("workspace.nativePreviewDescription")}</p></div></div>
-      <div class="player-controls">
-        <div class="player-time"><span>{formatTime(scrubberValueMs)}</span><span>/ {durationMs ? formatTime(projectRange.endMs) : "--:--"}</span></div>
-        <MacSlider className="player-scrubber" ariaLabel={t("preview.seekTimeline")} min={projectRange.startMs} max={projectRange.endMs} value={scrubberValueMs} disabled={!playerRunning || !durationMs} onInput={(value) => queueScrubberSeek(value, false)} onChange={(value) => queueScrubberSeek(value, true)} onCancel={cancelScrubber} />
-        <div class="player-buttons"><button class:play-icon={!playerRunning || playerPaused} class="player-button primary" data-tooltip={playerRunning ? t("workspace.pauseResume") : t("common.startPreview")} aria-label={playerRunning ? t("workspace.pauseResume") : t("common.startPreview")} onclick={playerRunning ? () => onPlayerCommand("toggle-pause") : onStartPreview} disabled={!playerRunning && previewAvailable === false}>{#if playerRunning && !playerPaused}<Pause size={18} />{:else}<Play size={18} />{/if}</button><span class="volume"><Volume2 size={17} /><MacSlider ariaLabel={t("preview.volume")} min={0} max={100} value={100} disabled={!playerRunning} onChange={onSetVolume} /></span><button class="player-button" data-tooltip={t("workspace.fitPreview")} aria-label={t("workspace.fitPreview")} onclick={onResizePreview} disabled={!playerRunning}><Maximize2 size={16} /></button><button class="player-button stop" data-tooltip={t("common.stopPreview")} aria-label={t("common.stopPreview")} onclick={onStopPreview} disabled={!playerRunning}><Square size={15} /></button></div>
+      <div class="native-preview" bind:this={nativePreview}>
+        <PreviewCanvas running={playerRunning} title={playerRunning ? t("workspace.nativePreviewActive") : t("workspace.nativePreview")} description={playerRunning ? t("workspace.nativePreviewActiveDescription") : t("workspace.nativePreviewDescription")} {onError} />
       </div>
+      <PlayerControls running={playerRunning} paused={playerPaused} available={previewAvailable} {projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} durationKnown={durationMs !== null} volume={previewVolume} onStart={onStartPreview} onTogglePause={() => onPlayerCommand("toggle-pause")} onStop={onStopPreview} onFit={onResizePreview} onSkipBack={() => onPlayerCommand("seek-back")} onSkipForward={() => onPlayerCommand("seek-forward")} {onToggleMute} {onSetVolume} {onSeekProject} {onSeekTarget} {onError} />
     </div>
     <div class="preview-status"><span>{t("workspace.scanned").replace("{0}", (bytesRead / 1024 ** 3).toFixed(2))}</span><span>{t("workspace.decodedEvents").replace("{0}", captions.toLocaleString())}</span></div>
     <TaskTimeline {archivePath} {desktopRuntime} live={isExporting || previewIndexing} editor {trackLabel} {trackName} {trackDetail} projectTimeMs={projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} playing={playerRunning && !playerPaused} expectedCount={captions} onSeek={onSeekProject} {onSeekTarget} onOpenMapping={openPlaybackMapping} {onError} />
@@ -187,15 +186,8 @@
   .tabs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); column-gap: 12px; }
   .workbench-status { display: flex; justify-self: end; align-items: center; gap: 6px; margin: 0; min-width: 0; color: var(--rw-success); font-size: 12px; line-height: 16px; white-space: nowrap; }
   .workbench-status.warning { color: var(--rw-warning); }.workbench-status.active { color: var(--rw-accent); }.workbench-status.active :global(svg) { animation: status-spin 1.2s linear infinite; }
-  .player-shell { margin-top: 19px; overflow: hidden; border: 1px solid var(--rw-border); border-radius: 7px; background: #05080c; }
-  .native-preview { margin: 0; min-height: 304px; border-radius: 0; }
-  .player-controls { display: grid; grid-template-columns: var(--rw-timeline-gutter) minmax(120px, 1fr); column-gap: 0; row-gap: 10px; align-items: center; padding: 10px; color: #dfe8f3; background: #111923; }
-  .player-time { display: flex; width: var(--rw-timeline-gutter); min-width: 0; padding-right: 11px; gap: 5px; font: 12px "Cascadia Mono", monospace; white-space: nowrap; }
-  .player-time span + span { color: #92a3b5; }
-  :global(.player-scrubber){width:100%}
-  .player-buttons { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; }
-  .player-button { display:grid; place-items:center; width:34px; height:32px; padding:0; color:#d9e4f0; border:1px solid #314152; border-radius:5px; background:#182330; }.player-button :global(svg){display:block;margin:0}.player-button.play-icon :global(svg){transform:translateX(1px)}
-  .player-button:hover:not(:disabled) { background:#24354a; }.player-button.primary { color:#fff; background:#1766e7; border-color:#3680ec; }.player-button.stop { margin-left:auto; }.volume{display:flex;align-items:center;gap:7px;min-width:130px;margin-left:8px;color:#b6c7d8}.volume :global(.mac-slider){width:92px}
+  .player-shell { container: player / inline-size; margin-top: 10px; overflow: hidden; border: 1px solid var(--rw-border); border-radius: 6px; background: var(--rw-content); }
+  .native-preview { margin: 0; }
   .preview-status { display:flex; justify-content:space-between; padding:8px 1px 0; color:var(--rw-muted); font-size:12px; line-height:16px; }
   .playback-mapping { margin-top:10px; overflow:hidden; border:1px solid var(--rw-border-subtle); border-radius:7px; background:var(--rw-content); }
   .playback-mapping summary { display:flex; align-items:center; justify-content:space-between; min-height:48px; padding:7px 11px; cursor:pointer; list-style:none; }.playback-mapping summary::-webkit-details-marker { display:none; }
