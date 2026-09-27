@@ -3,17 +3,25 @@
   import { backend, type DiagnosticRecord } from "../../backend";
   import { formatMessage, t } from "../../i18n";
 
-  export let jobId = "";
-  export let desktopRuntime = false;
-  export let logs: string[] = [];
-  export let onCountChange: (count: number) => void = () => {};
-  export let onError: (message: string) => void = () => {};
+  let {
+    jobId = "",
+    desktopRuntime = false,
+    logs = [],
+    onCountChange = () => {},
+    onError = () => {},
+  }: {
+    jobId?: string;
+    desktopRuntime?: boolean;
+    logs?: string[];
+    onCountChange?: (count: number) => void;
+    onError?: (message: string) => void;
+  } = $props();
 
   const pageSize = 100;
-  let records: DiagnosticRecord[] = [];
-  let loadedJobId = "";
-  let loading = false;
-  let exhausted = false;
+  let records: DiagnosticRecord[] = $state([]);
+  let loadedJobId = $state("");
+  let loading = $state(false);
+  let exhausted = $state(false);
 
   async function loadPage(reset: boolean) {
     if (!desktopRuntime || !jobId || loading || (!reset && exhausted)) return;
@@ -35,7 +43,9 @@
     }
   }
 
-  $: if (desktopRuntime && jobId && jobId !== loadedJobId) void loadPage(true);
+  $effect(() => {
+    if (desktopRuntime && jobId && jobId !== loadedJobId) void loadPage(true);
+  });
 </script>
 
 <section class="event-list diagnostics-list">

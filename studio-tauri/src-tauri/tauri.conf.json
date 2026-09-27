@@ -45,7 +45,7 @@
       "../../third_party/rounded-mplus-1m-arib/LICENSE.txt": "fonts/LICENSE.rounded-mplus-1m-arib.txt"
     },
     "windows": {
-      "wix": { "language": "en-US" },
+      "wix": { "language": ["en-US", "zh-CN", "zh-TW", "ja-JP"] },
       "nsis": {
         "installMode": "perMachine",
         "languages": ["English", "SimpChinese", "TradChinese", "Japanese"]

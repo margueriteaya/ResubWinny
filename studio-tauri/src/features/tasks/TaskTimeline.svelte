@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight, Clock3, FileText, GitCompareArrows, LocateFixed, RefreshCw, ScanLine } from "@lucide/svelte";
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import type { TimelineEvent, TimelineFeature } from "../../backend";
   import { t } from "../../i18n";
   import accessibilityIcon from "../../assets/arib/accessibility.svg";
@@ -13,36 +13,54 @@
   import { getFilteredTimelineWindow, getRecentTimelineWindow, getTimelineTimeWindow } from "./timeline-controller";
   import { projectTimeMs as asProjectTimeMs, type ProjectTimeMs } from "./time-mapping";
 
-  export let archivePath = "";
-  export let desktopRuntime = false;
-  export let live = false;
-  export let editor = false;
-  export let projectTimeMs: ProjectTimeMs = 0 as ProjectTimeMs;
-  export let rangeStartMs: ProjectTimeMs = 0 as ProjectTimeMs;
-  export let rangeEndMs: ProjectTimeMs = 120_000 as ProjectTimeMs;
-  export let playing = false;
-  export let trackLabel = "";
-  export let trackName = "";
-  export let trackDetail = "";
-  export let expectedCount = 0;
-  export let onSeek: (milliseconds: ProjectTimeMs, final: boolean) => void | Promise<void> = () => {};
-  export let onSeekTarget: (milliseconds: ProjectTimeMs, final?: boolean) => void = () => {};
-  export let onOpenMapping: () => void = () => {};
-  export let onError: (message: string) => void = () => {};
+  let {
+    archivePath = "",
+    desktopRuntime = false,
+    live = false,
+    editor = false,
+    projectTimeMs = 0 as ProjectTimeMs,
+    rangeStartMs = 0 as ProjectTimeMs,
+    rangeEndMs = 120_000 as ProjectTimeMs,
+    playing = false,
+    trackLabel = "",
+    trackName = "",
+    trackDetail = "",
+    expectedCount = 0,
+    onSeek = () => {},
+    onSeekTarget = () => {},
+    onOpenMapping = () => {},
+    onError = () => {},
+  }: {
+    archivePath?: string;
+    desktopRuntime?: boolean;
+    live?: boolean;
+    editor?: boolean;
+    projectTimeMs?: ProjectTimeMs;
+    rangeStartMs?: ProjectTimeMs;
+    rangeEndMs?: ProjectTimeMs;
+    playing?: boolean;
+    trackLabel?: string;
+    trackName?: string;
+    trackDetail?: string;
+    expectedCount?: number;
+    onSeek?: (milliseconds: ProjectTimeMs, final: boolean) => void | Promise<void>;
+    onSeekTarget?: (milliseconds: ProjectTimeMs, final?: boolean) => void;
+    onOpenMapping?: () => void;
+    onError?: (message: string) => void;
+  } = $props();
 
   const pageSize = 100;
   const featureOptions: TimelineFeature[] = ["color", "ruby", "drcs", "gaiji", "accessibility"];
-  let records: TimelineEvent[] = [];
-  let filters = new Set<TimelineFeature>();
-  let loadedArchive = "";
-  let loading = false;
-  let exhausted = false;
-  let refreshTimer: ReturnType<typeof setInterval> | undefined;
-  let loadedEditorStartMs = Number.NaN;
-  let loadedEditorEndMs = Number.NaN;
+  let records: TimelineEvent[] = $state([]);
+  let filters = $state(new Set<TimelineFeature>());
+  let loadedArchive = $state("");
+  let loading = $state(false);
+  let exhausted = $state(false);
+  let loadedEditorStartMs = $state(Number.NaN);
+  let loadedEditorEndMs = $state(Number.NaN);
   let editorRequestKey = "";
-  let loadedFilterKey = "";
-  let loadedLive = false;
+  let loadedFilterKey = $state("");
+  let loadedLive = $state(false);
   // Event rows are re-rendered whenever the playhead moves. Keep the rich
   // text segmentation out of that hot path: highlights are immutable for an
   // indexed archive event, so recomputing them on every 500 ms playback tick
@@ -53,15 +71,15 @@
   }>();
   // A 30 second default window keeps typical ARIB caption events readable;
   // users can still zoom out to the full programme or into frame-scale work.
-  let zoom = 4;
-  let scrubbing = false;
+  let zoom = $state(4);
+  let scrubbing = $state(false);
   let dragStartX = 0;
   let dragStartTimeMs = 0;
   let dragWindowSpanMs = 0;
   let dragWidth = 1;
   let dragMoved = false;
   let scrubStartedOnEvent = false;
-  let dragTargetTimeMs = 0;
+  let dragTargetTimeMs = $state(0);
   // Pointer capture allows a drag that starts on an event bar to continue
   // across the whole track. Suppress the synthetic click emitted after such
   // a drag so it cannot jump back to the event's begin time.
@@ -69,13 +87,13 @@
   let seekFrame: number | undefined;
   let pendingSeekTarget: number | null = null;
   let resumeFollowAfterScrub = false;
-  let scrollStartMs = 0;
-  let followPlayhead = true;
-  let layoutStartMs = 0;
-  let layoutSpanMs = 120_000;
-  let scrollbar: HTMLDivElement;
-  let scrollbarThumb: HTMLSpanElement;
-  let scrollbarDragging = false;
+  let scrollStartMs = $state(0);
+  let followPlayhead = $state(true);
+  let layoutStartMs = $state(0);
+  let layoutSpanMs = $state(120_000);
+  let scrollbar: HTMLDivElement | undefined = $state();
+  let scrollbarThumb: HTMLSpanElement | undefined = $state();
+  let scrollbarDragging = $state(false);
   let scrollbarPointerId = -1;
   let scrollbarGrabOffset = 0;
 
@@ -108,21 +126,23 @@
   // the timeline. Do not let whichever events arrived first expand the ruler:
   // that makes the same timestamp occupy different percentages in each
   // control and is the source of the apparent ruler/player drift.
-  $: timelineTimeMs = scrubbing ? dragTargetTimeMs : projectTimeMs;
-  $: timelineStartMs = Math.max(0, Math.min(rangeStartMs, rangeEndMs));
-  $: timelineEndMs = Math.max(timelineStartMs + 5_000, rangeEndMs);
-  $: timelineSpanMs = timelineEndMs - timelineStartMs;
-  $: minimumZoom = Math.min(.25, 120_000 / timelineSpanMs);
-  $: viewSpanMs = Math.min(timelineSpanMs, Math.max(5_000, 120_000 / zoom));
-  $: scrollMaximumMs = Math.max(0, timelineSpanMs - viewSpanMs);
+  const timelineTimeMs = $derived(scrubbing ? dragTargetTimeMs : projectTimeMs);
+  const timelineStartMs = $derived(Math.max(0, Math.min(rangeStartMs, rangeEndMs)));
+  const timelineEndMs = $derived(Math.max(timelineStartMs + 5_000, rangeEndMs));
+  const timelineSpanMs = $derived(timelineEndMs - timelineStartMs);
+  const minimumZoom = $derived(Math.min(.25, 120_000 / timelineSpanMs));
+  const viewSpanMs = $derived(Math.min(timelineSpanMs, Math.max(5_000, 120_000 / zoom)));
+  const scrollMaximumMs = $derived(Math.max(0, timelineSpanMs - viewSpanMs));
   const clampViewStart = (value: number) =>
     Math.max(timelineStartMs, Math.min(timelineStartMs + scrollMaximumMs, value));
   // In follow and drag modes the time axis moves beneath a normally fixed
   // centre playhead. Programme boundaries are the only natural exception.
-  $: viewStartMs = followPlayhead || scrubbing
-    ? clampViewStart(timelineTimeMs - viewSpanMs / 2)
-    : clampViewStart(scrollStartMs);
-  $: visibleEndMs = viewStartMs + viewSpanMs;
+  const viewStartMs = $derived(
+    followPlayhead || scrubbing
+      ? clampViewStart(timelineTimeMs - viewSpanMs / 2)
+      : clampViewStart(scrollStartMs),
+  );
+  const visibleEndMs = $derived(viewStartMs + viewSpanMs);
   function ensureLayoutWindow() {
     const desiredSpan = Math.min(timelineSpanMs, viewSpanMs * 3);
     // Keep three viewports mounted and rebase only after three quarters of a
@@ -142,34 +162,57 @@
       Math.min(timelineEndMs - desiredSpan, viewStartMs - (desiredSpan - viewSpanMs) / 2),
     );
   }
-  $: { viewStartMs; visibleEndMs; viewSpanMs; timelineStartMs; timelineEndMs; ensureLayoutWindow(); }
-  $: layoutEndMs = layoutStartMs + layoutSpanMs;
+  $effect(() => {
+    // Track exactly what the legacy reactive statement listed. The layout
+    // window itself is written by this call, so reading it must stay untracked.
+    void viewStartMs;
+    void visibleEndMs;
+    void viewSpanMs;
+    void timelineStartMs;
+    void timelineEndMs;
+    untrack(ensureLayoutWindow);
+  });
+  const layoutEndMs = $derived(layoutStartMs + layoutSpanMs);
   // `hasMore` means the native 500-item density cap was reached; it must not
   // cause an immediate retry of the identical range. Coverage changes are
   // the sole trigger, otherwise a dense archive becomes an infinite IPC loop.
-  $: editorWindowNeedsLoad = loadedArchive !== archivePath
-    || !Number.isFinite(loadedEditorStartMs)
-    || layoutStartMs < loadedEditorStartMs
-    || layoutEndMs > loadedEditorEndMs;
-  $: visibleRecords = records.filter((item) => item.endMs > layoutStartMs && item.beginMs < layoutEndMs && (!item.trackId || !trackLabel || item.trackId === trackLabel));
-  $: tickStepMs = viewSpanMs / 4;
-  $: tickPrecision = tickStepMs % 1_000 === 0 ? 0 : tickStepMs % 100 === 0 ? 1 : tickStepMs % 10 === 0 ? 2 : 3;
-  $: firstLayoutTickMs = Math.ceil(layoutStartMs / tickStepMs) * tickStepMs;
-  $: ticks = Array.from(
-    { length: Math.max(0, Math.floor((layoutEndMs - firstLayoutTickMs) / tickStepMs) + 1) },
-    (_, index) => {
-      const time = firstLayoutTickMs + index * tickStepMs;
-      return { time, percent: (time - layoutStartMs) / layoutSpanMs * 100 };
-    },
+  const editorWindowNeedsLoad = $derived(
+    loadedArchive !== archivePath
+      || !Number.isFinite(loadedEditorStartMs)
+      || layoutStartMs < loadedEditorStartMs
+      || layoutEndMs > loadedEditorEndMs,
   );
-  $: zoomPercent = Math.max(1, Math.round(zoom * 50));
-  $: scrollbarThumbPercent = Math.max(7, Math.min(100, viewSpanMs / timelineSpanMs * 100));
-  $: scrollbarThumbLeft = scrollMaximumMs <= 0 ? 0 : (viewStartMs - timelineStartMs) / scrollMaximumMs * (100 - scrollbarThumbPercent);
-  $: cursorPositionPercent = Math.max(0, Math.min(100, ((timelineTimeMs - viewStartMs) / viewSpanMs) * 100));
-  $: playheadVisible = timelineTimeMs >= viewStartMs && timelineTimeMs <= visibleEndMs;
-  $: motionLayerStyle = `width:${layoutSpanMs / viewSpanMs * 100}%;transform:translate3d(${(layoutStartMs - viewStartMs) / layoutSpanMs * 100}%,0,0);`;
-  $: activeRecordIndex = buildActiveRecordIndex(visibleRecords);
-  $: activeRecord = findActiveRecord(activeRecordIndex, timelineTimeMs);
+  const visibleRecords = $derived(
+    records.filter((item) => item.endMs > layoutStartMs && item.beginMs < layoutEndMs && (!item.trackId || !trackLabel || item.trackId === trackLabel)),
+  );
+  const tickStepMs = $derived(viewSpanMs / 4);
+  const tickPrecision = $derived(
+    tickStepMs % 1_000 === 0 ? 0 : tickStepMs % 100 === 0 ? 1 : tickStepMs % 10 === 0 ? 2 : 3,
+  );
+  const firstLayoutTickMs = $derived(Math.ceil(layoutStartMs / tickStepMs) * tickStepMs);
+  const ticks = $derived(
+    Array.from(
+      { length: Math.max(0, Math.floor((layoutEndMs - firstLayoutTickMs) / tickStepMs) + 1) },
+      (_, index) => {
+        const time = firstLayoutTickMs + index * tickStepMs;
+        return { time, percent: (time - layoutStartMs) / layoutSpanMs * 100 };
+      },
+    ),
+  );
+  const zoomPercent = $derived(Math.max(1, Math.round(zoom * 50)));
+  const scrollbarThumbPercent = $derived(Math.max(7, Math.min(100, viewSpanMs / timelineSpanMs * 100)));
+  const scrollbarThumbLeft = $derived(
+    scrollMaximumMs <= 0 ? 0 : (viewStartMs - timelineStartMs) / scrollMaximumMs * (100 - scrollbarThumbPercent),
+  );
+  const cursorPositionPercent = $derived(
+    Math.max(0, Math.min(100, ((timelineTimeMs - viewStartMs) / viewSpanMs) * 100)),
+  );
+  const playheadVisible = $derived(timelineTimeMs >= viewStartMs && timelineTimeMs <= visibleEndMs);
+  const motionLayerStyle = $derived(
+    `width:${layoutSpanMs / viewSpanMs * 100}%;transform:translate3d(${(layoutStartMs - viewStartMs) / layoutSpanMs * 100}%,0,0);`,
+  );
+  const activeRecordIndex = $derived(buildActiveRecordIndex(visibleRecords));
+  const activeRecord = $derived(findActiveRecord(activeRecordIndex, timelineTimeMs));
   const eventNodes = new Map<number, HTMLButtonElement>();
   let highlightedEventIndex: number | undefined;
   function registerEventNode(node: HTMLButtonElement, index: number) {
@@ -188,7 +231,7 @@
     highlightedEventIndex = index;
     if (index !== undefined) eventNodes.get(index)?.classList.add("current");
   }
-  $: highlightActiveEvent(activeRecord?.index);
+  $effect(() => highlightActiveEvent(activeRecord?.index));
   const visibleFeatures = (item: TimelineEvent) => item.features.filter((feature): feature is Exclude<TimelineFeature, "position"> => feature !== "position");
   const eventColor = (item: TimelineEvent) => featureMeta[visibleFeatures(item)[0]]?.color ?? "var(--rw-accent)";
   const sameTimelineRecords = (left: TimelineEvent[], right: TimelineEvent[]) =>
@@ -244,15 +287,17 @@
   // not of playback time. Keep their strings stable between samples so a
   // 100 Hz playhead update does not force every event button through another
   // style calculation.
-  $: positionedRecords = visibleRecords.map((item) => ({
-    item,
-    features: visibleFeatures(item),
-    style: `${barStyle(item, layoutStartMs, layoutSpanMs)}--event-color:${eventColor(item)};`,
-  }));
+  const positionedRecords = $derived(
+    visibleRecords.map((item) => ({
+      item,
+      features: visibleFeatures(item),
+      style: `${barStyle(item, layoutStartMs, layoutSpanMs)}--event-color:${eventColor(item)};`,
+    })),
+  );
   // The event-list view is also mounted while playback is active. Precompute
   // rich-text segments only when records change so a playhead update does not
   // repeatedly walk every caption's Unicode/highlight ranges.
-  $: eventListItems = records.map((item) => ({ item, segments: textSegments(item) }));
+  const eventListItems = $derived(records.map((item) => ({ item, segments: textSegments(item) })));
 
   async function loadPage(reset: boolean) {
     if (!desktopRuntime || !archivePath || loading || (!reset && exhausted && !live)) return;
@@ -473,9 +518,9 @@
     followPlayhead = false;
   }
 
-  function scrollbarValue(event: PointerEvent) {
-    const trackBounds = scrollbar.getBoundingClientRect();
-    const thumbWidth = scrollbarThumb.getBoundingClientRect().width;
+  function scrollbarValue(event: PointerEvent, track: HTMLDivElement, thumb: HTMLSpanElement) {
+    const trackBounds = track.getBoundingClientRect();
+    const thumbWidth = thumb.getBoundingClientRect().width;
     const available = Math.max(1, trackBounds.width - thumbWidth);
     const ratio = Math.max(0, Math.min(1, (event.clientX - trackBounds.left - scrollbarGrabOffset) / available));
     return Math.round(timelineStartMs + ratio * scrollMaximumMs);
@@ -483,25 +528,31 @@
 
   function beginScrollbar(event: PointerEvent) {
     if (scrollMaximumMs <= 0) return;
-    const thumbBounds = scrollbarThumb.getBoundingClientRect();
-    scrollbarGrabOffset = event.target === scrollbarThumb
+    const track = scrollbar;
+    const thumb = scrollbarThumb;
+    if (!track || !thumb) return;
+    const thumbBounds = thumb.getBoundingClientRect();
+    scrollbarGrabOffset = event.target === thumb
       ? event.clientX - thumbBounds.left
       : thumbBounds.width / 2;
     scrollbarDragging = true;
     scrollbarPointerId = event.pointerId;
-    scrollbar.setPointerCapture(event.pointerId);
-    setViewStart(scrollbarValue(event));
+    track.setPointerCapture(event.pointerId);
+    setViewStart(scrollbarValue(event, track, thumb));
   }
 
   function moveScrollbar(event: PointerEvent) {
     if (!scrollbarDragging || event.pointerId !== scrollbarPointerId) return;
-    setViewStart(scrollbarValue(event));
+    const track = scrollbar;
+    const thumb = scrollbarThumb;
+    if (!track || !thumb) return;
+    setViewStart(scrollbarValue(event, track, thumb));
   }
 
   function endScrollbar(event: PointerEvent) {
     if (!scrollbarDragging || event.pointerId !== scrollbarPointerId) return;
     scrollbarDragging = false;
-    if (scrollbar.hasPointerCapture(event.pointerId)) scrollbar.releasePointerCapture(event.pointerId);
+    if (scrollbar?.hasPointerCapture(event.pointerId)) scrollbar.releasePointerCapture(event.pointerId);
     scrollbarPointerId = -1;
   }
 
@@ -581,17 +632,32 @@
     return segments;
   }
 
-  $: filterKey = [...filters].sort().join(",");
-  $: if (!editor && desktopRuntime && archivePath && (archivePath !== loadedArchive || filterKey !== loadedFilterKey || loadedLive !== live)) {
-    loadedFilterKey = filterKey;
-    loadedLive = live;
-    void (live ? loadRecentPage() : loadPage(true));
-  }
-  $: if (editor && desktopRuntime && archivePath && !loading && editorWindowNeedsLoad) void loadEditorWindow();
-  $: if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = undefined; }
-  $: if (desktopRuntime && live && archivePath) refreshTimer = setInterval(() => void (editor ? loadEditorWindow(true) : loadRecentPage()), 1_500);
+  const filterKey = $derived([...filters].sort().join(","));
+  $effect(() => {
+    if (editor || !desktopRuntime || !archivePath) return;
+    if (archivePath === loadedArchive && filterKey === loadedFilterKey && loadedLive === live) return;
+    untrack(() => {
+      loadedFilterKey = filterKey;
+      loadedLive = live;
+      void (live ? loadRecentPage() : loadPage(true));
+    });
+  });
+  $effect(() => {
+    if (!editor || !desktopRuntime || !archivePath || loading || !editorWindowNeedsLoad) return;
+    untrack(() => void loadEditorWindow());
+  });
+  // One effect owns the poll, so the interval is torn down by its cleanup
+  // instead of by a second reactive statement that had to run first.
+  $effect(() => {
+    if (!desktopRuntime || !live || !archivePath) return;
+    const pollEditor = editor;
+    const timer = setInterval(
+      () => void (pollEditor ? loadEditorWindow(true) : loadRecentPage()),
+      1_500,
+    );
+    return () => clearInterval(timer);
+  });
   onDestroy(() => {
-    if (refreshTimer) clearInterval(refreshTimer);
     if (seekFrame !== undefined) cancelAnimationFrame(seekFrame);
     if (scrubbing || pendingSeekTarget !== null) {
       scrubbing = false;

@@ -3,21 +3,30 @@
   import { onMount } from "svelte";
   import { liquidPopover } from "../lib/motion";
 
-  export let value = "";
-  export let options: { value: string; label: string }[] = [];
-  export let label = "";
-  export let disabled = false;
-  export let onChange: (value: string) => void = () => {};
-  export let onOpen: () => void | Promise<void> = () => {};
+  let {
+    value = $bindable(""),
+    options = [],
+    label = "",
+    disabled = false,
+    onChange = () => {},
+    onOpen = () => {},
+  }: {
+    value?: string;
+    options?: { value: string; label: string }[];
+    label?: string;
+    disabled?: boolean;
+    onChange?: (value: string) => void;
+    onOpen?: () => void | Promise<void>;
+  } = $props();
 
   let root: HTMLDivElement;
   let trigger: HTMLButtonElement;
-  let open = false;
-  let keyboardOpen = false;
-  let openUp = false;
-  let alignRight = true;
+  let open = $state(false);
+  let keyboardOpen = $state(false);
+  let openUp = $state(false);
+  let alignRight = $state(true);
   let itemButtons: HTMLButtonElement[] = [];
-  $: selectedLabel = options.find((option) => option.value === value)?.label ?? value;
+  const selectedLabel = $derived(options.find((option) => option.value === value)?.label ?? value);
 
   function close(restoreFocus = false) {
     open = false;

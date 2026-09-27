@@ -82,3 +82,20 @@ An Unsigned Windows Alpha may proceed only when every required row is passed or
 the release notes explicitly identify a skipped private-corpus gate as allowed
 by `release-checklist.md`. A failed required row is a release blocker, not a
 reason to weaken the matrix.
+
+
+## One multilingual installer per format
+
+Release assets contain one setup executable and one MSI, both without language suffixes and both installing per machine. Setup selects English, Simplified Chinese, Traditional Chinese or Japanese from the system language. The MSI defaults to English and embeds transforms for the other three languages; double-clicking does not automatically select an embedded language. Select one transform in the installation command:
+
+```powershell
+msiexec /i "ResubWinny_VERSION_x64.msi" TRANSFORMS=:zh-CN.mst
+msiexec /i "ResubWinny_VERSION_x64.msi" TRANSFORMS=:zh-TW.mst
+msiexec /i "ResubWinny_VERSION_x64.msi" TRANSFORMS=:ja-JP.mst
+```
+
+Replace the example filename with the actual MSI filename. Omit `TRANSFORMS` for English. The transform changes installer UI language, not the application language setting.
+
+`scripts/build.ps1` generates four intermediate localized MSIs and calls `merge-msi-languages.ps1` to produce one MSI. The merge checks product identity, version, installed files and per-machine scope, then extracts and applies all three transforms from the final file. Localized intermediate MSIs are deleted only after validation passes. `package-windows-alpha.ps1` rechecks embedded languages and rejects multiple MSIs or setup executables.
+
+[Windows Installer embedded transform rules](https://learn.microsoft.com/en-us/windows/win32/msi/embedded-transforms).

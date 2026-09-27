@@ -25,6 +25,7 @@ export class SourceSession {
   constructor(private readonly hooks: SourceSessionHooks) {}
 
   begin() { return ++this.generation; }
+  currentGeneration() { return this.generation; }
   isCurrent(generation: number) { return generation === this.generation; }
   invalidate() { ++this.generation; }
 

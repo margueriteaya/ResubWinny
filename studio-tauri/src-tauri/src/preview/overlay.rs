@@ -129,7 +129,7 @@ pub fn render_preview_at(
 
 /// Synchronizes the native caption plane against mpv's authoritative playback
 /// time. The UI may poll this low-frequency operation, but never estimates
-/// media time, lays out subtitles, or sends video frames through the WebView.
+/// media time, lays out subtitles, or transforms the decoded video frames.
 #[tauri::command]
 pub fn sync_preview_overlay(
     state: State<'_, Arc<AppState>>,

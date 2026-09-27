@@ -2,7 +2,7 @@ import {
   backend,
   type BroadcastMetadata,
   type PlaybackTimeMapping,
-  type PreviewRect,
+  type PreviewSurfaceSize,
 } from "../../backend";
 import { mediaTimeMs as asMediaTimeMs, type MediaTimeMs } from "./time-mapping";
 
@@ -13,6 +13,7 @@ export type PreviewCallbacks = {
   setMediaTime: (timeMs: MediaTimeMs | null) => void;
   setDuration: (timeMs: MediaTimeMs | null) => void;
   setPaused: (paused: boolean) => void;
+  volume: () => number;
   setBroadcastMetadata: (metadata: BroadcastMetadata) => void;
   selectedServiceId: () => number | undefined;
   onError: (reason: unknown) => void;
@@ -52,10 +53,9 @@ export class NativePreviewController {
   private lastBroadcastSyncAt = 0;
   private lastCaptionSyncAt = 0;
   private source = "";
-  private rect: PreviewRect | null = null;
+  private rect: PreviewSurfaceSize | null = null;
   private lastTimeSeconds: number | null = null;
   private lastPaused = true;
-  private volume = 100;
   private consecutiveSyncFailures = 0;
   private recovering = false;
   private recoveryToken = 0;
@@ -127,7 +127,7 @@ export class NativePreviewController {
 
   async start(
     source: string,
-    rect: PreviewRect,
+    rect: PreviewSurfaceSize,
     setMapping: (mapping: PlaybackTimeMapping) => void,
     callbacks: PreviewCallbacks,
   ): Promise<boolean> {
@@ -175,6 +175,10 @@ export class NativePreviewController {
         );
       }
       if (!this.isCurrent(callbacks, generation)) return false;
+      // Applying session volume must not delay the start acknowledgement.
+      void backend.setPreviewVolume(callbacks.volume()).catch((reason) => {
+        if (this.isCurrent(callbacks, generation)) callbacks.onError(reason);
+      });
       callbacks.onNotice("notice.previewStarted");
       return true;
     } finally {
@@ -182,7 +186,7 @@ export class NativePreviewController {
     }
   }
 
-  async resize(rect: PreviewRect) {
+  async resize(rect: PreviewSurfaceSize) {
     if (this.running) {
       this.rect = { ...rect };
       await backend.resizePreview(rect);
@@ -190,8 +194,7 @@ export class NativePreviewController {
   }
 
   async setVolume(volume: number) {
-    this.volume = Math.min(100, Math.max(0, volume));
-    if (this.running) await backend.setPreviewVolume(this.volume);
+    if (this.running) await backend.setPreviewVolume(Math.min(100, Math.max(0, volume)));
   }
 
   async stop(callbacks: Pick<PreviewCallbacks, "onNotice">) {
@@ -380,15 +383,24 @@ export class NativePreviewController {
     this.recovering = true;
     const token = ++this.recoveryToken;
     try {
+      const recoveryVolume = callbacks.volume();
       const recovery = backend.recoverPreview(
         this.source,
         this.rect,
         this.lastTimeSeconds,
         this.lastPaused,
-        this.volume,
+        recoveryVolume,
       );
       this.recoveryPromise = recovery;
       await recovery;
+      if (!this.isCurrent(callbacks, generation)) return;
+      if (callbacks.volume() !== recoveryVolume) {
+        try {
+          await backend.setPreviewVolume(callbacks.volume());
+        } catch (reason) {
+          callbacks.onError(reason);
+        }
+      }
       if (!this.isCurrent(callbacks, generation)) return;
       this.consecutiveSyncFailures = 0;
       callbacks.onNotice("notice.previewRecovered");

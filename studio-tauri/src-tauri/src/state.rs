@@ -61,73 +61,39 @@ impl Default for AppState {
 #[cfg(windows)]
 pub struct PlayerHost {
     pub host: isize,
-    pub owner: isize,
+    pub app: tauri::AppHandle,
+    pub frame_pool: Arc<crate::preview::frame_bridge::PreviewFramePool>,
     pub source: PathBuf,
     pub player: NativePlayer,
-    pub overlay_path: PathBuf,
-    pub render_fallback_reason: Option<String>,
 }
 
 #[cfg(windows)]
-pub enum NativePlayer {
-    Client(crate::libmpv::LibMpvPlayer),
-    Render(crate::libmpv::LibMpvRenderWorker),
-}
+pub struct NativePlayer(pub(crate) crate::libmpv::LibMpvRenderWorker);
 
 #[cfg(windows)]
 impl NativePlayer {
     pub fn command(&self, arguments: &[&str]) -> Result<(), String> {
-        match self {
-            Self::Client(player) => player.command(arguments),
-            Self::Render(worker) => worker.command(arguments),
-        }
+        self.0.command(arguments)
     }
 
     pub fn time_seconds(&self) -> Result<Option<f64>, String> {
-        match self {
-            Self::Client(player) => player.time_seconds(),
-            Self::Render(worker) => worker.time_seconds(),
-        }
+        self.0.time_seconds()
     }
 
     pub fn duration_seconds(&self) -> Result<Option<f64>, String> {
-        match self {
-            Self::Client(player) => player.duration_seconds(),
-            Self::Render(worker) => worker.duration_seconds(),
-        }
+        self.0.duration_seconds()
     }
 
     pub fn paused(&self) -> Result<Option<bool>, String> {
-        match self {
-            Self::Client(player) => player.paused(),
-            Self::Render(worker) => worker.paused(),
-        }
+        self.0.paused()
     }
 
     pub fn stream_position(&self) -> Result<Option<f64>, String> {
-        match self {
-            Self::Client(player) => player.stream_position(),
-            Self::Render(worker) => worker.stream_position(),
-        }
+        self.0.stream_position()
     }
 
     pub fn resize(&self, width: i32, height: i32) {
-        if let Self::Render(worker) = self {
-            worker.resize(width, height);
-        }
-    }
-
-    pub fn osd_dimensions(&self) -> Result<Option<(i32, i32)>, String> {
-        match self {
-            Self::Client(player) => player.osd_dimensions(),
-            // The render route maps the complete logical caption plane to the
-            // display-aspect-correct video viewport on its WGL thread.
-            Self::Render(_) => Ok(None),
-        }
-    }
-
-    pub fn is_render(&self) -> bool {
-        matches!(self, Self::Render(_))
+        self.0.resize(width, height);
     }
 
     pub fn set_caption_overlay(
@@ -138,34 +104,19 @@ impl NativePlayer {
         x: i32,
         y: i32,
     ) -> Result<(), String> {
-        match self {
-            Self::Client(_) => {
-                Err("The client preview does not accept native texture uploads.".into())
-            }
-            Self::Render(worker) => worker.set_caption_overlay(pixels, width, height, x, y),
-        }
+        self.0.set_caption_overlay(pixels, width, height, x, y)
     }
 
     pub fn clear_caption_overlay(&self) -> Result<(), String> {
-        match self {
-            Self::Client(_) => {
-                Err("The client preview does not own a native caption texture.".into())
-            }
-            Self::Render(worker) => worker.clear_caption_overlay(),
-        }
+        self.0.clear_caption_overlay()
     }
 
     pub fn stop(self) {
-        if let Self::Render(worker) = self {
-            worker.stop();
-        }
+        self.0.stop();
     }
 
-    pub fn render_diagnostics(&self) -> Option<crate::libmpv::RenderWorkerStats> {
-        match self {
-            Self::Client(_) => None,
-            Self::Render(worker) => Some(worker.diagnostics()),
-        }
+    pub fn render_diagnostics(&self) -> crate::libmpv::RenderWorkerStats {
+        self.0.diagnostics()
     }
 }
 #[cfg(not(windows))]

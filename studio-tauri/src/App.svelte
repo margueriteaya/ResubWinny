@@ -1,12 +1,16 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from "svelte";
+  import { onMount, onDestroy, tick, untrack } from "svelte";
   import { TriangleAlert, X } from "@lucide/svelte";
   import { noticeIn, noticeOut } from "./lib/motion";
   import HomePage from "./features/home/HomePage.svelte";
   import OnboardingPage from "./features/onboarding/OnboardingPage.svelte";
+  import { BatchTaskSession } from "./features/batch/task-session";
   import { OnboardingSession } from "./features/onboarding/session";
+  import { PreviewNavigationSession } from "./features/tasks/preview-navigation-session";
   import { PreviewSession } from "./features/tasks/preview-session";
+  import { clampPreviewVolume, toggledPreviewVolume } from "./features/tasks/player-volume";
   import { SourceSession } from "./features/tasks/source-session";
+  import { ExportWorkflow } from "./features/tasks/export-workflow";
   import { ExportSession } from "./features/tasks/export-session";
   import { TaskEventSession } from "./features/tasks/event-session";
   import type { FeatureKnowledge, RuntimeExportConflicts } from "./features/tasks/export-assessment";
@@ -76,26 +80,37 @@
   import { restoreCachedTheme } from "./features/settings/preferences";
   import { PreferencesSession } from "./features/settings/session";
 
-  let page: Page = "home";
+  let page: Page = $state("home");
+  // The session only needs the page the shell starts on.
+  /* svelte-ignore state_referenced_locally */
   const navigationSession = new NavigationSession(page);
-  let TaskWorkspaceComponent: any = null;
-  let BatchPageComponent: any = null;
-  let DrcsPageComponent: any = null;
-  let SettingsPageComponent: any = null;
-  let onboardingVisible = false;
-  let onboardingRequired = false;
-  let onboardingSaving = false;
-  let onboardingError = "";
-  let startupReady = false;
+  let TaskWorkspaceComponent: any = $state(null);
+  let BatchPageComponent: any = $state(null);
+  let DrcsPageComponent: any = $state(null);
+  let SettingsPageComponent: any = $state(null);
+  let onboardingVisible = $state(false);
+  let onboardingRequired = $state(false);
+  let onboardingSaving = $state(false);
+  let onboardingError = $state("");
+  let startupReady = $state(false);
   const sidebarCompactQuery = "(max-width: 1250px)";
   const layoutSession = new LayoutSession(typeof window !== "undefined" && window.matchMedia(sidebarCompactQuery).matches);
-  let { sidebarCollapsed, sidebarAutoCollapsed, compactTaskViewport, compactSourceOpen, compactOutputOpen } = layoutSession.state;
+  let sidebarCollapsed = $state(layoutSession.state.sidebarCollapsed);
+  let sidebarAutoCollapsed = $state(layoutSession.state.sidebarAutoCollapsed);
+  let compactTaskViewport = $state(layoutSession.state.compactTaskViewport);
+  let compactSourceOpen = $state(layoutSession.state.compactSourceOpen);
+  let compactOutputOpen = $state(layoutSession.state.compactOutputOpen);
   function syncLayout() {
-    ({ sidebarCollapsed, sidebarAutoCollapsed, compactTaskViewport, compactSourceOpen, compactOutputOpen } = layoutSession.state);
+    const next = layoutSession.state;
+    sidebarCollapsed = next.sidebarCollapsed;
+    sidebarAutoCollapsed = next.sidebarAutoCollapsed;
+    compactTaskViewport = next.compactTaskViewport;
+    compactSourceOpen = next.compactSourceOpen;
+    compactOutputOpen = next.compactOutputOpen;
   }
-  let inspection: Inspection | null = null;
-  let error = "";
-  let isInspecting = false;
+  let inspection: Inspection | null = $state(null);
+  let error = $state("");
+  let isInspecting = $state(false);
   const exportSession = new ExportSession({
     beginExport: () => {
       isExporting = true;
@@ -173,28 +188,28 @@
     },
     refreshBatch: () => void refreshBatchJobs(),
   });
-  let isExporting = false;
-  let previewIndexing = false;
-  let exportPending = false;
-  let isPaused = false;
-  let logs: string[] = [];
+  let isExporting = $state(false);
+  let previewIndexing = $state(false);
+  let exportPending = $state(false);
+  let isPaused = $state(false);
+  let logs: string[] = $state([]);
   let lastLoggedProgressBucket = -1;
-  let progress = 0;
-  let bytesRead = 0;
-  let warnings = 0;
-  let captions = 0;
-  let featureKnowledge: Record<string, FeatureKnowledge> = {};
-  let exportConflicts: Record<string, RuntimeExportConflicts> = {};
-  let selectedFormats = new Set<ExportFormat>(["ASS"]);
-  let preservation: ExportPreservation = {
+  let progress = $state(0);
+  let bytesRead = $state(0);
+  let warnings = $state(0);
+  let captions = $state(0);
+  let featureKnowledge: Record<string, FeatureKnowledge> = $state({});
+  let exportConflicts: Record<string, RuntimeExportConflicts> = $state({});
+  let selectedFormats = $state(new Set<ExportFormat>(["ASS"]));
+  let preservation: ExportPreservation = $state({
     position: true,
     color: true,
     ruby: true,
     drcs: true,
     gaiji: true,
     accessibility: true,
-  };
-  let appSettings: AppSettings = {
+  });
+  let appSettings: AppSettings = $state({
     uiFont: "system",
     captionFont: "arib",
     defaultFormat: "ASS",
@@ -209,38 +224,43 @@
       outputCollapsed: false,
     },
     onboardingVersion: 0,
-  };
-  let settingsPanel: "general" | "typography" | "output" | "playback" | "about" | "licenses" = "general";
-  let outputDirectory = "";
-  let taskTab: "preview" | "events" | "diagnostics" = "preview";
-  let currentJobId = "";
-  let canResumeCurrentJob = false;
-  let resumeBusy = false;
-  let diagnosticsCount = 0;
-  let selectedTracks = new Set<string>();
-  let history: TaskRecord[] = [];
-  let savedDrcsMappings: Record<string, SavedDrcsMapping> = {};
+  });
+  let settingsPanel: "general" | "typography" | "output" | "playback" | "about" | "licenses" = $state("general");
+  let outputDirectory = $state("");
+  let taskTab: "preview" | "events" | "diagnostics" = $state("preview");
+  let currentJobId = $state("");
+  let canResumeCurrentJob = $state(false);
+  let resumeBusy = $state(false);
+  let diagnosticsCount = $state(0);
+  let selectedTracks = $state(new Set<string>());
+  let history: TaskRecord[] = $state([]);
+  let savedDrcsMappings: Record<string, SavedDrcsMapping> = $state({});
   // This node exists only while the Tasks preview tab is mounted.  Keeping a
   // nullable reference prevents a destroyed page's host from being reused by
   // a later native-preview start.
-  let nativePreview: HTMLDivElement | null = null;
-  let playerRunning = false;
-  let playerPaused = true;
-  let previewAvailable: boolean | null = null;
-  let projectCursorMs: ProjectTimeMs = asProjectTimeMs(0);
-  let renderBusy = false;
-  let archivePath = "";
-  let playbackMapping: PlaybackTimeMapping = {
+  let nativePreview: HTMLDivElement | null = $state(null);
+  let playerRunning = $state(false);
+  let playerPaused = $state(true);
+  let previewVolume = $state(100);
+  let lastNonZeroPreviewVolume = $state(100);
+  let previewAvailable: boolean | null = $state(null);
+  let projectCursorMs: ProjectTimeMs = $state(asProjectTimeMs(0));
+  let renderBusy = $state(false);
+  let archivePath = $state("");
+  let playbackMapping: PlaybackTimeMapping = $state({
     segmentId: "recording-origin",
     mediaAnchorMs: 0,
     projectAnchorMs: 0,
     rateNumerator: 1,
     rateDenominator: 1,
-  };
-  let appliedPlaybackMapping: PlaybackTimeMapping = { ...playbackMapping };
-  let playbackMappingBusy = false;
-  let mediaTimeMs: MediaTimeMs | null = null;
-  let previewDurationMs: MediaTimeMs | null = null;
+  });
+  // Seeded from the initial mapping; from then on it tracks what the backend
+  // last accepted, which is deliberately not the edited mapping.
+  /* svelte-ignore state_referenced_locally */
+  let appliedPlaybackMapping: PlaybackTimeMapping = $state({ ...playbackMapping });
+  let playbackMappingBusy = $state(false);
+  let mediaTimeMs: MediaTimeMs | null = $state(null);
+  let previewDurationMs: MediaTimeMs | null = $state(null);
   const runtimeSession = new TaskRuntimeSession({
     setEventState: (state) => ({ archivePath, bytesRead, captions, isExporting, isPaused, lastLoggedProgressBucket, logs, previewIndexing, progress, warnings, featureKnowledge, exportConflicts } = state),
     setMediaTime: (value) => (mediaTimeMs = value),
@@ -284,27 +304,26 @@
     });
   }
 
-  $: if (page === "batch" && !BatchPageComponent)
-    void import("./features/batch/BatchPage.svelte").then((module) => BatchPageComponent = module.default);
-  $: if (page === "tasks" && !TaskWorkspaceComponent)
-    void import("./features/tasks/TaskWorkspace.svelte").then((module) => TaskWorkspaceComponent = module.default);
-  $: if (page === "drcs" && !DrcsPageComponent)
-    void import("./features/drcs/DrcsPage.svelte").then((module) => DrcsPageComponent = module.default);
-  $: if (page === "settings" && !SettingsPageComponent)
-    void import("./features/settings/SettingsPage.svelte").then((module) => SettingsPageComponent = module.default);
-  // mpv owns a native surface. Once it starts, remove the WebView placeholder
-  // so the instructional layer cannot be mistaken for video state.
-  $: if (nativePreview)
-    nativePreview.classList.toggle("native-preview-active", playerRunning);
-  // A language switch deliberately remounts the WebView page tree so every
-  // legacy translation call refreshes.  Rebind the native child HWND to the
-  // replacement placeholder immediately instead of leaving a stale rectangle.
-  $: if (playerRunning && nativePreview) void resizePreview();
-  let batchInputs: BatchItem[] = [];
-  let batchRunning = false;
-  let multiTaskOutputDirectory = "";
-  let drcsGlyphs: DrcsGlyph[] = [];
-  let drcsMessage = t("drcs.selectTask");
+  $effect(() => {
+    if (page === "batch" && !BatchPageComponent)
+      void import("./features/batch/BatchPage.svelte").then((module) => BatchPageComponent = module.default);
+    if (page === "tasks" && !TaskWorkspaceComponent)
+      void import("./features/tasks/TaskWorkspace.svelte").then((module) => TaskWorkspaceComponent = module.default);
+    if (page === "drcs" && !DrcsPageComponent)
+      void import("./features/drcs/DrcsPage.svelte").then((module) => DrcsPageComponent = module.default);
+    if (page === "settings" && !SettingsPageComponent)
+      void import("./features/settings/SettingsPage.svelte").then((module) => SettingsPageComponent = module.default);
+  });
+  // A language switch remounts the page tree. Re-measure the replacement
+  // Canvas so the offscreen renderer keeps the correct physical resolution.
+  $effect(() => {
+    if (playerRunning && nativePreview) untrack(() => void resizePreview());
+  });
+  let batchInputs: BatchItem[] = $state([]);
+  let batchRunning = $state(false);
+  let multiTaskOutputDirectory = $state("");
+  let drcsGlyphs: DrcsGlyph[] = $state([]);
+  let drcsMessage = $state(t("drcs.selectTask"));
   // `isTauri()` is the supported runtime probe.  Inspecting private
   // `__TAURI_INTERNALS__.metadata` is not stable across Tauri/WebView2
   // releases and can incorrectly disable every real desktop action.
@@ -354,7 +373,7 @@
     desktopRuntime,
     subscribeTaskEvents: (handler) => backend.subscribeTaskEvents(handler),
     onTaskEvent: (payload) => taskEventSession.handle(payload),
-    playerRunning: () => playerRunning,
+    playerRunning: () => playerRunning && page === "tasks" && taskTab === "preview",
     onRecordingDrop: (source) => void loadSource(source),
     onPlayerCommand: (command) => void playerCommand(command),
     onSurfaceChange: () => void resizePreview(),
@@ -367,14 +386,14 @@
 
   const saveCaptionFont = (font: string) => preferencesSession.saveCaptionFont(font);
 
-  let supportedFormats = formatOptions(t);
-  $: {
-    $localeRevision;
+  let supportedFormats = $state(formatOptions(t));
+  $effect(() => {
+    void $localeRevision;
     supportedFormats = formatOptions(t);
-  }
+  });
 
   const bytes = formatBytes;
-  $: routeDisplayLabel = routeLabel(inspection?.routeCode, t);
+  const routeDisplayLabel = $derived.by(() => routeLabel(inspection?.routeCode, t));
   function savedPreferences(): AppSettings {
     return appSettings;
   }
@@ -410,21 +429,17 @@
     onboardingVisible = true;
   }
 
-  async function completeOnboarding(userMode: AppSettings["userMode"]) {
-    if (!onboardingRequired) { onboardingVisible = false; return; }
-    onboardingSaving = true;
-    onboardingError = "";
-    try {
-      const next = onboardingSession.completed({ ...appSettings, userMode });
-      appSettings = desktopRuntime ? await backend.updateSettings(next) : next;
-      onboardingSession.cacheCompletion();
-      onboardingVisible = false;
-      onboardingRequired = false;
-      page = "home";
-    } catch (reason) {
-      onboardingError = formatMessage("onboarding.saveFailed", { message: String(reason) });
-    } finally { onboardingSaving = false; }
-  }
+  const completeOnboarding = (userMode: AppSettings["userMode"]) => onboardingSession.finish(userMode, {
+    required: () => onboardingRequired,
+    settings: () => appSettings,
+    persist: (next) => backend.updateSettings(next),
+    setSettings: (next) => (appSettings = next),
+    setSaving: (value) => (onboardingSaving = value),
+    clearError: () => (onboardingError = ""),
+    fail: (reason) => (onboardingError = formatMessage("onboarding.saveFailed", { message: String(reason) })),
+    close: () => (onboardingVisible = false),
+    completed: () => { onboardingVisible = false; onboardingRequired = false; page = "home"; },
+  });
 
   function openOnboardingAbout() {
     onboardingVisible = false;
@@ -432,8 +447,12 @@
     selectView("settings");
   }
 
-  $: sourceInspectorCollapsed = compactTaskViewport ? !compactSourceOpen : appSettings.workspaceLayout.sourceCollapsed;
-  $: outputInspectorCollapsed = compactTaskViewport ? !compactOutputOpen : appSettings.workspaceLayout.outputCollapsed;
+  const sourceInspectorCollapsed = $derived(
+    compactTaskViewport ? !compactSourceOpen : appSettings.workspaceLayout.sourceCollapsed,
+  );
+  const outputInspectorCollapsed = $derived(
+    compactTaskViewport ? !compactOutputOpen : appSettings.workspaceLayout.outputCollapsed,
+  );
 
   function toggleSourceInspector() {
     if (compactTaskViewport) {
@@ -563,50 +582,30 @@
     await refreshResumeAvailability();
   }
 
-  async function startExport() {
-    if (!desktopRuntime) {
-      error = t("error.desktopExport");
-      return;
-    }
-    if (!inspection || isExporting || exportPending) return;
-    const activeInspection = inspection;
-    error = "";
-    if (!outputDirectory.trim()) {
-      error = t("workspace.outputDirectoryRequired");
-      return;
-    }
-    const plan = createExportPlan(activeInspection, selectedFormats, preservation, selectedTracks, outputDirectory);
-    logs = [
-      ...logs,
-      formatMessage("notice.exportStarted", { format: plan?.formats.join(", ") ?? "" }),
-      formatMessage("notice.exportOptions"),
-    ];
-    lastLoggedProgressBucket = -1;
-    if (!plan) {
-      error = t("tracks.selectionRequired");
-      return;
-    }
-    if (previewIndexing) {
-      exportPending = true;
-      try {
-        await exportSession.cancel(() => backend.cancelExportAndWait());
-        previewIndexing = false;
-      } catch (reason) {
-        exportPending = false;
-        reportBackendFailure(reason);
-        return;
-      }
-    }
-    exportPending = false;
-    await exportSession.runExport(
-      (onCreated) => startTaskExport(
-          activeInspection,
-          plan,
-          exportMappings(),
-          onCreated,
-      ),
-    );
-  }
+  const exportWorkflow = new ExportWorkflow(exportSession, {
+    desktopRuntime: () => desktopRuntime,
+    inspection: () => inspection,
+    sourceGeneration: () => sourceSession.currentGeneration(),
+    exporting: () => isExporting,
+    pending: () => exportPending,
+    indexing: () => previewIndexing,
+    outputDirectory: () => outputDirectory,
+    plan: (source) => createExportPlan(source, selectedFormats, preservation, selectedTracks, outputDirectory),
+    setPending: (value) => (exportPending = value),
+    setIndexing: (value) => (previewIndexing = value),
+    error: (code) => (error = t(code)),
+    clearError: () => (error = ""),
+    started: (plan) => {
+      logs = [...logs, formatMessage("notice.exportStarted", { format: plan.formats.join(", ") }), formatMessage("notice.exportOptions")];
+      lastLoggedProgressBucket = -1;
+    },
+    fail: reportBackendFailure,
+    cancelIndex: () => backend.cancelExportAndWait(),
+    start: (source, plan, onCreated) => startTaskExport(source, plan, exportMappings(), onCreated),
+    index: (source) => backend.startPreviewIndex(source.path, taskTrackId(source.tracks.find((track) => selectedTracks.has(taskTrackKey(track))))),
+  });
+
+  const startExport = () => exportWorkflow.start();
 
   async function chooseOutputDirectory() {
     if (!desktopRuntime || !inspection) return;
@@ -614,17 +613,7 @@
     if (selected) outputDirectory = selected;
   }
 
-  async function startPreviewIndex(expectedPath = inspection?.path ?? "") {
-    if (!desktopRuntime || !inspection || isExporting || exportPending || previewIndexing) return;
-    if (!expectedPath || inspection.path !== expectedPath) return;
-    const sourcePath = inspection.path;
-    const selected = inspection.tracks.find((track) => selectedTracks.has(taskTrackKey(track)));
-    await exportSession.runPreviewIndex(
-        () => backend.startPreviewIndex(sourcePath, taskTrackId(selected)),
-        () => inspection?.path === sourcePath,
-        () => backend.cancelExportAndWait(),
-    );
-  }
+  const startPreviewIndex = (expectedPath = inspection?.path ?? "") => exportWorkflow.index(expectedPath);
 
   async function cancelExport() {
     if (!desktopRuntime) return;
@@ -665,6 +654,7 @@
           },
           setDuration: (timeMs) => (previewDurationMs = timeMs),
           setPaused: (paused) => (playerPaused = paused),
+          volume: () => previewVolume,
           setBroadcastMetadata: (metadata) => {
             if (!inspection) return;
             inspection = {
@@ -702,49 +692,24 @@
     return previewSession.queueStop(stopPreview);
   }
 
-  async function seekRunningPreview(
-    milliseconds: MediaTimeMs,
-    waitForReady = false,
-    isCurrent: () => boolean = () => true,
-  ) {
-    await previewSession.seekMedia(milliseconds, waitForReady, isCurrent);
-  }
-
-  async function seekRunningPreviewProject(
-    milliseconds: ProjectTimeMs,
-    waitForReady = false,
-    final = true,
-    intent = previewSession.currentIntent(),
-  ) {
-    await previewSession.seekProject(milliseconds, waitForReady, final, intent);
-  }
+  const previewNavigation = new PreviewNavigationSession(previewSession, {
+    desktopRuntime: () => desktopRuntime,
+    tab: () => taskTab,
+    setTab: (next) => (taskTab = next),
+    tasksVisible: () => page === "tasks",
+    hasSource: () => inspection != null,
+    running: () => playerRunning,
+    layoutReady: async () => {
+      await tick();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    },
+    start: startPreview,
+    stop: queuePreviewStop,
+    onError: reportBackendFailure,
+  });
 
   function switchTaskTab(next: typeof taskTab) {
-    if (next === taskTab) return;
-    const generation = previewSession.beginPageTransition(next !== "preview");
-    taskTab = next;
-    if (next !== "preview") {
-      void queuePreviewStop();
-      return;
-    }
-    if (inspection) void activateTabPreview(generation);
-  }
-
-  async function activateTabPreview(generation: number) {
-    await previewSession.whenStopped();
-    await tick();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    if (!previewSession.isCurrentPageTransition(generation) || taskTab !== "preview" || page !== "tasks") return;
-    const resumeAt = previewSession.resumeTime();
-    await startPreview();
-    if (resumeAt != null && resumeAt > 0 && previewSession.isCurrentPageTransition(generation) && playerRunning) {
-      await seekRunningPreview(
-        resumeAt,
-        true,
-        () => previewSession.isCurrentPageTransition(generation) && taskTab === "preview" && page === "tasks",
-      );
-      previewSession.clearResumeTime();
-    }
+    previewNavigation.switchTab(next);
   }
 
   async function playerCommand(command: PreviewCommand) {
@@ -771,27 +736,16 @@
   }
 
   async function performSeekPreviewProject(milliseconds: ProjectTimeMs, final = true, intent = previewSession.currentIntent()) {
-    if (!desktopRuntime) return;
-    let restarted = false;
-    if (taskTab !== "preview") {
-      const generation = previewSession.beginPageTransition(false);
-      taskTab = "preview";
-      await tick();
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      if (!previewSession.isCurrentPageTransition(generation) || page !== "tasks" || !previewSession.isCurrentIntent(intent)) return;
-      await previewSession.whenStopped();
-      await startPreview();
-      restarted = true;
-    }
-    if (!playerRunning || !previewSession.isCurrentIntent(intent)) return;
-    try {
-      await seekRunningPreviewProject(milliseconds, restarted, final, intent);
-    } catch (reason) {
-      reportBackendFailure(reason);
-    }
+    await previewNavigation.seek(milliseconds, final, intent);
   }
-  async function setPreviewVolume(volume: number) {
-    await previewSession.setVolume(volume);
+  function setPreviewVolume(volume: number) {
+    previewVolume = clampPreviewVolume(volume);
+    if (previewVolume > 0) lastNonZeroPreviewVolume = previewVolume;
+    previewSession.setVolume(previewVolume);
+  }
+
+  function togglePreviewMute() {
+    setPreviewVolume(toggledPreviewVolume(previewVolume, lastNonZeroPreviewVolume));
   }
 
   async function savePlaybackMapping() {
@@ -848,40 +802,34 @@
     if (selected) multiTaskOutputDirectory = selected;
   }
 
-  async function openMultiTaskItem(item: BatchItem) {
-    const generation = sourceSession.begin();
-    await stopPreview();
-    if (!sourceSession.isCurrent(generation)) return;
-    inspection = item.inspection;
-    currentJobId = item.jobId ?? "";
-    batchController.beginEditing(item);
-    selectedTracks = item.inspection.tracks[0]
-      ? selectionSession.singleTrack(item.selectedTrackKey ?? taskTrackKey(item.inspection.tracks[0]))
-      : new Set();
-    taskTab = "preview";
-    page = "tasks";
-    applyRuntimeReset(resetTaskRuntime({
-      progress: item.progress,
-      bytesRead: Math.round((item.progress / 100) * item.inspection.size),
-      warnings: item.warnings,
-      isExporting: item.status === "Processing",
-    }));
-    if (item.jobId) {
-      try {
-        const artifacts = await backend.getJobArtifacts(item.jobId);
-        const archive = artifacts.find(
-          (artifact) => artifact.kind === "archive" && artifact.status === "completed",
-        );
-        if (archive) archivePath = archive.path;
-      } catch {
-        // A queued or running task may not have published an artifact yet.
-      }
-    }
-    await tick();
-    if (!sourceSession.isCurrent(generation)) return;
-    void startPreview();
-    if (!batchRunning && !archivePath) void startPreviewIndex(item.inspection.path);
-  }
+  const batchTaskSession = new BatchTaskSession(sourceSession, {
+    stopPreview,
+    apply: (item) => {
+      inspection = item.inspection;
+      currentJobId = item.jobId ?? "";
+      batchController.beginEditing(item);
+      selectedTracks = item.inspection.tracks[0]
+        ? selectionSession.singleTrack(item.selectedTrackKey ?? taskTrackKey(item.inspection.tracks[0]))
+        : new Set();
+      taskTab = "preview";
+      page = "tasks";
+      applyRuntimeReset(resetTaskRuntime({
+        progress: item.progress,
+        bytesRead: Math.round((item.progress / 100) * item.inspection.size),
+        warnings: item.warnings,
+        isExporting: item.status === "Processing",
+      }));
+    },
+    archive: async (jobId) => (await backend.getJobArtifacts(jobId)).find(
+      (artifact) => artifact.kind === "archive" && artifact.status === "completed",
+    )?.path,
+    setArchive: (path) => (archivePath = path),
+    layoutReady: tick,
+    startPreview,
+    needsIndex: () => !batchRunning && !archivePath,
+    startIndex: (path) => startPreviewIndex(path),
+  });
+  const openMultiTaskItem = (item: BatchItem) => batchTaskSession.open(item);
   const drcsController = new DrcsDictionaryController({
     desktopRuntime,
     sourcePath: () =>
@@ -957,20 +905,7 @@
   }
 
   async function activateTaskPreview(generation: number) {
-    await previewSession.whenStopped();
-    await tick();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    if (!navigationSession.isCurrent(generation, "tasks") || page !== "tasks" || taskTab !== "preview") return;
-    const resumeAt = previewSession.resumeTime();
-    await startPreview();
-    if (resumeAt != null && resumeAt > 0 && navigationSession.isCurrent(generation, "tasks") && playerRunning) {
-      await seekRunningPreview(
-        resumeAt,
-        true,
-        () => navigationSession.isCurrent(generation, "tasks") && page === "tasks" && taskTab === "preview",
-      );
-      previewSession.clearResumeTime();
-    }
+    await previewNavigation.activate(() => navigationSession.isCurrent(generation, "tasks"));
   }
 
   onMount(() => {
@@ -1064,7 +999,7 @@
       />
     {:else if page === "tasks"}
       {#if TaskWorkspaceComponent}
-      <svelte:component this={TaskWorkspaceComponent}
+      <TaskWorkspaceComponent
         {inspection}
         userMode={appSettings.userMode}
         {isInspecting}
@@ -1083,6 +1018,7 @@
         {progress}
         projectTimeMs={projectCursorMs}
         durationMs={previewDurationMs}
+        {previewVolume}
         {playerRunning}
         {playerPaused}
         {previewAvailable}
@@ -1120,6 +1056,7 @@
         onSeekProject={seekPreviewProject}
         onSeekTarget={setPreviewSeekTarget}
         onSetVolume={setPreviewVolume}
+        onToggleMute={togglePreviewMute}
         onSaveMapping={savePlaybackMapping}
         onDiagnosticsCount={(count: number) => (diagnosticsCount = count)}
         onError={(message: string) => (error = formatMessage("error.backend", { message }))}
@@ -1132,7 +1069,7 @@
       {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
     {:else if page === "batch"}
       {#if BatchPageComponent}
-      <svelte:component this={BatchPageComponent}
+      <BatchPageComponent
         items={batchInputs}
         running={batchRunning}
         paused={isPaused}
@@ -1153,7 +1090,7 @@
       {:else}<div class="route-loading" role="status" aria-label={t("workspace.loading")}><span></span></div>{/if}
     {:else if page === "drcs"}
       {#if DrcsPageComponent}
-      <svelte:component this={DrcsPageComponent}
+      <DrcsPageComponent
         glyphs={drcsGlyphs}
         message={drcsMessage}
         canRefresh={Boolean(inspection)}
@@ -1170,7 +1107,7 @@
         </div>
       </header>
       {#if SettingsPageComponent}
-      <svelte:component this={SettingsPageComponent}
+      <SettingsPageComponent
         bind:panel={settingsPanel}
         {saveCaptionFont}
         persistSettings={(settings: AppSettings) => preferencesSession.persist(settings)}
