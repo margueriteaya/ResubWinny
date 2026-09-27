@@ -36,7 +36,7 @@ work required before the repository is suitable for a public source release.
 | Worker exporters | The public exporter boundary remains in `exporters/mod.rs`; ASS, TTML, text formats, B24 orchestration, evidence, and Ruby layout live in format-focused modules. |
 | Worker TTML | B62 semantics, strict XML document decoding, and TS/PES scanning are separate `ttml`, `document`, and `scan` modules. |
 | Experimental TLV/MMTP | Base packet/MPU handling, signalling/MPT, evidence writing, and the constrained route are separate modules. |
-| Shared caption semantics | `crates/caption-semantics` is an ordinary library both the Worker and the desktop backend depend on: every item is compiled once, so items only one side calls no longer need dead-code allowances. |
+| Shared caption semantics | `crates/caption-semantics` is an ordinary library both the Worker and the desktop backend depend on: shared code is compiled as a separate dependency instead of being included by path in both crates; public items called by only one side no longer need dead-code allowances. |
 | Worker tests | Corpus, TS/M2TS, B24/timeline, TTML, TLV, archive, and synthetic protocol suites own their fixtures in separate files; the full baseline is 202 tests. |
 | libmpv | Dynamic client ABI/playback and the Windows render worker are separate; render tests are isolated. |
 | Desktop timeline | Public paging/presentation stays in `timeline.rs`; the bounded live-window and append-cursor state is isolated in `timeline/cache.rs`. |

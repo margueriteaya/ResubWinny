@@ -5,7 +5,7 @@
 # 後端合約
 
 > 2026-09-02 實作說明：本文的邏輯 1920×1080 平面只是有界中間紋理，不是定義正確性的目標解析度。
-> Worker 在可選 `source_layout` 中保留來源平面、region、樣式和行內長度；原生算繪器由此明確計算
+> Worker 在可選 `source_layout` 中保留來源平面、region、樣式和行內長度；原生渲染器由此明確計算
 > 中間紋理，再將整張紋理映射至 libmpv 的視訊內容 viewport。正確性以排除黑邊後相對視訊內容的比例為準。
 Tauri/Svelte UI 是 Rust 後端的客戶端。它不解析 TS/TLV 資料、解碼 ARIB、渲染高解析度影片或決定轉換語義。
 
@@ -26,7 +26,7 @@ Tauri/Svelte UI 是 Rust 後端的客戶端。它不解析 TS/TLV 資料、解�
 | `get_job_diagnostics` | 返回為持久作業收集的有界結構化診斷資訊 |
 | `get_job_diagnostics_window` | 使用偏移/限制返回有界診斷頁 |
 | `list_jobs_window` | 返回最近任務摘要的有界頁面 |
-| `get_job_artifacts` | 返回任務工件清單和 `.part` 路徑 |
+| `get_job_artifacts` | 返回任務產物清單和 `.part` 路徑 |
 | `get_job_checkpoint` | 返回任務的最新有界進度檢查點 |
 | `pause_queue` / `resume_queue` / `queue_is_paused` | 控制 Supervisor 佇列並協作暫停/恢復其活動 Worker |
 | `load_drcs_report` | 讀取 Worker 生成的 DRCS 報告並返回可顯示的字形影象 |
@@ -53,7 +53,7 @@ TLV 歸檔匯出還可能包含有界 `asset_evidence` 和 `resource_evidence` �
 
 該快照還帶有 `renderProfile`。它的合約刻意與 libaribcaption 保持相容：使用捆綁的 `Rounded M+ 1m for ARIB` 字族，保留字元單元幾何，把 ruby 維持在 0.5 的相對比例，並從解碼得到的源字元資料中取用背景 alpha 與描邊顏色。已釋出的 libaribcaption 截圖是面向觀看者的視覺參考；其固定的本地基線與審查規則見 `docs/visual-reference.md`。該 profile 的 B24 部分由解碼器支撐。當前的本機 TTML 路徑使用捆綁字型、源前景/背景 RGBA、span 樣式區段、簡單水平 ruby，以及顯式關聯的垂直 ruby，其中包含跨自動分欄的有界延續。複雜的 ruby 分組、完整的垂直排版方向與標準描邊行為，在其本機實現透過測試之前仍只是宣告性元資料；UI 不得用任意 CSS 陰影或固定黑框去模仿它們。`captionOverlayModes` 是一組結構化的後端路徑能力：`id`、`available`、`experimental` 與 `unavailableReasonCode`。在 Windows 上，當發現的執行時匯出完整渲染 API 時，`libmpv-render` 即變為可用；後端預設選擇它，若渲染 Worker 啟動失敗，則按來源回落到 `libmpv-client-overlay`。UI 呈現後端實際採用的路徑，絕不自行選擇渲染器。
 
-## Worker 事件信封
+## Worker 事件格式
 
 Worker 的 JSONL 事件使用 `protocolVersion`、`jobId`、`sequence` 與 `payload` 欄位。為保持相容，遷移期間舊的頂層事件欄位依然保留。Tauri 層必須先驗證版本與序號，才能把事件轉發給 Svelte。
 

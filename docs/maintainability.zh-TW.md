@@ -25,7 +25,7 @@
 | Worker 匯出器 | 公開匯出器邊界仍位於 `exporters/mod.rs`；ASS、TTML、文字格式、B24 協調、證據和 Ruby 版面配置位於按格式聚焦的模組中。 |
 | Worker TTML | B62 語意、嚴格 XML 檔案解碼和 TS/PES 掃描分別位於獨立的 `ttml`、`document` 和 `scan` 模組中。 |
 | 實驗性 TLV/MMTP | 基礎封包/MPU 處理、訊號/MPT、證據寫入和受約束路徑分別位於獨立模組中。 |
-| 共享字幕語意 | `crates/caption-semantics` 是 Worker 與桌面後端共同依賴的普通程式庫：每個項目只編譯一次，任何一側未用到的項目不再需要死程式碼豁免。 |
+| 共享字幕語意 | `crates/caption-semantics` 是 Worker 與桌面後端共同依賴的普通程式庫：共用程式碼作為獨立相依項編譯，不再透過路徑分別納入兩個 crate；僅由一側呼叫的公開項目無須死程式碼豁免。 |
 | Worker 測試 | 語料庫、TS/M2TS、B24/時間軸、TTML、TLV、封存和合成通訊協定套件在獨立檔案中各自管理其測試資料；完整基準為 202 項測試。 |
 | libmpv | 動態使用者端 ABI/播放與 Windows 繪製 Worker 已分離；繪製測試已隔離。 |
 | 桌面時間軸 | 公開分頁/呈現保留在 `timeline.rs`；有界即時視窗和附加遊標狀態隔離在 `timeline/cache.rs` 中。 |
@@ -46,7 +46,7 @@
 
 字幕 IR 的匯聚發生在剖析之後，而非傳輸模型中。封閉的零複製 `CaptionCueRef` 為 B24 `RegionInterval` 和 ARIB-TTML `TtmlCaption` 公開共用的時間、區域、路徑、純文字、Ruby 數量和 DRCS 存在性語意，同時保留其完整的路徑特定 DRCS、Ruby、樣式和來源承載資料。封存寫入器使用此共用邊界，但保留 schema-v1 的 `region_interval` 和 `caption` 記錄形狀。
 
-若干繪製器熱門路徑函式仍明確傳遞幾何資訊，以避免配置暫存內容物件。相容性 `start_export`、`create_job`、Worker 事件輔助函式和 libmpv 執行緒進入點也具有寬簽章。其 lint 例外均為區域性且有理由；新 API 應使用具型別的要求/狀態物件。現有 Tauri 引數名稱只能在協調完成前端合約移轉時變更。
+若干渲染器效能關鍵路徑函式仍明確傳遞幾何資訊，以避免配置暫存內容物件。相容性 `start_export`、`create_job`、Worker 事件輔助函式和 libmpv 執行緒進入點也具有寬簽章。其 lint 例外均為區域性且有理由；新 API 應使用具型別的要求/狀態物件。現有 Tauri 引數名稱只能在協調完成前端合約移轉時變更。
 
 ## 建置和品質關卡
 
@@ -57,11 +57,11 @@
 - 前端合約檢查目前涵蓋 62 個具型別命令、82 個原始檔和四個完整的內建地區設定檔；Svelte 建置無診斷訊息。
 - `scripts/check.ps1` 是格式化、Worker 和桌面測試/lint、前端建置、模糊測試編譯及產生依賴授權清單的唯一本機進入點。
 - `scripts/build.ps1` 是唯一封裝進入點。其 Windows 預設值為套件設定檔，該設定檔會明確安裝並驗證固定版本的執行階段；`-Libmpv External` 會產生不含 libmpv 的套件，並要求使用者提供相容執行階段。Tauri 基礎設定本身不會無提示地綑綁執行階段。
-- 一般 CI 路徑有四個聚焦工作：一個共用靜態品質關卡、一個三平臺 Rust 測試矩陣、模糊測試目標編譯和依賴稽核。每週排程工作流程會對每個模糊測試目標執行有界的 30 秒運作；提取要求保留僅編譯的模糊測試涵蓋。`cargo-deny` 對 Worker、桌面端和模糊測試資訊清單強制執行已簽入的授權/來源原則。耗時較長的 LGPL libmpv 建置為手動執行，並與提取要求 CI 隔離。它直接在 GitHub Ubuntu 執行器上執行，並在對應原始碼封存旁記錄完整的工具/套件環境。
+- 一般 CI 路徑有四個聚焦工作：一個共用靜態品質關卡、一個三平臺 Rust 測試矩陣、模糊測試目標編譯和依賴稽核。每週排程工作流程會對每個模糊測試目標執行有界的 30 秒運作；拉取請求保留僅編譯的模糊測試涵蓋。`cargo-deny` 對 Worker、桌面端和模糊測試資訊清單強制執行已簽入的授權/來源原則。耗時較長的 LGPL libmpv 建置為手動執行，並與拉取請求 CI 隔離。它直接在 GitHub Ubuntu 執行器上執行，並在對應原始碼封存旁記錄完整的工具/套件環境。
 - `scripts/verify-repository.ps1` 拒絕產生/下載的成品、巢狀儲存庫、過大的追蹤檔案和發布版本偏移。`scripts/package-source.ps1` 從乾淨的 Git 修訂版建立按雜湊定址的原始碼封存；兩條路徑都已在暫儲存存庫中實際執行。
-- GitHub 議題和提取要求範本記錄合法樣本邊界、受影響的傳輸路徑、模型不變數和驗證證據。
+- GitHub 議題和拉取請求範本記錄合法樣本邊界、受影響的傳輸路徑、模型不變數和驗證證據。
 
-## 公開發布阻礙專案
+## 公開發布阻礙項
 
 - 每次依賴更新時，必須保持 `THIRD_PARTY_NOTICES.md` 與 `third_party/versions.json` 同步。現已記錄準確的 libaribcaption/libmpv 修訂版、雜湊、授權、來源位置和動態替換說明。
 - 必須將大型 Windows libmpv 二進位檔排除在 Git 之外。`scripts/setup-libmpv.ps1` 會驗證其固定版本封存和解壓縮後雜湊；Windows CI 和封裝會呼叫該明確設定步驟。

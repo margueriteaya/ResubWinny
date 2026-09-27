@@ -26,7 +26,7 @@ Tauri/Svelte UI 是 Rust 后端的客户端。它不解析 TS/TLV 数据、解�
 | `get_job_diagnostics` | 返回为持久作业收集的有界结构化诊断信息 |
 | `get_job_diagnostics_window` | 使用偏移/限制返回有界诊断页 |
 | `list_jobs_window` | 返回最近任务摘要的有界页面 |
-| `get_job_artifacts` | 返回任务工件清单和 `.part` 路径 |
+| `get_job_artifacts` | 返回任务产物清单和 `.part` 路径 |
 | `get_job_checkpoint` | 返回任务的最新有界进度检查点 |
 | `pause_queue` / `resume_queue` / `queue_is_paused` | 控制 Supervisor 队列并协作暂停/恢复其活动 Worker |
 | `load_drcs_report` | 读取 Worker 生成的 DRCS 报告并返回可显示的字形图像 |
@@ -53,7 +53,7 @@ TLV 归档导出还可能包含有界 `asset_evidence` 和 `resource_evidence` �
 
 该快照还带有 `renderProfile`。它的合约刻意与 libaribcaption 保持兼容：使用捆绑的 `Rounded M+ 1m for ARIB` 字族，保留字符单元几何，把 ruby 维持在 0.5 的相对比例，并从解码得到的源字符数据中取用背景 alpha 与描边颜色。已发布的 libaribcaption 截图是面向观看者的视觉参考；其固定的本地基线与审查规则见 `docs/visual-reference.md`。该 profile 的 B24 部分由解码器支撑。当前的本机 TTML 路径使用捆绑字体、源前景/背景 RGBA、span 样式区段、简单水平 ruby，以及显式关联的垂直 ruby，其中包含跨自动分栏的有界延续。复杂的 ruby 分组、完整的垂直排版方向与标准描边行为，在其本机实现通过测试之前仍只是声明性元数据；UI 不得用任意 CSS 阴影或固定黑框去模仿它们。`captionOverlayModes` 是一组结构化的后端路径能力：`id`、`available`、`experimental` 与 `unavailableReasonCode`。在 Windows 上，当发现的运行时导出完整渲染 API 时，`libmpv-render` 即变为可用；后端默认选择它，若渲染 Worker 启动失败，则按来源回落到 `libmpv-client-overlay`。UI 呈现后端实际采用的路径，绝不自行选择渲染器。
 
-## Worker 事件信封
+## Worker 事件格式
 
 Worker 的 JSONL 事件使用 `protocolVersion`、`jobId`、`sequence` 与 `payload` 字段。为保持兼容，迁移期间旧的顶层事件字段依然保留。Tauri 层必须先校验版本与序号，才能把事件转发给 Svelte。
 

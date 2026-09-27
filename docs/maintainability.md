@@ -25,7 +25,7 @@
 | Worker 导出器 | 公共导出器边界仍位于 `exporters/mod.rs`；ASS、TTML、文本格式、B24 编排、证据和 Ruby 布局位于按格式聚焦的模块中。 |
 | Worker TTML | B62 语义、严格 XML 文档解码和 TS/PES 扫描分别位于独立的 `ttml`、`document` 和 `scan` 模块中。 |
 | 实验性 TLV/MMTP | 基础数据包/MPU 处理、信令/MPT、证据写入和受约束路径分别位于独立模块中。 |
-| 共享字幕语义 | `crates/caption-semantics` 是 Worker 与桌面后端共同依赖的普通库：每个条目只编译一次，任何一侧未用到的条目不再需要死代码豁免。 |
+| 共享字幕语义 | `crates/caption-semantics` 是 Worker 与桌面后端共同依赖的普通库：共享代码作为独立依赖编译，不再按路径分别纳入两个 crate；仅由一侧调用的公开条目无需死代码豁免。 |
 | Worker 测试 | 语料库、TS/M2TS、B24/时间线、TTML、TLV、归档和合成协议套件在独立文件中各自管理其夹具；完整基线为 202 项测试。 |
 | libmpv | 动态客户端 ABI/播放与 Windows 渲染 Worker 已分离；渲染测试已隔离。 |
 | 桌面时间线 | 公共分页/呈现保留在 `timeline.rs`；有界实时窗口和追加游标状态隔离在 `timeline/cache.rs` 中。 |
@@ -58,7 +58,7 @@
 - `scripts/check.ps1` 是格式化、Worker 和桌面测试/lint、前端构建、模糊测试编译及生成依赖许可证清单的唯一本地入口点。
 - `scripts/build.ps1` 是唯一打包入口点。其 Windows 默认值为捆绑配置，该配置会显式安装并验证固定版本的运行时；`-Libmpv External` 会生成不含 libmpv 的包，并要求用户提供兼容运行时。Tauri 基础配置本身不会静默捆绑运行时。
 - 常规 CI 路径有四个聚焦作业：一个共享静态质量门槛、一个三平台 Rust 测试矩阵、模糊测试目标编译和依赖审计。每周计划工作流会对每个模糊测试目标执行有界的 30 秒运行；拉取请求保留仅编译的模糊测试覆盖。`cargo-deny` 对 Worker、桌面端和模糊测试清单强制执行已签入的许可证/来源策略。耗时较长的 LGPL libmpv 构建为手动执行，并与拉取请求 CI 隔离。它直接在 GitHub Ubuntu 运行器上运行，并在相应源代码归档旁记录完整的工具/包环境。
-- `scripts/verify-repository.ps1` 拒绝生成/下载的工件、嵌套仓库、超大跟踪文件和发布版本漂移。`scripts/package-source.ps1` 从干净的 Git 修订版创建按哈希寻址的源代码归档；两条路径都已在临时仓库中实际运行。
+- `scripts/verify-repository.ps1` 拒绝生成或下载的文件、嵌套仓库、超大跟踪文件和发布版本漂移。`scripts/package-source.ps1` 从干净的 Git 修订版创建按哈希寻址的源代码归档；两条路径都已在临时仓库中实际运行。
 - GitHub 议题和拉取请求模板记录合法样本边界、受影响的传输路径、模型不变量和验证证据。
 
 ## 公开发布阻碍项
@@ -66,7 +66,7 @@
 - 每次依赖更新时，必须保持 `THIRD_PARTY_NOTICES.md` 与 `third_party/versions.json` 同步。现已记录准确的 libaribcaption/libmpv 修订版、哈希、许可证、源位置和动态替换说明。
 - 必须将大型 Windows libmpv 二进制文件排除在 Git 之外。`scripts/setup-libmpv.ps1` 会验证其固定版本归档和解压后哈希；Windows CI 和打包会调用该显式设置步骤。
 - 必须保持已供应的 libaribcaption 提交与源快照哈希同步。其嵌套 Git 元数据已移除；今后的更新在进入根仓库之前必须通过 `scripts/prepare-vendored-source.ps1`。
-- 必须为确切捆绑的 Windows libmpv 构建镜像一个持久、完整的对应源代码归档及构建脚本。适用的 LGPL 文本、构建来源、哈希和替换机制现已记录，但不能只将上游 URL 视为最终发布工件。
+- 必须为确切捆绑的 Windows libmpv 构建镜像一个持久、完整的对应源代码归档及构建脚本。适用的 LGPL 文本、构建来源、哈希和替换机制现已记录，但不能只将上游 URL 视为最终发布产物。
 - 必须确保字体旁的 Rounded M+ 1m for ARIB 来源/许可证文件包含在每个安装程序和二进制归档中。已通过 SHA-256 将捆绑二进制文件与其记录的上游文件匹配。
 - `CONTRIBUTING.md`、`SECURITY.md` 和受支持的工具链策略现已存在。Windows Alpha 候选工作流会运行完整打包门槛并写入安装程序哈希，但不会创建公开发布。
 - 必须记录行为准则决定。Signed Stable 发布需要受保护的签名身份，但明确披露且满足源代码、哈希、来源和许可证门槛的 Unsigned Windows Alpha 不需要。
@@ -74,8 +74,8 @@
 
 ## 建议顺序
 
-1. 构建可审计的 Unsigned Windows Alpha 流水线，发布准确的标签和提交、完整工件哈希、未签名构建警告、通知以及捆绑 libmpv 的对应源代码回执。
-2. 针对源选择、原生预览、动态广播元数据、多任务控制、语言包、输出规划和工件发布执行已打包 Windows 端到端验收。源选择、暂停的原生视频、动态元数据、118 事件索引和最终归档时间线恢复已用 `bs4k_test_2.ts` 验证；其余工作流仍需打包验收。
+1. 构建可审计的 Unsigned Windows Alpha 流水线，发布准确的标签和提交、完整产物哈希、未签名构建警告、通知以及捆绑 libmpv 的对应源代码回执。
+2. 针对源选择、原生预览、动态广播元数据、多任务控制、语言包、输出规划和产物发布执行已打包 Windows 端到端验收。源选择、暂停的原生视频、动态元数据、118 事件索引和最终归档时间线恢复已用 `bs4k_test_2.ts` 验证；其余工作流仍需打包验收。
 3. 维护私有的真实广播兼容性矩阵，并仅发布其结果。不得添加合成广播生成来替代合法持有的录像，并须将 TLV/MMTP 明确保持为实验性功能。
 4. 为纯前端行为和生成的 Rust 到 TypeScript DTO 类型添加聚焦测试，且不得引入前端测试框架或 RPC 框架。
 5. 为确切捆绑的 LGPL libmpv 构建生成固定、完整的对应源代码包；在此完成之前，当前开发 DLL 会阻碍公开二进制分发。
