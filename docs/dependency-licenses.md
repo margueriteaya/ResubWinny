@@ -4,7 +4,7 @@ This file is generated from the committed Cargo and npm lock data by
 `scripts/generate-license-report.ps1`. It records package metadata for review;
 the dependency source distributions remain the authoritative license texts.
 
-Generated inventory: 464 Cargo packages and 91 npm packages.
+Generated inventory: 453 Cargo packages and 91 npm packages.
 
 ## Cargo
 
@@ -396,17 +396,14 @@ Generated inventory: 464 Cargo packages and 91 npm packages.
 | `web-time` | `1.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `webkit2gtk` | `2.0.2` | MIT | Desktop service |
 | `webkit2gtk-sys` | `2.0.2` | MIT | Desktop service |
-| `webview2-com` | `0.38.2` | MIT | Desktop service |
 | `webview2-com` | `0.39.1` | MIT | Desktop service |
 | `webview2-com-macros` | `0.8.1` | MIT | Desktop service |
-| `webview2-com-sys` | `0.38.2` | MIT | Desktop service |
 | `webview2-com-sys` | `0.39.1` | MIT | Desktop service |
 | `winapi` | `0.3.9` | MIT/Apache-2.0 | Desktop service |
 | `winapi-i686-pc-windows-gnu` | `0.4.0` | MIT/Apache-2.0 | Desktop service |
 | `winapi-util` | `0.1.11` | Unlicense OR MIT | Desktop service |
 | `winapi-x86_64-pc-windows-gnu` | `0.4.0` | MIT/Apache-2.0 | Desktop service |
 | `window-vibrancy` | `0.8.1` | Apache-2.0 OR MIT | Desktop service |
-| `windows` | `0.61.3` | MIT OR Apache-2.0 | Desktop service |
 | `windows` | `0.62.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows_aarch64_gnullvm` | `0.42.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows_aarch64_gnullvm` | `0.52.6` | MIT OR Apache-2.0 | Desktop service |
@@ -431,21 +428,14 @@ Generated inventory: 464 Cargo packages and 91 npm packages.
 | `windows_x86_64_msvc` | `0.42.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows_x86_64_msvc` | `0.52.6` | MIT OR Apache-2.0 | Desktop service |
 | `windows_x86_64_msvc` | `0.53.1` | MIT OR Apache-2.0 | Desktop service |
-| `windows-collections` | `0.2.0` | MIT OR Apache-2.0 | Desktop service |
 | `windows-collections` | `0.3.2` | MIT OR Apache-2.0 | Desktop service |
-| `windows-core` | `0.61.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows-core` | `0.62.2` | MIT OR Apache-2.0 | Desktop service |
-| `windows-future` | `0.2.1` | MIT OR Apache-2.0 | Desktop service |
 | `windows-future` | `0.3.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows-implement` | `0.60.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows-interface` | `0.59.3` | MIT OR Apache-2.0 | Desktop service |
-| `windows-link` | `0.1.3` | MIT OR Apache-2.0 | Desktop service |
 | `windows-link` | `0.2.1` | MIT OR Apache-2.0 | Desktop service |
-| `windows-numerics` | `0.2.0` | MIT OR Apache-2.0 | Desktop service |
 | `windows-numerics` | `0.3.1` | MIT OR Apache-2.0 | Desktop service |
-| `windows-result` | `0.3.4` | MIT OR Apache-2.0 | Desktop service |
 | `windows-result` | `0.4.1` | MIT OR Apache-2.0 | Desktop service |
-| `windows-strings` | `0.4.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows-strings` | `0.5.1` | MIT OR Apache-2.0 | Desktop service |
 | `windows-sys` | `0.45.0` | MIT OR Apache-2.0 | Desktop service |
 | `windows-sys` | `0.59.0` | MIT OR Apache-2.0 | Desktop service |
@@ -454,7 +444,6 @@ Generated inventory: 464 Cargo packages and 91 npm packages.
 | `windows-targets` | `0.42.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows-targets` | `0.52.6` | MIT OR Apache-2.0 | Desktop service |
 | `windows-targets` | `0.53.5` | MIT OR Apache-2.0 | Desktop service |
-| `windows-threading` | `0.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `windows-threading` | `0.2.1` | MIT OR Apache-2.0 | Desktop service |
 | `windows-version` | `0.1.7` | MIT OR Apache-2.0 | Desktop service |
 | `winnow` | `0.5.40` | MIT | Desktop service |
