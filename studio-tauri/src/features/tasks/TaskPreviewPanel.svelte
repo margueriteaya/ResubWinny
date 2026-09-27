@@ -94,6 +94,15 @@
   } = $props();
   let playbackMappingDetails: HTMLDetailsElement | undefined = $state();
 
+  // Pane drags change this rectangle without resizing the document or window.
+  // Follow the actual surface so its native child HWND stays inside the player.
+  $effect(() => {
+    if (!desktopRuntime || !nativePreview) return;
+    const observer = new ResizeObserver(() => onResizePreview());
+    observer.observe(nativePreview);
+    return () => observer.disconnect();
+  });
+
   function openPlaybackMapping() {
     const details = playbackMappingDetails;
     if (!details) return;

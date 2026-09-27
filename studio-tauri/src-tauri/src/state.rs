@@ -61,7 +61,6 @@ impl Default for AppState {
 #[cfg(windows)]
 pub struct PlayerHost {
     pub host: isize,
-    pub owner: isize,
     pub source: PathBuf,
     pub player: NativePlayer,
     pub overlay_path: PathBuf,

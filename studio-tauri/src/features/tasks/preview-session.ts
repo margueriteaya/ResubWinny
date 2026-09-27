@@ -69,7 +69,6 @@ export class PreviewSession {
   private seekRunning = false;
   private activeSeekPromise: Promise<void> | null = null;
   private pendingSeek: PendingProjectSeek | null = null;
-  private resizeFrame = 0;
   private resizeInFlight = false;
   private resizePending = false;
   private readonly volumeQueue: VolumeCommandQueue;
@@ -115,8 +114,6 @@ export class PreviewSession {
   resize() { return this.controller.resize(this.rect()); }
   stop(callbacks: Pick<PreviewCallbacks, "onNotice">) { return this.controller.stop(callbacks); }
   dispose() {
-    if (this.resizeFrame) cancelAnimationFrame(this.resizeFrame);
-    this.resizeFrame = 0;
     this.resizePending = false;
     this.volumeQueue.dispose();
     return this.controller.dispose();
@@ -124,11 +121,7 @@ export class PreviewSession {
 
   queueResize() {
     this.resizePending = true;
-    if (this.resizeFrame || this.resizeInFlight) return;
-    this.resizeFrame = requestAnimationFrame(() => {
-      this.resizeFrame = 0;
-      void this.flushResize();
-    });
+    if (!this.resizeInFlight) void this.flushResize();
   }
 
   private async flushResize() {

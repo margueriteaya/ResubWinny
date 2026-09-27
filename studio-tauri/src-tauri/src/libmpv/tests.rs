@@ -14,7 +14,8 @@ use windows::{
             Threading::GetCurrentProcess,
         },
         UI::WindowsAndMessaging::{
-            CreateWindowExW, DestroyWindow, SWP_NOACTIVATE, SetWindowPos, WS_POPUP,
+            CreateWindowExW, DestroyWindow, SWP_NOACTIVATE, SetWindowPos, WS_CHILD, WS_POPUP,
+            WS_VISIBLE,
         },
     },
     core::w,
@@ -36,26 +37,10 @@ fn render_worker_starts_and_stops_on_a_real_recording() {
             .expect("set RESUBWINNY_RENDER_SMOKE_SOURCE to a legal local recording"),
     );
     assert!(source.is_file(), "render smoke source must be a file");
-    let host = unsafe {
-        CreateWindowExW(
-            Default::default(),
-            w!("STATIC"),
-            w!("ResubWinnyRenderSmoke"),
-            WS_POPUP,
-            -10_000,
-            -10_000,
-            640,
-            360,
-            None,
-            None,
-            None,
-            None,
-        )
-    }
-    .expect("create hidden native render host");
+    let host = NativeHost::create(640, 360, w!("ResubWinnyRenderSmoke"));
     let runtime = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../third_party/libmpv/windows-x86_64/libmpv-2.dll");
-    let worker = LibMpvRenderWorker::start(runtime, source, host.0 as isize, 640, 360)
+    let worker = LibMpvRenderWorker::start(runtime, source, host.0.0 as isize, 640, 360)
         .expect("start native libmpv render worker");
     let mut media_ready = false;
     for _ in 0..40 {
@@ -102,18 +87,7 @@ fn render_worker_starts_and_stops_on_a_real_recording() {
     worker
         .set_caption_overlay(overlay.into(), 16, 16, 0, 0)
         .expect("upload native caption texture");
-    unsafe {
-        SetWindowPos(
-            host,
-            Some(HWND(std::ptr::null_mut())),
-            -10_000,
-            -10_000,
-            1920,
-            1080,
-            SWP_NOACTIVATE,
-        )
-    }
-    .expect("resize native render host");
+    resize_host(&host, 1920, 1080);
     worker.resize(1920, 1080);
     thread::sleep(Duration::from_millis(100));
     let frame = worker.capture_frame().expect("capture native render frame");
@@ -136,23 +110,11 @@ fn render_worker_starts_and_stops_on_a_real_recording() {
     worker
         .clear_caption_overlay()
         .expect("clear native caption texture");
-    unsafe {
-        SetWindowPos(
-            host,
-            Some(HWND(std::ptr::null_mut())),
-            -10_000,
-            -10_000,
-            3840,
-            2160,
-            SWP_NOACTIVATE,
-        )
-    }
-    .expect("resize native render host to 4K");
+    resize_host(&host, 3840, 2160);
     worker.resize(3840, 2160);
     thread::sleep(Duration::from_millis(500));
     let diagnostics = worker.diagnostics();
     worker.stop();
-    unsafe { DestroyWindow(HWND(host.0)) }.expect("destroy render host");
     assert!(
         diagnostics.frames_presented > 0,
         "native render worker did not present a video frame"
@@ -374,11 +336,13 @@ fn render_worker_meets_the_long_4k_performance_gate() {
     );
 }
 
-struct NativeHost(HWND);
+// Use the same child-window topology as the application preview. Rendering
+// into a standalone popup would miss WGL regressions in that route.
+struct NativeHost(HWND, HWND);
 
 impl NativeHost {
     fn create(width: i32, height: i32, title: windows::core::PCWSTR) -> Self {
-        let hwnd = unsafe {
+        let parent = unsafe {
             CreateWindowExW(
                 Default::default(),
                 w!("STATIC"),
@@ -394,14 +358,32 @@ impl NativeHost {
                 None,
             )
         }
-        .expect("create hidden native render host");
-        Self(hwnd)
+        .expect("create hidden native render parent");
+        let child = unsafe {
+            CreateWindowExW(
+                Default::default(),
+                w!("STATIC"),
+                title,
+                WS_CHILD | WS_VISIBLE,
+                0,
+                0,
+                width,
+                height,
+                Some(parent),
+                None,
+                None,
+                None,
+            )
+        }
+        .expect("create native child render host");
+        Self(child, parent)
     }
 }
 
 impl Drop for NativeHost {
     fn drop(&mut self) {
         let _ = unsafe { DestroyWindow(self.0) };
+        let _ = unsafe { DestroyWindow(self.1) };
     }
 }
 
@@ -433,10 +415,22 @@ fn wait_for_media(worker: &LibMpvRenderWorker, timeout: Duration) {
 fn resize_host(host: &NativeHost, width: i32, height: i32) {
     unsafe {
         SetWindowPos(
+            host.1,
+            None,
+            -10_000,
+            -10_000,
+            width,
+            height,
+            SWP_NOACTIVATE,
+        )
+    }
+    .expect("resize native render parent");
+    unsafe {
+        SetWindowPos(
             host.0,
             Some(HWND(std::ptr::null_mut())),
-            -10_000,
-            -10_000,
+            0,
+            0,
             width,
             height,
             SWP_NOACTIVATE,

@@ -7,14 +7,13 @@ use crate::{
 use std::process::Command;
 use windows::{
     Win32::{
-        Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, POINT, WPARAM},
-        Graphics::Gdi::ClientToScreen,
+        Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM},
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
             CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow,
             HWND_TOP, RegisterClassW, SW_HIDE, SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowPos,
             ShowWindow, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_NOACTIVATE,
-            WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
+            WS_CHILD, WS_VISIBLE,
         },
     },
     core::w,
@@ -63,27 +62,11 @@ fn preview_window_instance() -> Result<HINSTANCE, String> {
         .map_err(Clone::clone)
 }
 
-fn preview_screen_origin(owner: HWND, rect: &PreviewRect) -> Result<POINT, String> {
-    let mut origin = POINT {
-        x: rect.x,
-        y: rect.y,
-    };
-    // SAFETY: `owner` is a live window handle and `origin` is a live point.
-    if unsafe { ClientToScreen(owner, &mut origin) }.as_bool() {
-        Ok(origin)
-    } else {
-        Err(format!(
-            "Could not position the native preview over the WebView: {}",
-            windows::core::Error::from_win32()
-        ))
-    }
-}
-
 fn stop_host(state: &AppState) {
     if let Ok(mut slot) = state.player.lock()
         && let Some(player) = slot.take()
     {
-        // The host is above WebView2. Hide it before libmpv teardown
+        // The child host is above WebView2. Hide it before libmpv teardown
         // so it cannot cover a newly selected Svelte page.
         // SAFETY: `player.host` is the preview window this state created and
         // has not destroyed yet.
@@ -128,17 +111,19 @@ fn start_preview_impl(
         .hwnd()
         .map_err(|e| format!("Could not access the native window: {e}"))?;
     let instance = preview_window_instance()?;
-    let origin = preview_screen_origin(parent, &rect)?;
+    // The DOM rectangle is measured in WebView client pixels. A true child
+    // HWND uses the same client coordinate space and follows the main window
+    // synchronously while it moves, unlike an owned screen-positioned popup.
     // SAFETY: the class was registered above, and `parent` is the live main
     // window handle obtained from Tauri.
     let host = unsafe {
         CreateWindowExW(
-            WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+            WS_EX_NOACTIVATE,
             w!("ResubWinnyPreviewHost"),
             w!("ResubWinnyMpvHost"),
-            WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
-            origin.x,
-            origin.y,
+            WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+            rect.x,
+            rect.y,
             rect.width,
             rect.height,
             Some(parent),
@@ -153,8 +138,8 @@ fn start_preview_impl(
         SetWindowPos(
             host,
             Some(HWND_TOP),
-            origin.x,
-            origin.y,
+            rect.x,
+            rect.y,
             rect.width,
             rect.height,
             SWP_NOACTIVATE | SWP_SHOWWINDOW,
@@ -215,7 +200,6 @@ fn start_preview_impl(
         .lock()
         .map_err(|_| "Preview state is unavailable")? = Some(PlayerHost {
         host: host.0 as isize,
-        owner: parent.0 as isize,
         source: Path::new(&source).to_path_buf(),
         player,
         overlay_path,
@@ -260,14 +244,13 @@ pub fn resize_preview(state: State<'_, Arc<AppState>>, rect: PreviewRect) -> Res
         .map_err(|_| "Preview state is unavailable")?
         .as_mut()
     {
-        let origin = preview_screen_origin(HWND(player.owner as *mut _), &rect)?;
         // SAFETY: `player.host` is the live preview window owned by this state.
         unsafe {
             SetWindowPos(
                 HWND(player.host as *mut _),
                 Some(HWND_TOP),
-                origin.x,
-                origin.y,
+                rect.x,
+                rect.y,
                 rect.width.max(1),
                 rect.height.max(1),
                 SWP_NOACTIVATE | SWP_SHOWWINDOW,
@@ -278,6 +261,65 @@ pub fn resize_preview(state: State<'_, Arc<AppState>>, rect: PreviewRect) -> Res
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::{
+        Foundation::RECT,
+        UI::WindowsAndMessaging::{GetParent, GetWindowRect, WS_POPUP},
+    };
+
+    #[test]
+    fn child_preview_follows_the_main_window_without_a_webview_resize() {
+        // SAFETY: both windows are created and destroyed by this test on the
+        // same thread. Their HWNDs remain live for every Win32 call below.
+        unsafe {
+            let parent = CreateWindowExW(
+                Default::default(),
+                w!("STATIC"),
+                w!("ResubWinnyPreviewParentTest"),
+                WS_POPUP,
+                100,
+                100,
+                400,
+                300,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("create parent window");
+            let child = CreateWindowExW(
+                WS_EX_NOACTIVATE,
+                w!("STATIC"),
+                w!("ResubWinnyPreviewChildTest"),
+                WS_CHILD | WS_VISIBLE,
+                30,
+                40,
+                200,
+                100,
+                Some(parent),
+                None,
+                None,
+                None,
+            )
+            .expect("create child preview window");
+            assert_eq!(GetParent(child), Ok(parent));
+            let mut before = RECT::default();
+            GetWindowRect(child, &mut before).expect("get initial child bounds");
+            SetWindowPos(parent, None, 180, 165, 400, 300, SWP_NOACTIVATE)
+                .expect("move parent window");
+            let mut after = RECT::default();
+            GetWindowRect(child, &mut after).expect("get moved child bounds");
+            assert_eq!(after.left - before.left, 80);
+            assert_eq!(after.top - before.top, 65);
+            DestroyWindow(child).expect("destroy child window");
+            DestroyWindow(parent).expect("destroy parent window");
+        }
+    }
+}
+
 pub fn stop_preview(state: State<'_, Arc<AppState>>) {
     stop_host(state.inner())
 }
