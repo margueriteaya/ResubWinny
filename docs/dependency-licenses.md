@@ -329,7 +329,7 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `tao` | `0.35.3` | Apache-2.0 | Desktop service |
 | `tao-macros` | `0.1.4` | MIT OR Apache-2.0 | Desktop service |
 | `target-lexicon` | `0.12.16` | Apache-2.0 WITH LLVM-exception | Desktop service |
-| `tauri` | `2.11.5` | Apache-2.0 OR MIT | Desktop service |
+| `tauri` | `2.11.6` | Apache-2.0 OR MIT | Desktop service |
 | `tauri-build` | `2.6.3` | Apache-2.0 OR MIT | Desktop service |
 | `tauri-codegen` | `2.6.3` | Apache-2.0 OR MIT | Desktop service |
 | `tauri-macros` | `2.6.3` | Apache-2.0 OR MIT | Desktop service |
