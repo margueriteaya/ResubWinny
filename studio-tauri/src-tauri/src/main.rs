@@ -100,6 +100,12 @@ fn main() {
             timeline::get_timeline_recent_window_filtered,
             timeline::get_timeline_time_window
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running ResubWinny");
+        .build(tauri::generate_context!())
+        .expect("error while building ResubWinny")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                let state = app.state::<Arc<state::AppState>>();
+                preview::shutdown_preview(state.inner());
+            }
+        });
 }

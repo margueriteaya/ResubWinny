@@ -1,11 +1,11 @@
-import type { BroadcastMetadata, CaptionRenderSnapshot, PlaybackTimeMapping, PreviewCapabilities, PreviewCommand, PreviewOverlaySyncResult, PreviewPlaybackState, PreviewRect, PreviewRenderDiagnostics, PreviewRuntime } from '../backend'
+import type { BroadcastMetadata, CaptionRenderSnapshot, PlaybackTimeMapping, PreviewCapabilities, PreviewCommand, PreviewOverlaySyncResult, PreviewPlaybackState, PreviewSurfaceSize, PreviewRenderDiagnostics, PreviewRuntime } from '../backend'
 import { call } from './client'
 
 export const previewApi = {
-  startPreview: (source: string, rect: PreviewRect) => call<void>('start_preview', { source, rect }),
-  recoverPreview: (source: string, rect: PreviewRect, timeSeconds: number | null, paused: boolean, volume: number) =>
+  startPreview: (source: string, rect: PreviewSurfaceSize) => call<void>('start_preview', { source, rect }),
+  recoverPreview: (source: string, rect: PreviewSurfaceSize, timeSeconds: number | null, paused: boolean, volume: number) =>
     call<void>('recover_preview', { source, rect, timeSeconds, paused, volume }),
-  resizePreview: (rect: PreviewRect) => call<void>('resize_preview', { rect }),
+  resizePreview: (rect: PreviewSurfaceSize) => call<void>('resize_preview', { rect }),
   stopPreview: () => call<void>('stop_preview'),
   previewCommand: (command: PreviewCommand) => call<void>('preview_command', { command }),
   setCaptionFont: (font: string) => call<void>('set_caption_font', { font }),

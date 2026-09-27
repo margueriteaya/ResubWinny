@@ -2,17 +2,31 @@
   import { CirclePause, CirclePlay, HardDrive, X } from "@lucide/svelte";
   import { t } from "../i18n";
 
-  export let sourceSize = 0;
-  export let container = "";
-  export let trackCount = 0;
-  export let warnings = 0;
-  export let isExporting = false;
-  export let previewIndexing = false;
-  export let isPaused = false;
-  export let progress = 0;
-  export let onPause: () => void = () => {};
-  export let onResume: () => void = () => {};
-  export let onCancel: () => void = () => {};
+  let {
+    sourceSize = 0,
+    container = "",
+    trackCount = 0,
+    warnings = 0,
+    isExporting = false,
+    previewIndexing = false,
+    isPaused = false,
+    progress = 0,
+    onPause = () => {},
+    onResume = () => {},
+    onCancel = () => {},
+  }: {
+    sourceSize?: number;
+    container?: string;
+    trackCount?: number;
+    warnings?: number;
+    isExporting?: boolean;
+    previewIndexing?: boolean;
+    isPaused?: boolean;
+    progress?: number;
+    onPause?: () => void;
+    onResume?: () => void;
+    onCancel?: () => void;
+  } = $props();
 
   const bytes = (value: number) => value ? `${(value / 1024 ** 3).toFixed(value > 100 * 1024 ** 3 ? 1 : 2)} GB` : "-";
 </script>
