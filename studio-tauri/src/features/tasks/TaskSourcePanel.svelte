@@ -69,5 +69,5 @@
 
 <style>
   .source-checkmark{display:block;width:10px;height:10px;overflow:visible;filter:none}.source-checkmark path{fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-  .mode-section{margin:18px 0 8px;color:var(--rw-text);font-size:12px;font-weight:750}.evidence-list{display:grid;gap:7px;margin:0}.evidence-list div{display:grid;gap:2px;padding:7px 8px;border:1px solid var(--rw-border-subtle);border-radius:6px;background:var(--rw-content)}.evidence-list dt{color:var(--rw-muted);font-size:10px}.evidence-list dd{margin:0;overflow-wrap:anywhere;color:var(--rw-text-secondary);font:11px/1.4 "Cascadia Mono",monospace}
+  .mode-section{margin:18px 0 8px;color:var(--rw-text);font-size:12px;font-weight:750}.evidence-list{display:grid;gap:7px;margin:0}.evidence-list div{display:grid;gap:2px;padding:7px 8px;border:1px solid var(--rw-border-subtle);border-radius:6px;background:var(--rw-content)}.evidence-list dt{color:var(--rw-muted);font-size:11px}.evidence-list dd{margin:0;overflow-wrap:anywhere;color:var(--rw-text-secondary);font:11px/1.4 "Cascadia Mono",monospace}
 </style>

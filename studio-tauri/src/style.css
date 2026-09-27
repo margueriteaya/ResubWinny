@@ -122,7 +122,7 @@ main { position: relative; }
   grid-row: 1;
   border-left: 1px solid var(--rw-border);
 }
-.source-stats small { color: var(--rw-muted); font-size: 10px; }
+.source-stats small { color: var(--rw-muted); font-size: 11px; }
 .source-stats b { margin-top: 4px; overflow-wrap: anywhere; font-size: 12px; }
 .broadcast-info {
   display: grid;
@@ -136,7 +136,7 @@ main { position: relative; }
 }
 .broadcast-info div { min-width: 0; padding: 9px 10px; background: var(--rw-surface-raised); }
 .broadcast-info .wide { grid-column: 1 / -1; }
-.broadcast-info dt { color: var(--rw-muted); font-size: 10px; }
+.broadcast-info dt { color: var(--rw-muted); font-size: 11px; }
 .broadcast-info dd {
   margin: 4px 0 0;
   overflow-wrap: anywhere;
