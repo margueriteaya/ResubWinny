@@ -4,7 +4,7 @@ This file is generated from the committed Cargo and npm lock data by
 `scripts/generate-license-report.ps1`. It records package metadata for review;
 the dependency source distributions remain the authoritative license texts.
 
-Generated inventory: 466 Cargo packages and 91 npm packages.
+Generated inventory: 472 Cargo packages and 91 npm packages.
 
 ## Cargo
 
@@ -55,6 +55,7 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `cmake` | `0.1.58` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `combine` | `4.6.8` | MIT | Desktop service |
 | `cookie` | `0.18.2` | MIT OR Apache-2.0 | Desktop service |
+| `core_detect` | `1.0.0` | MIT/Apache-2.0 | Worker |
 | `core_maths` | `0.1.1` | MIT | Desktop service |
 | `core-foundation` | `0.10.1` | MIT OR Apache-2.0 | Desktop service |
 | `core-foundation-sys` | `0.8.7` | MIT OR Apache-2.0 | Desktop service |
@@ -96,7 +97,8 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `dyn-clone` | `1.0.20` | MIT OR Apache-2.0 | Desktop service |
 | `embed_plist` | `1.2.2` | MIT OR Apache-2.0 | Desktop service |
 | `embed-resource` | `3.0.11` | MIT | Desktop service |
-| `encoding_rs` | `0.8.35` | (Apache-2.0 OR MIT) AND BSD-3-Clause | Fuzz targets, Worker |
+| `encoding_rs` | `0.8.35` | (Apache-2.0 OR MIT) AND BSD-3-Clause | Fuzz targets |
+| `encoding_rs` | `0.8.41` | (Apache-2.0 OR MIT) AND BSD-3-Clause | Worker |
 | `equivalent` | `1.0.2` | Apache-2.0 OR MIT | Desktop service |
 | `erased-serde` | `0.4.10` | MIT OR Apache-2.0 | Desktop service |
 | `fastrand` | `2.5.0` | Apache-2.0 OR MIT | Desktop service |
@@ -211,6 +213,9 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `mio` | `1.2.2` | MIT | Desktop service |
 | `moxcms` | `0.8.1` | BSD-3-Clause OR Apache-2.0 | Worker |
 | `muda` | `0.19.3` | Apache-2.0 OR MIT | Desktop service |
+| `multiversion` | `0.9.0` | MIT OR Apache-2.0 | Worker |
+| `multiversion_no_op` | `1.0.0` | Apache-2.0 OR MIT | Worker |
+| `multiversion-macros` | `0.9.0` | MIT OR Apache-2.0 | Worker |
 | `ndk` | `0.9.0` | MIT OR Apache-2.0 | Desktop service |
 | `ndk-sys` | `0.6.0+11769913` | MIT OR Apache-2.0 | Desktop service |
 | `new_debug_unreachable` | `1.0.6` | MIT | Desktop service |
@@ -281,13 +286,13 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `roxmltree` | `0.21.1` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `rustc_version` | `0.4.1` | MIT OR Apache-2.0 | Desktop service |
 | `rustc-hash` | `2.1.3` | Apache-2.0 OR MIT | Desktop service |
-| `rustversion` | `1.0.23` | MIT OR Apache-2.0 | Desktop service |
+| `rustversion` | `1.0.23` | MIT OR Apache-2.0 | Desktop service, Worker |
 | `same-file` | `1.0.6` | Unlicense/MIT | Desktop service |
 | `schemars` | `0.8.22` | MIT | Desktop service |
 | `schemars` | `0.9.0` | MIT | Desktop service |
 | `schemars` | `1.2.2` | MIT | Desktop service |
 | `schemars_derive` | `0.8.22` | MIT | Desktop service |
-| `scopeguard` | `1.2.0` | MIT OR Apache-2.0 | Desktop service |
+| `scopeguard` | `1.2.0` | MIT OR Apache-2.0 | Desktop service, Worker |
 | `selectors` | `0.36.1` | MPL-2.0 | Desktop service |
 | `semver` | `1.0.28` | MIT OR Apache-2.0 | Desktop service |
 | `serde` | `1.0.229` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
@@ -307,6 +312,7 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `sha2` | `0.10.9` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `shlex` | `2.0.1` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `simd-adler32` | `0.3.10` | MIT | Desktop service, Worker |
+| `simdutf8` | `0.1.5` | MIT OR Apache-2.0 | Worker |
 | `siphasher` | `1.0.3` | MIT/Apache-2.0 | Desktop service |
 | `slab` | `0.4.12` | MIT | Desktop service |
 | `smallvec` | `1.15.2` | MIT OR Apache-2.0 | Desktop service |
@@ -329,7 +335,7 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `tao` | `0.35.3` | Apache-2.0 | Desktop service |
 | `tao-macros` | `0.1.4` | MIT OR Apache-2.0 | Desktop service |
 | `target-lexicon` | `0.12.16` | Apache-2.0 WITH LLVM-exception | Desktop service |
-| `tauri` | `2.11.5` | Apache-2.0 OR MIT | Desktop service |
+| `tauri` | `2.11.6` | Apache-2.0 OR MIT | Desktop service |
 | `tauri-build` | `2.6.3` | Apache-2.0 OR MIT | Desktop service |
 | `tauri-codegen` | `2.6.3` | Apache-2.0 OR MIT | Desktop service |
 | `tauri-macros` | `2.6.3` | Apache-2.0 OR MIT | Desktop service |
@@ -486,7 +492,7 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `@jridgewell/resolve-uri` | `3.1.2` | MIT |
 | `@jridgewell/sourcemap-codec` | `1.5.5` | MIT |
 | `@jridgewell/trace-mapping` | `0.3.31` | MIT |
-| `@lucide/svelte` | `1.37.0` | ISC |
+| `@lucide/svelte` | `1.47.0` | ISC |
 | `@oxc-project/types` | `0.147.0` | MIT |
 | `@rolldown/binding-android-arm-eabi` | `1.2.6` | MIT |
 | `@rolldown/binding-android-arm64` | `1.2.6` | MIT |
@@ -523,7 +529,7 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `@tauri-apps/cli-win32-arm64-msvc` | `2.11.4` | Apache-2.0 OR MIT |
 | `@tauri-apps/cli-win32-ia32-msvc` | `2.11.4` | Apache-2.0 OR MIT |
 | `@tauri-apps/cli-win32-x64-msvc` | `2.11.4` | Apache-2.0 OR MIT |
-| `@tauri-apps/plugin-dialog` | `2.7.2` | MIT OR Apache-2.0 |
+| `@tauri-apps/plugin-dialog` | `2.7.3` | MIT OR Apache-2.0 |
 | `@tsconfig/svelte` | `5.0.8` | MIT |
 | `@types/estree` | `1.0.9` | MIT |
 | `acorn` | `8.17.0` | MIT |
@@ -533,7 +539,7 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `clsx` | `2.1.1` | MIT |
 | `deepmerge` | `4.3.1` | MIT |
 | `detect-libc` | `2.1.2` | Apache-2.0 |
-| `devalue` | `5.8.2` | MIT |
+| `devalue` | `5.9.4` | MIT |
 | `esm-env` | `1.2.2` | MIT |
 | `esrap` | `2.3.0` | MIT |
 | `fdir` | `6.5.0` | MIT |
@@ -555,11 +561,11 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `macos-traffic-lights` | `1.1.0` | MIT |
 | `magic-string` | `0.30.21` | MIT |
 | `mri` | `1.2.0` | MIT |
-| `nanoid` | `3.3.18` | MIT |
+| `nanoid` | `3.3.19` | MIT |
 | `obug` | `2.1.4` | MIT |
 | `picocolors` | `1.1.1` | ISC |
-| `picomatch` | `4.0.5` | MIT |
-| `postcss` | `8.5.26` | MIT |
+| `picomatch` | `4.0.7` | MIT |
+| `postcss` | `8.5.28` | MIT |
 | `readdirp` | `4.1.2` | MIT |
 | `rolldown` | `1.2.6` | MIT |
 | `sade` | `1.8.1` | MIT |
@@ -569,7 +575,7 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `tinyglobby` | `0.2.17` | MIT |
 | `tslib` | `2.8.1` | 0BSD |
 | `typescript` | `5.9.3` | Apache-2.0 |
-| `vite` | `8.2.2` | MIT |
+| `vite` | `8.3.0` | MIT |
 | `vitefu` | `1.1.3` | MIT |
 | `zimmerframe` | `1.1.4` | MIT |
 
