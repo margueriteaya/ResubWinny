@@ -486,7 +486,7 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `@jridgewell/resolve-uri` | `3.1.2` | MIT |
 | `@jridgewell/sourcemap-codec` | `1.5.5` | MIT |
 | `@jridgewell/trace-mapping` | `0.3.31` | MIT |
-| `@lucide/svelte` | `1.37.0` | ISC |
+| `@lucide/svelte` | `1.47.0` | ISC |
 | `@oxc-project/types` | `0.147.0` | MIT |
 | `@rolldown/binding-android-arm-eabi` | `1.2.6` | MIT |
 | `@rolldown/binding-android-arm64` | `1.2.6` | MIT |
