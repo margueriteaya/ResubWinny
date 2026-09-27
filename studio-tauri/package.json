@@ -18,10 +18,10 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@lucide/svelte": "^1.0.1",
+    "@lucide/svelte": "^1.47.0",
     "@tabler/icons-svelte": "^3.48.0",
     "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/plugin-dialog": "^2.4.0",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
     "macos-traffic-lights": "^1.1.0",
     "svelte": "^5.55.7"
   },
@@ -31,7 +31,7 @@
     "@tsconfig/svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "tslib": "^2.4.0",
-    "typescript": "^7.0.2",
-    "vite": "^8.2.2"
+    "typescript": "^5.6.3",
+    "vite": "^8.3.0"
   }
 }

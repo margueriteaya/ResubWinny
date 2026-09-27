@@ -17,7 +17,10 @@ pub(crate) struct TtmlResourceMetadata {
 }
 
 pub(crate) fn resource_sha256(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 pub(crate) fn b62_drcs_mapping_key(content_sha256: &str, source_codepoint: u32) -> String {
