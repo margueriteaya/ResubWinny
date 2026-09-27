@@ -4,7 +4,7 @@ This file is generated from the committed Cargo and npm lock data by
 `scripts/generate-license-report.ps1`. It records package metadata for review;
 the dependency source distributions remain the authoritative license texts.
 
-Generated inventory: 475 Cargo packages and 91 npm packages.
+Generated inventory: 462 Cargo packages and 91 npm packages.
 
 ## Cargo
 
@@ -12,8 +12,8 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | --- | --- | --- | --- |
 | `adler2` | `2.0.1` | 0BSD OR MIT OR Apache-2.0 | Desktop service, Worker |
 | `aho-corasick` | `1.1.5` | Unlicense OR MIT | Desktop service |
-| `alloc-no-stdlib` | `2.0.4` | BSD-3-Clause | Desktop service |
-| `alloc-stdlib` | `0.2.4` | BSD-3-Clause | Desktop service |
+| `alloc-no-stdlib` | `3.0.0` | BSD-3-Clause | Desktop service |
+| `alloc-stdlib` | `0.3.0` | BSD-3-Clause | Desktop service |
 | `allocator-api2` | `0.2.21` | MIT OR Apache-2.0 | Desktop service |
 | `android_system_properties` | `0.1.6` | MIT OR Apache-2.0 | Desktop service |
 | `anyhow` | `1.0.104` | MIT OR Apache-2.0 | Desktop service |
@@ -32,8 +32,8 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `block-buffer` | `0.10.4` | MIT OR Apache-2.0 | Desktop service |
 | `block-buffer` | `0.12.1` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `block2` | `0.6.2` | MIT | Desktop service |
-| `brotli` | `8.0.4` | BSD-3-Clause AND MIT | Desktop service |
-| `brotli-decompressor` | `5.0.3` | BSD-3-Clause/MIT | Desktop service |
+| `brotli` | `9.0.0` | BSD-3-Clause AND MIT | Desktop service |
+| `brotli-decompressor` | `6.0.1` | BSD-3-Clause/MIT | Desktop service |
 | `bs58` | `0.5.1` | MIT/Apache-2.0 | Desktop service |
 | `bumpalo` | `3.20.3` | MIT OR Apache-2.0 | Desktop service |
 | `bytemuck` | `1.25.2` | Zlib OR Apache-2.0 OR MIT | Desktop service, Worker |
@@ -44,11 +44,11 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `cairo-sys-rs` | `0.18.2` | MIT | Desktop service |
 | `camino` | `1.2.5` | MIT OR Apache-2.0 | Desktop service |
 | `cargo_metadata` | `0.19.2` | MIT | Desktop service |
-| `cargo_toml` | `0.22.3` | Apache-2.0 OR MIT | Desktop service |
+| `cargo_toml` | `1.0.1` | Apache-2.0 OR MIT | Desktop service |
 | `cargo-platform` | `0.1.9` | MIT OR Apache-2.0 | Desktop service |
 | `cc` | `1.4.4` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `cesu8` | `1.1.0` | Apache-2.0/MIT | Desktop service |
-| `cfb` | `0.7.3` | MIT | Desktop service |
+| `cfb` | `0.14.0` | MIT | Desktop service |
 | `cfg-expr` | `0.15.8` | MIT OR Apache-2.0 | Desktop service |
 | `cfg-if` | `1.0.4` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `chrono` | `0.4.45` | MIT OR Apache-2.0 | Desktop service |
@@ -69,10 +69,9 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `crossbeam-utils` | `0.8.22` | MIT OR Apache-2.0 | Desktop service |
 | `crypto-common` | `0.1.7` | MIT OR Apache-2.0 | Desktop service |
 | `crypto-common` | `0.2.2` | MIT OR Apache-2.0 | Fuzz targets, Worker |
-| `cssparser` | `0.36.0` | MPL-2.0 | Desktop service |
-| `cssparser-macros` | `0.6.1` | MPL-2.0 | Desktop service |
-| `ctor` | `0.8.0` | Apache-2.0 OR MIT | Desktop service |
-| `ctor-proc-macro` | `0.0.7` | Apache-2.0 OR MIT | Desktop service |
+| `cssparser` | `0.37.0` | MPL-2.0 | Desktop service |
+| `cssparser-macros` | `0.7.1` | MPL-2.0 | Desktop service |
+| `ctor` | `1.0.13` | Apache-2.0 OR MIT | Desktop service |
 | `darling` | `0.23.0` | MIT | Desktop service |
 | `darling_core` | `0.23.0` | MIT | Desktop service |
 | `darling_macro` | `0.23.0` | MIT | Desktop service |
@@ -85,18 +84,16 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `derive_more-impl` | `2.1.1` | MIT | Desktop service |
 | `digest` | `0.10.7` | MIT OR Apache-2.0 | Desktop service |
 | `digest` | `0.11.3` | MIT OR Apache-2.0 | Fuzz targets, Worker |
-| `dirs` | `6.0.0` | MIT OR Apache-2.0 | Desktop service |
+| `dirs` | `7.0.0` | MIT OR Apache-2.0 | Desktop service |
 | `dirs-sys` | `0.5.0` | MIT OR Apache-2.0 | Desktop service |
 | `dispatch2` | `0.3.1` | Zlib OR Apache-2.0 OR MIT | Desktop service |
 | `displaydoc` | `0.2.7` | MIT OR Apache-2.0 | Desktop service |
 | `dlopen2` | `0.8.2` | MIT | Desktop service |
 | `dlopen2_derive` | `0.4.3` | MIT | Desktop service |
-| `dom_query` | `0.27.0` | MIT | Desktop service |
+| `dom_query` | `0.28.0` | MIT | Desktop service |
 | `dpi` | `0.1.2` | Apache-2.0 AND MIT | Desktop service |
 | `dtoa` | `1.0.11` | MIT OR Apache-2.0 | Desktop service |
 | `dtoa-short` | `0.3.5` | MPL-2.0 | Desktop service |
-| `dtor` | `0.3.0` | Apache-2.0 OR MIT | Desktop service |
-| `dtor-proc-macro` | `0.0.6` | Apache-2.0 OR MIT | Desktop service |
 | `dunce` | `1.0.5` | CC0-1.0 OR MIT-0 OR Apache-2.0 | Desktop service |
 | `dyn-clone` | `1.0.20` | MIT OR Apache-2.0 | Desktop service |
 | `embed_plist` | `1.2.2` | MIT OR Apache-2.0 | Desktop service |
@@ -152,7 +149,7 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `heck` | `0.4.1` | MIT OR Apache-2.0 | Desktop service |
 | `heck` | `0.5.0` | MIT OR Apache-2.0 | Desktop service |
 | `hex` | `0.4.3` | MIT OR Apache-2.0 | Desktop service |
-| `html5ever` | `0.38.0` | MIT OR Apache-2.0 | Desktop service |
+| `html5ever` | `0.39.0` | MIT OR Apache-2.0 | Desktop service |
 | `http` | `1.5.0` | MIT OR Apache-2.0 | Desktop service |
 | `http-body` | `1.1.0` | MIT | Desktop service |
 | `http-body-util` | `0.1.5` | MIT | Desktop service |
@@ -176,7 +173,7 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `image` | `0.25.10` | MIT OR Apache-2.0 | Worker |
 | `indexmap` | `1.9.3` | Apache-2.0 OR MIT | Desktop service |
 | `indexmap` | `2.14.1` | Apache-2.0 OR MIT | Desktop service |
-| `infer` | `0.19.0` | MIT | Desktop service |
+| `infer` | `0.22.0` | MIT | Desktop service |
 | `ipnet` | `2.12.1` | MIT OR Apache-2.0 | Desktop service |
 | `itoa` | `1.0.18` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `javascriptcore-rs` | `1.1.2` | MIT | Desktop service |
@@ -192,9 +189,9 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `jni-sys-macros` | `0.4.1` | MIT OR Apache-2.0 | Desktop service |
 | `jobserver` | `0.1.35` | MIT OR Apache-2.0 | Fuzz targets |
 | `js-sys` | `0.3.104` | MIT OR Apache-2.0 | Desktop service |
-| `json-patch` | `3.0.1` | MIT/Apache-2.0 | Desktop service |
-| `jsonptr` | `0.6.3` | MIT OR Apache-2.0 | Desktop service |
-| `keyboard-types` | `0.7.0` | MIT OR Apache-2.0 | Desktop service |
+| `json-patch` | `4.2.0` | MIT/Apache-2.0 | Desktop service |
+| `jsonptr` | `0.7.1` | MIT OR Apache-2.0 | Desktop service |
+| `keyboard-types` | `0.8.3` | MIT OR Apache-2.0 | Desktop service |
 | `libappindicator` | `0.9.0` | Apache-2.0 OR MIT | Desktop service |
 | `libappindicator-sys` | `0.9.0` | Apache-2.0 OR MIT | Desktop service |
 | `libc` | `0.2.189` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
@@ -207,7 +204,7 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `litemap` | `0.8.3` | Unicode-3.0 | Desktop service |
 | `lock_api` | `0.4.14` | MIT OR Apache-2.0 | Desktop service |
 | `log` | `0.4.34` | MIT OR Apache-2.0 | Desktop service |
-| `markup5ever` | `0.38.0` | MIT OR Apache-2.0 | Desktop service |
+| `markup5ever` | `0.39.0` | MIT OR Apache-2.0 | Desktop service |
 | `memchr` | `2.8.3` | Unlicense OR MIT | Desktop service, Fuzz targets, Worker |
 | `memoffset` | `0.9.1` | MIT | Desktop service |
 | `mime` | `0.3.17` | MIT OR Apache-2.0 | Desktop service |
@@ -215,11 +212,12 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `miniz_oxide` | `0.9.1` | MIT OR Zlib OR Apache-2.0 | Desktop service, Worker |
 | `mio` | `1.2.2` | MIT | Desktop service |
 | `moxcms` | `0.8.1` | BSD-3-Clause OR Apache-2.0 | Worker |
-| `muda` | `0.19.3` | Apache-2.0 OR MIT | Desktop service |
+| `muda` | `0.20.0` | Apache-2.0 OR MIT | Desktop service |
 | `multiversion` | `0.9.0` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `multiversion_no_op` | `1.0.0` | Apache-2.0 OR MIT | Fuzz targets, Worker |
 | `multiversion-macros` | `0.9.0` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `ndk` | `0.9.0` | MIT OR Apache-2.0 | Desktop service |
+| `ndk-context` | `0.1.1` | MIT OR Apache-2.0 | Desktop service |
 | `ndk-sys` | `0.6.0+11769913` | MIT OR Apache-2.0 | Desktop service |
 | `new_debug_unreachable` | `1.0.6` | MIT | Desktop service |
 | `num_enum` | `0.7.6` | BSD-3-Clause OR MIT OR Apache-2.0 | Desktop service |
@@ -296,7 +294,7 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `schemars` | `1.2.2` | MIT | Desktop service |
 | `schemars_derive` | `0.8.22` | MIT | Desktop service |
 | `scopeguard` | `1.2.0` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
-| `selectors` | `0.36.1` | MPL-2.0 | Desktop service |
+| `selectors` | `0.38.0` | MPL-2.0 | Desktop service |
 | `semver` | `1.0.28` | MIT OR Apache-2.0 | Desktop service |
 | `serde` | `1.0.229` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `serde_core` | `1.0.229` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
@@ -335,19 +333,19 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `sync_wrapper` | `1.0.2` | Apache-2.0 | Desktop service |
 | `synstructure` | `0.13.2` | MIT | Desktop service |
 | `system-deps` | `6.2.2` | MIT OR Apache-2.0 | Desktop service |
-| `tao` | `0.35.3` | Apache-2.0 | Desktop service |
+| `tao` | `0.37.1` | Apache-2.0 | Desktop service |
 | `tao-macros` | `0.1.4` | MIT OR Apache-2.0 | Desktop service |
 | `target-lexicon` | `0.12.16` | Apache-2.0 WITH LLVM-exception | Desktop service |
-| `tauri` | `2.11.6` | Apache-2.0 OR MIT | Desktop service |
-| `tauri-build` | `2.6.3` | Apache-2.0 OR MIT | Desktop service |
-| `tauri-codegen` | `2.6.3` | Apache-2.0 OR MIT | Desktop service |
-| `tauri-macros` | `2.6.3` | Apache-2.0 OR MIT | Desktop service |
-| `tauri-plugin` | `2.6.3` | Apache-2.0 OR MIT | Desktop service |
-| `tauri-plugin-dialog` | `2.7.2` | Apache-2.0 OR MIT | Desktop service |
-| `tauri-plugin-fs` | `2.5.1` | Apache-2.0 OR MIT | Desktop service |
-| `tauri-runtime` | `2.11.3` | Apache-2.0 OR MIT | Desktop service |
-| `tauri-runtime-wry` | `2.11.4` | Apache-2.0 OR MIT | Desktop service |
-| `tauri-utils` | `2.9.3` | Apache-2.0 OR MIT | Desktop service |
+| `tauri` | `2.12.0` | Apache-2.0 OR MIT | Desktop service |
+| `tauri-build` | `2.7.0` | Apache-2.0 OR MIT | Desktop service |
+| `tauri-codegen` | `2.7.0` | Apache-2.0 OR MIT | Desktop service |
+| `tauri-macros` | `2.7.0` | Apache-2.0 OR MIT | Desktop service |
+| `tauri-plugin` | `2.7.0` | Apache-2.0 OR MIT | Desktop service |
+| `tauri-plugin-dialog` | `2.7.3` | Apache-2.0 OR MIT | Desktop service |
+| `tauri-plugin-fs` | `2.6.0` | Apache-2.0 OR MIT | Desktop service |
+| `tauri-runtime` | `2.12.0` | Apache-2.0 OR MIT | Desktop service |
+| `tauri-runtime-wry` | `2.12.0` | Apache-2.0 OR MIT | Desktop service |
+| `tauri-utils` | `2.10.0` | Apache-2.0 OR MIT | Desktop service |
 | `tauri-winres` | `0.3.6` | MIT | Desktop service |
 | `tendril` | `0.5.1` | MIT OR Apache-2.0 | Desktop service |
 | `thiserror` | `1.0.69` | MIT OR Apache-2.0 | Desktop service |
@@ -363,10 +361,8 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `tokio` | `1.53.1` | MIT | Desktop service |
 | `tokio-util` | `0.7.19` | MIT | Desktop service |
 | `toml` | `0.8.2` | MIT OR Apache-2.0 | Desktop service |
-| `toml` | `0.9.12+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `toml` | `1.1.4+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `toml_datetime` | `0.6.3` | MIT OR Apache-2.0 | Desktop service |
-| `toml_datetime` | `0.7.5+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `toml_datetime` | `1.1.1+spec-1.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `toml_edit` | `0.19.15` | MIT OR Apache-2.0 | Desktop service |
 | `toml_edit` | `0.20.2` | MIT OR Apache-2.0 | Desktop service |
@@ -379,20 +375,15 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `tower-service` | `0.3.3` | MIT | Desktop service |
 | `tracing` | `0.1.44` | MIT | Desktop service |
 | `tracing-core` | `0.1.36` | MIT | Desktop service |
-| `tray-icon` | `0.24.2` | MIT OR Apache-2.0 | Desktop service |
+| `tray-icon` | `0.25.1` | MIT OR Apache-2.0 | Desktop service |
 | `try-lock` | `0.2.5` | MIT | Desktop service |
 | `ttf-parser` | `0.25.1` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `typeid` | `1.0.3` | MIT OR Apache-2.0 | Desktop service |
 | `typenum` | `1.20.1` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
-| `unic-char-property` | `0.9.0` | MIT/Apache-2.0 | Desktop service |
-| `unic-char-range` | `0.9.0` | MIT/Apache-2.0 | Desktop service |
-| `unic-common` | `0.9.0` | MIT/Apache-2.0 | Desktop service |
-| `unic-ucd-ident` | `0.9.0` | MIT/Apache-2.0 | Desktop service |
-| `unic-ucd-version` | `0.9.0` | MIT/Apache-2.0 | Desktop service |
 | `unicode-ident` | `1.0.24` | (MIT OR Apache-2.0) AND Unicode-3.0 | Desktop service, Fuzz targets, Worker |
 | `unicode-segmentation` | `1.13.3` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `url` | `2.5.8` | MIT OR Apache-2.0 | Desktop service |
-| `urlpattern` | `0.3.0` | MIT | Desktop service |
+| `urlpattern` | `0.6.0` | MIT | Desktop service |
 | `utf8_iter` | `1.0.4` | Apache-2.0 OR MIT | Desktop service |
 | `uuid` | `1.26.0` | Apache-2.0 OR MIT | Desktop service |
 | `version_check` | `0.9.5` | MIT/Apache-2.0 | Desktop service |
@@ -411,17 +402,18 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `wasm-streams` | `0.5.0` | MIT OR Apache-2.0 | Desktop service |
 | `web_atoms` | `0.2.6` | MIT OR Apache-2.0 | Desktop service |
 | `web-sys` | `0.3.104` | MIT OR Apache-2.0 | Desktop service |
+| `web-time` | `1.1.0` | MIT OR Apache-2.0 | Desktop service |
 | `webkit2gtk` | `2.0.2` | MIT | Desktop service |
 | `webkit2gtk-sys` | `2.0.2` | MIT | Desktop service |
-| `webview2-com` | `0.38.2` | MIT | Desktop service |
+| `webview2-com` | `0.39.1` | MIT | Desktop service |
 | `webview2-com-macros` | `0.8.1` | MIT | Desktop service |
-| `webview2-com-sys` | `0.38.2` | MIT | Desktop service |
+| `webview2-com-sys` | `0.39.1` | MIT | Desktop service |
 | `winapi` | `0.3.9` | MIT/Apache-2.0 | Desktop service |
 | `winapi-i686-pc-windows-gnu` | `0.4.0` | MIT/Apache-2.0 | Desktop service |
 | `winapi-util` | `0.1.11` | Unlicense OR MIT | Desktop service |
 | `winapi-x86_64-pc-windows-gnu` | `0.4.0` | MIT/Apache-2.0 | Desktop service |
-| `window-vibrancy` | `0.6.0` | Apache-2.0 OR MIT | Desktop service |
-| `windows` | `0.61.3` | MIT OR Apache-2.0 | Desktop service |
+| `window-vibrancy` | `0.8.1` | Apache-2.0 OR MIT | Desktop service |
+| `windows` | `0.62.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows_aarch64_gnullvm` | `0.42.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows_aarch64_gnullvm` | `0.52.6` | MIT OR Apache-2.0 | Desktop service |
 | `windows_aarch64_gnullvm` | `0.53.1` | MIT OR Apache-2.0 | Desktop service |
@@ -445,18 +437,14 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `windows_x86_64_msvc` | `0.42.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows_x86_64_msvc` | `0.52.6` | MIT OR Apache-2.0 | Desktop service |
 | `windows_x86_64_msvc` | `0.53.1` | MIT OR Apache-2.0 | Desktop service |
-| `windows-collections` | `0.2.0` | MIT OR Apache-2.0 | Desktop service |
-| `windows-core` | `0.61.2` | MIT OR Apache-2.0 | Desktop service |
+| `windows-collections` | `0.3.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows-core` | `0.62.2` | MIT OR Apache-2.0 | Desktop service |
-| `windows-future` | `0.2.1` | MIT OR Apache-2.0 | Desktop service |
+| `windows-future` | `0.3.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows-implement` | `0.60.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows-interface` | `0.59.3` | MIT OR Apache-2.0 | Desktop service |
-| `windows-link` | `0.1.3` | MIT OR Apache-2.0 | Desktop service |
 | `windows-link` | `0.2.1` | MIT OR Apache-2.0 | Desktop service |
-| `windows-numerics` | `0.2.0` | MIT OR Apache-2.0 | Desktop service |
-| `windows-result` | `0.3.4` | MIT OR Apache-2.0 | Desktop service |
+| `windows-numerics` | `0.3.1` | MIT OR Apache-2.0 | Desktop service |
 | `windows-result` | `0.4.1` | MIT OR Apache-2.0 | Desktop service |
-| `windows-strings` | `0.4.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows-strings` | `0.5.1` | MIT OR Apache-2.0 | Desktop service |
 | `windows-sys` | `0.45.0` | MIT OR Apache-2.0 | Desktop service |
 | `windows-sys` | `0.59.0` | MIT OR Apache-2.0 | Desktop service |
@@ -465,15 +453,14 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `windows-targets` | `0.42.2` | MIT OR Apache-2.0 | Desktop service |
 | `windows-targets` | `0.52.6` | MIT OR Apache-2.0 | Desktop service |
 | `windows-targets` | `0.53.5` | MIT OR Apache-2.0 | Desktop service |
-| `windows-threading` | `0.1.0` | MIT OR Apache-2.0 | Desktop service |
+| `windows-threading` | `0.2.1` | MIT OR Apache-2.0 | Desktop service |
 | `windows-version` | `0.1.7` | MIT OR Apache-2.0 | Desktop service |
 | `winnow` | `0.5.40` | MIT | Desktop service |
-| `winnow` | `0.7.15` | MIT | Desktop service |
 | `winnow` | `1.0.4` | MIT | Desktop service |
 | `winreg` | `0.55.0` | MIT | Desktop service |
 | `wit-bindgen` | `0.57.1` | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | Desktop service |
 | `writeable` | `0.6.4` | Unicode-3.0 | Desktop service |
-| `wry` | `0.55.1` | Apache-2.0 OR MIT | Desktop service |
+| `wry` | `0.57.0` | Apache-2.0 OR MIT | Desktop service |
 | `x11` | `2.21.0` | MIT | Desktop service |
 | `x11-dl` | `2.21.0` | MIT | Desktop service |
 | `yoke` | `0.8.3` | Unicode-3.0 | Desktop service |
