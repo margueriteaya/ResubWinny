@@ -4,7 +4,7 @@ This file is generated from the committed Cargo and npm lock data by
 `scripts/generate-license-report.ps1`. It records package metadata for review;
 the dependency source distributions remain the authoritative license texts.
 
-Generated inventory: 472 Cargo packages and 91 npm packages.
+Generated inventory: 475 Cargo packages and 91 npm packages.
 
 ## Cargo
 
@@ -29,7 +29,8 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `bit-vec` | `0.8.0` | Apache-2.0 OR MIT | Desktop service |
 | `bitflags` | `1.3.2` | MIT/Apache-2.0 | Desktop service |
 | `bitflags` | `2.13.1` | MIT OR Apache-2.0 | Desktop service, Worker |
-| `block-buffer` | `0.10.4` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
+| `block-buffer` | `0.10.4` | MIT OR Apache-2.0 | Desktop service |
+| `block-buffer` | `0.12.1` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `block2` | `0.6.2` | MIT | Desktop service |
 | `brotli` | `8.0.4` | BSD-3-Clause AND MIT | Desktop service |
 | `brotli-decompressor` | `5.0.3` | BSD-3-Clause/MIT | Desktop service |
@@ -45,8 +46,7 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `cargo_metadata` | `0.19.2` | MIT | Desktop service |
 | `cargo_toml` | `0.22.3` | Apache-2.0 OR MIT | Desktop service |
 | `cargo-platform` | `0.1.9` | MIT OR Apache-2.0 | Desktop service |
-| `cc` | `1.4.0` | MIT OR Apache-2.0 | Fuzz targets |
-| `cc` | `1.4.4` | MIT OR Apache-2.0 | Desktop service, Worker |
+| `cc` | `1.4.4` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `cesu8` | `1.1.0` | Apache-2.0/MIT | Desktop service |
 | `cfb` | `0.7.3` | MIT | Desktop service |
 | `cfg-expr` | `0.15.8` | MIT OR Apache-2.0 | Desktop service |
@@ -54,18 +54,21 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `chrono` | `0.4.45` | MIT OR Apache-2.0 | Desktop service |
 | `cmake` | `0.1.58` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `combine` | `4.6.8` | MIT | Desktop service |
+| `const-oid` | `0.10.2` | Apache-2.0 OR MIT | Fuzz targets, Worker |
 | `cookie` | `0.18.2` | MIT OR Apache-2.0 | Desktop service |
-| `core_detect` | `1.0.0` | MIT/Apache-2.0 | Worker |
+| `core_detect` | `1.0.0` | MIT/Apache-2.0 | Fuzz targets, Worker |
 | `core_maths` | `0.1.1` | MIT | Desktop service |
 | `core-foundation` | `0.10.1` | MIT OR Apache-2.0 | Desktop service |
 | `core-foundation-sys` | `0.8.7` | MIT OR Apache-2.0 | Desktop service |
 | `core-graphics` | `0.25.0` | MIT OR Apache-2.0 | Desktop service |
 | `core-graphics-types` | `0.2.0` | MIT OR Apache-2.0 | Desktop service |
-| `cpufeatures` | `0.2.17` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
+| `cpufeatures` | `0.2.17` | MIT OR Apache-2.0 | Desktop service |
+| `cpufeatures` | `0.3.1` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `crc32fast` | `1.5.1` | MIT OR Apache-2.0 | Desktop service, Worker |
 | `crossbeam-channel` | `0.5.16` | MIT OR Apache-2.0 | Desktop service |
 | `crossbeam-utils` | `0.8.22` | MIT OR Apache-2.0 | Desktop service |
-| `crypto-common` | `0.1.7` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
+| `crypto-common` | `0.1.7` | MIT OR Apache-2.0 | Desktop service |
+| `crypto-common` | `0.2.2` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `cssparser` | `0.36.0` | MPL-2.0 | Desktop service |
 | `cssparser-macros` | `0.6.1` | MPL-2.0 | Desktop service |
 | `ctor` | `0.8.0` | Apache-2.0 OR MIT | Desktop service |
@@ -80,7 +83,8 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `deranged` | `0.5.8` | MIT OR Apache-2.0 | Desktop service |
 | `derive_more` | `2.1.1` | MIT | Desktop service |
 | `derive_more-impl` | `2.1.1` | MIT | Desktop service |
-| `digest` | `0.10.7` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
+| `digest` | `0.10.7` | MIT OR Apache-2.0 | Desktop service |
+| `digest` | `0.11.3` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `dirs` | `6.0.0` | MIT OR Apache-2.0 | Desktop service |
 | `dirs-sys` | `0.5.0` | MIT OR Apache-2.0 | Desktop service |
 | `dispatch2` | `0.3.1` | Zlib OR Apache-2.0 OR MIT | Desktop service |
@@ -97,15 +101,13 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `dyn-clone` | `1.0.20` | MIT OR Apache-2.0 | Desktop service |
 | `embed_plist` | `1.2.2` | MIT OR Apache-2.0 | Desktop service |
 | `embed-resource` | `3.0.11` | MIT | Desktop service |
-| `encoding_rs` | `0.8.35` | (Apache-2.0 OR MIT) AND BSD-3-Clause | Fuzz targets |
-| `encoding_rs` | `0.8.41` | (Apache-2.0 OR MIT) AND BSD-3-Clause | Worker |
+| `encoding_rs` | `0.8.41` | (Apache-2.0 OR MIT) AND BSD-3-Clause | Fuzz targets, Worker |
 | `equivalent` | `1.0.2` | Apache-2.0 OR MIT | Desktop service |
 | `erased-serde` | `0.4.10` | MIT OR Apache-2.0 | Desktop service |
 | `fastrand` | `2.5.0` | Apache-2.0 OR MIT | Desktop service |
 | `fdeflate` | `0.3.7` | MIT OR Apache-2.0 | Desktop service, Worker |
 | `field-offset` | `0.3.6` | MIT OR Apache-2.0 | Desktop service |
-| `find-msvc-tools` | `0.1.11` | MIT OR Apache-2.0 | Desktop service, Worker |
-| `find-msvc-tools` | `0.1.9` | MIT OR Apache-2.0 | Fuzz targets |
+| `find-msvc-tools` | `0.1.11` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `flate2` | `1.1.10` | MIT OR Apache-2.0 | Desktop service, Worker |
 | `fnv` | `1.0.7` | Apache-2.0 / MIT | Desktop service |
 | `foldhash` | `0.1.5` | Zlib | Desktop service |
@@ -130,7 +132,7 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `gdkwayland-sys` | `0.18.2` | MIT | Desktop service |
 | `gdkx11` | `0.18.2` | MIT | Desktop service |
 | `gdkx11-sys` | `0.18.2` | MIT | Desktop service |
-| `generic-array` | `0.14.7` | MIT | Desktop service, Fuzz targets, Worker |
+| `generic-array` | `0.14.7` | MIT | Desktop service |
 | `getrandom` | `0.2.17` | MIT OR Apache-2.0 | Desktop service |
 | `getrandom` | `0.3.4` | MIT OR Apache-2.0 | Desktop service |
 | `getrandom` | `0.4.3` | MIT OR Apache-2.0 | Desktop service, Fuzz targets |
@@ -155,6 +157,7 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `http-body` | `1.1.0` | MIT | Desktop service |
 | `http-body-util` | `0.1.5` | MIT | Desktop service |
 | `httparse` | `1.10.1` | MIT OR Apache-2.0 | Desktop service |
+| `hybrid-array` | `0.4.15` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `hyper` | `1.11.1` | MIT | Desktop service |
 | `hyper-util` | `0.1.20` | MIT | Desktop service |
 | `iana-time-zone` | `0.1.65` | MIT OR Apache-2.0 | Desktop service |
@@ -213,9 +216,9 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `mio` | `1.2.2` | MIT | Desktop service |
 | `moxcms` | `0.8.1` | BSD-3-Clause OR Apache-2.0 | Worker |
 | `muda` | `0.19.3` | Apache-2.0 OR MIT | Desktop service |
-| `multiversion` | `0.9.0` | MIT OR Apache-2.0 | Worker |
-| `multiversion_no_op` | `1.0.0` | Apache-2.0 OR MIT | Worker |
-| `multiversion-macros` | `0.9.0` | MIT OR Apache-2.0 | Worker |
+| `multiversion` | `0.9.0` | MIT OR Apache-2.0 | Fuzz targets, Worker |
+| `multiversion_no_op` | `1.0.0` | Apache-2.0 OR MIT | Fuzz targets, Worker |
+| `multiversion-macros` | `0.9.0` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `ndk` | `0.9.0` | MIT OR Apache-2.0 | Desktop service |
 | `ndk-sys` | `0.6.0+11769913` | MIT OR Apache-2.0 | Desktop service |
 | `new_debug_unreachable` | `1.0.6` | MIT | Desktop service |
@@ -286,13 +289,13 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `roxmltree` | `0.21.1` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `rustc_version` | `0.4.1` | MIT OR Apache-2.0 | Desktop service |
 | `rustc-hash` | `2.1.3` | Apache-2.0 OR MIT | Desktop service |
-| `rustversion` | `1.0.23` | MIT OR Apache-2.0 | Desktop service, Worker |
+| `rustversion` | `1.0.23` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `same-file` | `1.0.6` | Unlicense/MIT | Desktop service |
 | `schemars` | `0.8.22` | MIT | Desktop service |
 | `schemars` | `0.9.0` | MIT | Desktop service |
 | `schemars` | `1.2.2` | MIT | Desktop service |
 | `schemars_derive` | `0.8.22` | MIT | Desktop service |
-| `scopeguard` | `1.2.0` | MIT OR Apache-2.0 | Desktop service, Worker |
+| `scopeguard` | `1.2.0` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `selectors` | `0.36.1` | MPL-2.0 | Desktop service |
 | `semver` | `1.0.28` | MIT OR Apache-2.0 | Desktop service |
 | `serde` | `1.0.229` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
@@ -309,10 +312,11 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `serialize-to-javascript` | `0.1.2` | MIT OR Apache-2.0 | Desktop service |
 | `serialize-to-javascript-impl` | `0.1.2` | MIT OR Apache-2.0 | Desktop service |
 | `servo_arc` | `0.4.3` | MIT OR Apache-2.0 | Desktop service |
-| `sha2` | `0.10.9` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
+| `sha2` | `0.10.9` | MIT OR Apache-2.0 | Desktop service |
+| `sha2` | `0.11.0` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `shlex` | `2.0.1` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `simd-adler32` | `0.3.10` | MIT | Desktop service, Worker |
-| `simdutf8` | `0.1.5` | MIT OR Apache-2.0 | Worker |
+| `simdutf8` | `0.1.5` | MIT OR Apache-2.0 | Fuzz targets, Worker |
 | `siphasher` | `1.0.3` | MIT/Apache-2.0 | Desktop service |
 | `slab` | `0.4.12` | MIT | Desktop service |
 | `smallvec` | `1.15.2` | MIT OR Apache-2.0 | Desktop service |
@@ -327,8 +331,7 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `swift-rs` | `1.0.8` | MIT OR Apache-2.0 | Desktop service |
 | `syn` | `1.0.109` | MIT OR Apache-2.0 | Desktop service |
 | `syn` | `2.0.119` | MIT OR Apache-2.0 | Desktop service |
-| `syn` | `3.0.3` | MIT OR Apache-2.0 | Fuzz targets |
-| `syn` | `3.0.4` | MIT OR Apache-2.0 | Desktop service, Worker |
+| `syn` | `3.0.4` | MIT OR Apache-2.0 | Desktop service, Fuzz targets, Worker |
 | `sync_wrapper` | `1.0.2` | Apache-2.0 | Desktop service |
 | `synstructure` | `0.13.2` | MIT | Desktop service |
 | `system-deps` | `6.2.2` | MIT OR Apache-2.0 | Desktop service |
@@ -392,7 +395,7 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `urlpattern` | `0.3.0` | MIT | Desktop service |
 | `utf8_iter` | `1.0.4` | Apache-2.0 OR MIT | Desktop service |
 | `uuid` | `1.26.0` | Apache-2.0 OR MIT | Desktop service |
-| `version_check` | `0.9.5` | MIT/Apache-2.0 | Desktop service, Fuzz targets, Worker |
+| `version_check` | `0.9.5` | MIT/Apache-2.0 | Desktop service |
 | `version-compare` | `0.2.1` | MIT | Desktop service |
 | `vswhom` | `0.1.0` | MIT | Desktop service |
 | `vswhom-sys` | `0.1.3` | MIT | Desktop service |
