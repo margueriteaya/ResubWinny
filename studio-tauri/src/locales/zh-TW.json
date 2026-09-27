@@ -491,6 +491,7 @@
     "assessment.detail.semanticRole": "明確語義角色",
     "assessment.featureCountObserved": "已發現 {count} 個{feature}",
     "assessment.featureCountFinal": "共 {count} 個{feature}",
+    "assessment.summaryCounts": "{conflicts} 項衝突 · {notices} 項提示",
     "assessment.needsSettings": "需要修改輸出設定",
     "export_conflict": "需要修改輸出設定後才能匯出目前任務。",
     "assessment.approximated": "{features} 將以相容方式近似表達",

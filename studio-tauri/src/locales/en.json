@@ -491,6 +491,7 @@
     "assessment.detail.semanticRole": "Explicit semantic role",
     "assessment.featureCountObserved": "Found {count} {feature} item(s) so far",
     "assessment.featureCountFinal": "{count} {feature} item(s) in total",
+    "assessment.summaryCounts": "{conflicts} conflicts · {notices} notes",
     "assessment.needsSettings": "Output settings need to be changed",
     "export_conflict": "Output settings need to be changed before this task can be exported.",
     "assessment.approximated": "{features} will use a compatible approximation",

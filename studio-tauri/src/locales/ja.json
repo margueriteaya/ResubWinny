@@ -491,6 +491,7 @@
     "assessment.detail.semanticRole": "明示的なセマンティックロール",
     "assessment.featureCountObserved": "{feature}を現時点で {count} 件検出",
     "assessment.featureCountFinal": "{feature}は合計 {count} 件",
+    "assessment.summaryCounts": "競合 {conflicts} 件 · 注意 {notices} 件",
     "assessment.needsSettings": "出力設定の変更が必要です",
     "export_conflict": "現在のタスクを出力するには、出力設定を変更してください。",
     "assessment.approximated": "{features} は互換表現に置き換えられます",
