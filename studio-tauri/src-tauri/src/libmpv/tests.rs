@@ -14,8 +14,7 @@ use windows::{
             Threading::GetCurrentProcess,
         },
         UI::WindowsAndMessaging::{
-            CreateWindowExW, DestroyWindow, SWP_NOACTIVATE, SetWindowPos, WS_CHILD, WS_POPUP,
-            WS_VISIBLE,
+            CreateWindowExW, DestroyWindow, SWP_NOACTIVATE, SetWindowPos, WS_POPUP,
         },
     },
     core::w,
@@ -40,7 +39,7 @@ fn render_worker_starts_and_stops_on_a_real_recording() {
     let host = NativeHost::create(640, 360, w!("ResubWinnyRenderSmoke"));
     let runtime = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../third_party/libmpv/windows-x86_64/libmpv-2.dll");
-    let worker = LibMpvRenderWorker::start(runtime, source, host.0.0 as isize, 640, 360)
+    let worker = LibMpvRenderWorker::start(runtime, source, host.0.0 as isize, 640, 360, None)
         .expect("start native libmpv render worker");
     let mut media_ready = false;
     for _ in 0..40 {
@@ -175,8 +174,9 @@ fn render_worker_meets_the_long_4k_performance_gate() {
     let host = NativeHost::create(1920, 1080, w!("ResubWinnyRenderPerformance"));
     let runtime = bundled_runtime();
     let startup_started = Instant::now();
-    let worker = LibMpvRenderWorker::start(runtime, source.clone(), host.0.0 as isize, 1920, 1080)
-        .expect("start native libmpv render worker");
+    let worker =
+        LibMpvRenderWorker::start(runtime, source.clone(), host.0.0 as isize, 1920, 1080, None)
+            .expect("start native libmpv render worker");
     let startup_ms = startup_started.elapsed().as_secs_f64() * 1_000.0;
 
     wait_for_media(&worker, Duration::from_secs(5));
@@ -336,13 +336,12 @@ fn render_worker_meets_the_long_4k_performance_gate() {
     );
 }
 
-// Use the same child-window topology as the application preview. Rendering
-// into a standalone popup would miss WGL regressions in that route.
-struct NativeHost(HWND, HWND);
+// Match the application's hidden offscreen WGL host. It never presents pixels.
+struct NativeHost(HWND);
 
 impl NativeHost {
     fn create(width: i32, height: i32, title: windows::core::PCWSTR) -> Self {
-        let parent = unsafe {
+        let host = unsafe {
             CreateWindowExW(
                 Default::default(),
                 w!("STATIC"),
@@ -358,32 +357,14 @@ impl NativeHost {
                 None,
             )
         }
-        .expect("create hidden native render parent");
-        let child = unsafe {
-            CreateWindowExW(
-                Default::default(),
-                w!("STATIC"),
-                title,
-                WS_CHILD | WS_VISIBLE,
-                0,
-                0,
-                width,
-                height,
-                Some(parent),
-                None,
-                None,
-                None,
-            )
-        }
-        .expect("create native child render host");
-        Self(child, parent)
+        .expect("create hidden offscreen render host");
+        Self(host)
     }
 }
 
 impl Drop for NativeHost {
     fn drop(&mut self) {
         let _ = unsafe { DestroyWindow(self.0) };
-        let _ = unsafe { DestroyWindow(self.1) };
     }
 }
 
@@ -415,7 +396,7 @@ fn wait_for_media(worker: &LibMpvRenderWorker, timeout: Duration) {
 fn resize_host(host: &NativeHost, width: i32, height: i32) {
     unsafe {
         SetWindowPos(
-            host.1,
+            host.0,
             None,
             -10_000,
             -10_000,
@@ -425,18 +406,6 @@ fn resize_host(host: &NativeHost, width: i32, height: i32) {
         )
     }
     .expect("resize native render parent");
-    unsafe {
-        SetWindowPos(
-            host.0,
-            Some(HWND(std::ptr::null_mut())),
-            0,
-            0,
-            width,
-            height,
-            SWP_NOACTIVATE,
-        )
-    }
-    .expect("resize native render host");
 }
 
 fn timed_command(worker: &LibMpvRenderWorker, arguments: &[&str]) -> Result<f64, String> {

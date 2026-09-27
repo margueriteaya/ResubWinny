@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
     models::{BroadcastMetadata, PreviewPlaybackState},
+    preview::frame_bridge::{MAX_FRAME_HEIGHT, MAX_FRAME_WIDTH, PreviewFramePool},
     state::{PlayerHost, PreviewBroadcastCache},
     worker::worker_path,
 };
@@ -11,9 +12,7 @@ use windows::{
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
             CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow,
-            FindWindowExW, GWL_STYLE, GetWindowLongPtrW, HWND_TOP, RegisterClassW, SW_HIDE,
-            SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos, ShowWindow, WNDCLASSW,
-            WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_NOACTIVATE, WS_VISIBLE,
+            RegisterClassW, WNDCLASSW, WS_EX_NOACTIVATE, WS_POPUP,
         },
     },
     core::w,
@@ -43,10 +42,8 @@ fn preview_window_instance() -> Result<HINSTANCE, String> {
             style: CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
             lpfnWndProc: Some(preview_window_proc),
             hInstance: instance,
-            lpszClassName: w!("ResubWinnyPreviewHost"),
-            // An OpenGL host must not have a class background brush: a
-            // WM_PAINT from its parent would otherwise erase the front buffer
-            // after SwapBuffers and leave an apparently healthy black player.
+            lpszClassName: w!("ResubWinnyOffscreenGlHost"),
+            // The hidden host only supplies a stable device context for WGL.
             ..Default::default()
         };
         // SAFETY: `class` is fully initialized and its name string outlives
@@ -62,49 +59,12 @@ fn preview_window_instance() -> Result<HINSTANCE, String> {
         .map_err(Clone::clone)
 }
 
-fn clip_parent_around_native_children(parent: HWND) {
-    // WebView2 continuously paints this content host. Excluding child HWND
-    // rectangles from that paint keeps its compositor from covering a
-    // successfully swapped OpenGL preview frame.
-    // SAFETY: `parent` is a live window owned by this process.
-    unsafe {
-        let style = GetWindowLongPtrW(parent, GWL_STYLE);
-        SetWindowLongPtrW(parent, GWL_STYLE, style | WS_CLIPCHILDREN.0 as isize);
-    }
-}
-
-fn native_preview_parent(main_window: HWND) -> HWND {
-    // Wry puts the windowed WebView2 controller inside this direct child. A
-    // preview parented to the outer Tauri HWND can sit below WebView2's own
-    // composition visual even when Win32 reports it first in sibling order.
-    // Parenting inside the content host gives the preview the same origin as
-    // DOM client coordinates and makes it a true sibling of the WebView.
-    // SAFETY: `main_window` is live; FindWindowExW only reads its direct child
-    // list and the class-name literals are NUL-terminated.
-    unsafe {
-        FindWindowExW(
-            Some(main_window),
-            None,
-            w!("WRY_WEBVIEW"),
-            windows::core::PCWSTR::null(),
-        )
-        .unwrap_or(main_window)
-    }
-}
-
 fn stop_host(state: &AppState) {
     if let Ok(mut slot) = state.player.lock()
         && let Some(player) = slot.take()
     {
-        // The child host is above WebView2. Hide it before libmpv teardown
-        // so it cannot cover a newly selected Svelte page.
-        // SAFETY: `player.host` is the preview window this state created and
-        // has not destroyed yet.
-        unsafe {
-            let _ = ShowWindow(HWND(player.host as *mut _), SW_HIDE);
-        }
-        let _ = fs::remove_file(&player.overlay_path);
         player.player.stop();
+        player.frame_pool.stop(&player.app);
         // SAFETY: the host window is owned by this state and taken out of the
         // slot above, so it is destroyed exactly once.
         unsafe {
@@ -115,90 +75,69 @@ fn stop_host(state: &AppState) {
         *cache = None;
     }
 }
+
+pub(crate) fn shutdown_preview(state: &AppState) {
+    stop_host(state);
+}
 pub fn start_preview(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
     source: String,
-    rect: PreviewRect,
+    rect: PreviewSurfaceSize,
 ) -> Result<(), String> {
-    start_preview_impl(app, state, source, rect, false)
+    start_preview_impl(app, state, source, rect)
 }
 
 fn start_preview_impl(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
     source: String,
-    rect: PreviewRect,
-    force_client: bool,
+    rect: PreviewSurfaceSize,
 ) -> Result<(), String> {
-    if rect.width < 32 || rect.height < 32 {
-        return Err("The native preview surface has no usable size.".into());
+    if rect.width < 32
+        || rect.height < 32
+        || rect.width > MAX_FRAME_WIDTH
+        || rect.height > MAX_FRAME_HEIGHT
+    {
+        return Err("The preview surface must fit within 1920 by 1080 physical pixels.".into());
     }
     stop_host(state.inner());
-    let main_window = app
-        .get_webview_window("main")
-        .ok_or("The main application window is unavailable.")?
-        .hwnd()
-        .map_err(|e| format!("Could not access the native window: {e}"))?;
-    let parent = native_preview_parent(main_window);
-    clip_parent_around_native_children(parent);
     let instance = preview_window_instance()?;
-    // The DOM rectangle is measured in WebView client pixels. A true child
-    // HWND uses the same client coordinate space and follows the main window
-    // synchronously while it moves, unlike an owned screen-positioned popup.
-    // SAFETY: the class was registered above, and `parent` is the live Wry
-    // content host (or the live Tauri window on the compatibility fallback).
+    // This hidden window supplies only the device context required to create
+    // WGL. Video pixels are rendered into an offscreen texture and displayed
+    // by the Canvas inside the WebView.
+    // SAFETY: the class was registered above and the window remains hidden.
     let host = unsafe {
         CreateWindowExW(
             WS_EX_NOACTIVATE,
-            w!("ResubWinnyPreviewHost"),
-            w!("ResubWinnyMpvHost"),
-            WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-            rect.x,
-            rect.y,
+            w!("ResubWinnyOffscreenGlHost"),
+            w!("ResubWinnyOffscreenMpvHost"),
+            WS_POPUP,
+            -32_000,
+            -32_000,
             rect.width,
             rect.height,
-            Some(parent),
+            None,
             None,
             Some(instance),
             None,
         )
     }
     .map_err(|e| format!("Could not create the native preview surface: {e}"))?;
-    // SAFETY: `host` is the window just created and still live.
-    unsafe {
-        SetWindowPos(
-            host,
-            Some(HWND_TOP),
-            rect.x,
-            rect.y,
-            rect.width,
-            rect.height,
-            SWP_NOACTIVATE | SWP_SHOWWINDOW,
-        )
-    }
-    .map_err(|e| format!("Could not position the native preview surface: {e}"))?;
-    let process_id = std::process::id();
-    let overlay_path =
-        std::env::temp_dir().join(format!("resubwinny-mpv-overlay-{process_id}.bgra"));
-    let _ = fs::remove_file(&overlay_path);
+    let frame_pool = match PreviewFramePool::create(&app) {
+        Ok(pool) => pool,
+        Err(error) => {
+            // SAFETY: buffer setup failed after this thread created `host`.
+            unsafe {
+                let _ = DestroyWindow(host);
+            }
+            return Err(error);
+        }
+    };
     let resource_dir = app.path().resource_dir().ok();
     let startup = (|| -> Result<_, String> {
         let library_path = crate::libmpv::discover_library(resource_dir.as_deref())?;
         let source_path = Path::new(&source);
-        let start_client = |fallback_reason| {
-            crate::libmpv::LibMpvPlayer::start(&library_path, host.0 as isize, source_path).map(
-                |player| {
-                    (
-                        crate::state::NativePlayer::Client(player),
-                        Some(fallback_reason),
-                    )
-                },
-            )
-        };
-        if force_client {
-            return start_client("libmpv-render was replaced after a runtime failure.".into());
-        }
         match crate::libmpv::render_api_available(&library_path) {
             Ok(true) => match crate::libmpv::LibMpvRenderWorker::start(
                 library_path.clone(),
@@ -206,19 +145,21 @@ fn start_preview_impl(
                 host.0 as isize,
                 rect.width,
                 rect.height,
+                Some(frame_pool.clone()),
             ) {
-                Ok(worker) => Ok((crate::state::NativePlayer::Render(worker), None)),
-                Err(reason) => start_client(format!("libmpv-render startup failed: {reason}")),
+                Ok(worker) => Ok(crate::state::NativePlayer(worker)),
+                Err(reason) => Err(format!("libmpv-render startup failed: {reason}")),
             },
-            Ok(false) => start_client(
-                "The bundled libmpv runtime does not expose the complete render API.".into(),
-            ),
-            Err(reason) => start_client(format!("Could not probe libmpv-render: {reason}")),
+            Ok(false) => {
+                Err("The bundled libmpv runtime does not expose the complete render API.".into())
+            }
+            Err(reason) => Err(format!("Could not probe libmpv-render: {reason}")),
         }
     })();
-    let (player, render_fallback_reason) = match startup {
+    let player = match startup {
         Ok(startup) => startup,
         Err(error) => {
+            frame_pool.stop(&app);
             // SAFETY: startup failed after creating `host`, so this destroys it
             // exactly once before returning the error.
             unsafe {
@@ -232,10 +173,10 @@ fn start_preview_impl(
         .lock()
         .map_err(|_| "Preview state is unavailable")? = Some(PlayerHost {
         host: host.0 as isize,
+        app: app.clone(),
+        frame_pool,
         source: Path::new(&source).to_path_buf(),
         player,
-        overlay_path,
-        render_fallback_reason,
     });
     Ok(())
 }
@@ -244,12 +185,12 @@ pub fn recover_preview(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
     source: String,
-    rect: PreviewRect,
+    rect: PreviewSurfaceSize,
     time_seconds: Option<f64>,
     paused: bool,
     volume: f64,
 ) -> Result<(), String> {
-    start_preview_impl(app, state.clone(), source, rect, true)?;
+    start_preview_impl(app, state.clone(), source, rect)?;
     let player_slot = state
         .player
         .lock()
@@ -269,26 +210,23 @@ pub fn recover_preview(
         .player
         .command(&["set", "pause", if paused { "yes" } else { "no" }])
 }
-pub fn resize_preview(state: State<'_, Arc<AppState>>, rect: PreviewRect) -> Result<(), String> {
+pub fn resize_preview(
+    state: State<'_, Arc<AppState>>,
+    rect: PreviewSurfaceSize,
+) -> Result<(), String> {
+    if rect.width < 1
+        || rect.height < 1
+        || rect.width > MAX_FRAME_WIDTH
+        || rect.height > MAX_FRAME_HEIGHT
+    {
+        return Err("The preview surface must fit within 1920 by 1080 physical pixels.".into());
+    }
     if let Some(player) = state
         .player
         .lock()
         .map_err(|_| "Preview state is unavailable")?
         .as_mut()
     {
-        // SAFETY: `player.host` is the live preview window owned by this state.
-        unsafe {
-            SetWindowPos(
-                HWND(player.host as *mut _),
-                Some(HWND_TOP),
-                rect.x,
-                rect.y,
-                rect.width.max(1),
-                rect.height.max(1),
-                SWP_NOACTIVATE | SWP_SHOWWINDOW,
-            )
-        }
-        .map_err(|e| format!("Could not resize native preview: {e}"))?;
         player.player.resize(rect.width, rect.height);
     }
     Ok(())
@@ -378,81 +316,9 @@ pub fn caption_overlay(
     let player = player_slot
         .as_ref()
         .ok_or("Start native preview before showing captions.")?;
-    if player.player.is_render() {
-        return player
-            .player
-            .set_caption_overlay(pixels, width, height, x, y);
-    }
-    let (pixels, width, height, x, y) = match player.player.osd_dimensions()? {
-        Some((target_width, target_height))
-            if target_width > 0
-                && target_height > 0
-                && (target_width != width || target_height != height) =>
-        {
-            // The archive renderer produces a complete caption plane.
-            // Fit that plane inside mpv's OSD space and center it; filling
-            // both axes independently distorts glyphs and ruby placement.
-            let scale =
-                (target_width as f64 / width as f64).min(target_height as f64 / height as f64);
-            let scaled_width = ((width as f64 * scale).round() as i32).clamp(1, target_width);
-            let scaled_height = ((height as f64 * scale).round() as i32).clamp(1, target_height);
-            let offset_x = x.saturating_add((target_width - scaled_width) / 2);
-            let offset_y = y.saturating_add((target_height - scaled_height) / 2);
-            (
-                scale_rgba_nearest(&pixels, width, height, scaled_width, scaled_height).into(),
-                scaled_width,
-                scaled_height,
-                offset_x,
-                offset_y,
-            )
-        }
-        _ => (pixels, width, height, x, y),
-    };
-    let bgra = rgba_to_bgra(&pixels);
-    fs::write(&player.overlay_path, bgra)
-        .map_err(|e| format!("Could not prepare caption overlay pixels: {e}"))?;
-    let path = player.overlay_path.to_string_lossy().into_owned();
-    player.player.command(&[
-        "overlay-add",
-        "1",
-        &x.to_string(),
-        &y.to_string(),
-        &path,
-        "0",
-        "bgra",
-        &width.to_string(),
-        &height.to_string(),
-        &width.saturating_mul(4).to_string(),
-    ])
-}
-
-fn scale_rgba_nearest(
-    source: &[u8],
-    source_width: i32,
-    source_height: i32,
-    target_width: i32,
-    target_height: i32,
-) -> Vec<u8> {
-    let mut target = vec![0; target_width as usize * target_height as usize * 4];
-    for target_y in 0..target_height as usize {
-        let source_y = target_y * source_height as usize / target_height as usize;
-        for target_x in 0..target_width as usize {
-            let source_x = target_x * source_width as usize / target_width as usize;
-            let source_offset = (source_y * source_width as usize + source_x) * 4;
-            let target_offset = (target_y * target_width as usize + target_x) * 4;
-            target[target_offset..target_offset + 4]
-                .copy_from_slice(&source[source_offset..source_offset + 4]);
-        }
-    }
-    target
-}
-
-fn rgba_to_bgra(source: &[u8]) -> Vec<u8> {
-    let mut target = Vec::with_capacity(source.len());
-    for pixel in source.chunks_exact(4) {
-        target.extend_from_slice(&[pixel[2], pixel[1], pixel[0], pixel[3]]);
-    }
-    target
+    player
+        .player
+        .set_caption_overlay(pixels, width, height, x, y)
 }
 pub fn clear_caption_overlay(state: State<'_, Arc<AppState>>) -> Result<(), String> {
     let player_slot = state
@@ -462,11 +328,7 @@ pub fn clear_caption_overlay(state: State<'_, Arc<AppState>>) -> Result<(), Stri
     let player = player_slot
         .as_ref()
         .ok_or("Start native preview before clearing captions.")?;
-    if player.player.is_render() {
-        player.player.clear_caption_overlay()
-    } else {
-        player.player.command(&["overlay-remove", "1"])
-    }
+    player.player.clear_caption_overlay()
 }
 pub fn preview_time(state: State<'_, Arc<AppState>>) -> Result<Option<f64>, String> {
     let slot = state
@@ -593,87 +455,34 @@ mod tests {
     use super::*;
     use windows::Win32::{
         Foundation::RECT,
-        UI::WindowsAndMessaging::{GetParent, GetWindowRect, WS_POPUP},
+        UI::WindowsAndMessaging::{GetParent, GetWindowRect, IsWindowVisible},
     };
 
     #[test]
-    fn child_preview_uses_the_webview_host_and_follows_the_main_window() {
-        // SAFETY: both windows are created and destroyed by this test on the
-        // same thread. Their HWNDs remain live for every Win32 call below.
+    fn gl_host_stays_hidden_offscreen_and_outside_the_app_window_tree() {
+        // SAFETY: the host is created and destroyed by this test on one thread.
         unsafe {
-            let parent = CreateWindowExW(
-                Default::default(),
-                w!("STATIC"),
-                w!("ResubWinnyPreviewParentTest"),
-                WS_POPUP,
-                100,
-                100,
-                400,
-                300,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("create parent window");
-            let module = GetModuleHandleW(None).expect("test module");
-            let webview_class = WNDCLASSW {
-                lpfnWndProc: Some(preview_window_proc),
-                hInstance: HINSTANCE(module.0),
-                lpszClassName: w!("WRY_WEBVIEW"),
-                ..Default::default()
-            };
-            let _ = RegisterClassW(&webview_class);
-            let webview = CreateWindowExW(
-                Default::default(),
-                w!("WRY_WEBVIEW"),
-                w!("ResubWinnyWebViewParentTest"),
-                WS_CHILD | WS_VISIBLE,
-                0,
-                0,
-                400,
-                300,
-                Some(parent),
-                None,
-                None,
-                None,
-            )
-            .expect("create webview content host");
-            let preview_parent = native_preview_parent(parent);
-            assert_eq!(preview_parent, webview);
-            clip_parent_around_native_children(preview_parent);
-            assert_ne!(
-                GetWindowLongPtrW(preview_parent, GWL_STYLE) & WS_CLIPCHILDREN.0 as isize,
-                0,
-                "the WebView host must exclude the native preview from painting"
-            );
-            let child = CreateWindowExW(
+            let host = CreateWindowExW(
                 WS_EX_NOACTIVATE,
-                w!("STATIC"),
-                w!("ResubWinnyPreviewChildTest"),
-                WS_CHILD | WS_VISIBLE,
-                30,
-                40,
-                200,
-                100,
-                Some(preview_parent),
+                w!("ResubWinnyOffscreenGlHost"),
+                w!("ResubWinnyOffscreenMpvHostTest"),
+                WS_POPUP,
+                -32_000,
+                -32_000,
+                640,
+                360,
                 None,
                 None,
+                Some(preview_window_instance().expect("preview host class")),
                 None,
             )
-            .expect("create child preview window");
-            assert_eq!(GetParent(child), Ok(preview_parent));
-            let mut before = RECT::default();
-            GetWindowRect(child, &mut before).expect("get initial child bounds");
-            SetWindowPos(parent, None, 180, 165, 400, 300, SWP_NOACTIVATE)
-                .expect("move parent window");
-            let mut after = RECT::default();
-            GetWindowRect(child, &mut after).expect("get moved child bounds");
-            assert_eq!(after.left - before.left, 80);
-            assert_eq!(after.top - before.top, 65);
-            DestroyWindow(child).expect("destroy child window");
-            DestroyWindow(webview).expect("destroy webview content host");
-            DestroyWindow(parent).expect("destroy parent window");
+            .expect("create hidden GL host");
+            assert!(GetParent(host).is_err(), "the GL host must have no parent");
+            assert!(!IsWindowVisible(host).as_bool());
+            let mut bounds = RECT::default();
+            GetWindowRect(host, &mut bounds).expect("get hidden host bounds");
+            assert!(bounds.right <= -31_000 && bounds.bottom <= -31_000);
+            DestroyWindow(host).expect("destroy hidden GL host");
         }
     }
 }

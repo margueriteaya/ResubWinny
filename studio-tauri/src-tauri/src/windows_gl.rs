@@ -1,5 +1,5 @@
-//! Minimal project-owned WGL surface primitives for the future libmpv render
-//! backend. They deliberately do not expose a WebView texture or video frame.
+//! Project-owned WGL primitives for libmpv offscreen composition and bounded
+//! frame readback into the WebView2 SharedBuffer bridge.
 
 #![cfg(windows)]
 
@@ -20,10 +20,13 @@ const GL_ONE_MINUS_SRC_ALPHA: u32 = 0x0303;
 const GL_PROJECTION: u32 = 0x1701;
 const GL_QUADS: u32 = 0x0007;
 const GL_RGBA: i32 = 0x1908;
-#[cfg(test)]
 const GL_RGBA_FORMAT: u32 = 0x1908;
-#[cfg(test)]
-const GL_FRONT: u32 = 0x0404;
+const GL_COLOR_ATTACHMENT0: u32 = 0x8ce0;
+const GL_FRAMEBUFFER: u32 = 0x8d40;
+const GL_FRAMEBUFFER_COMPLETE: u32 = 0x8cd5;
+const GL_PIXEL_PACK_BUFFER: u32 = 0x88eb;
+const GL_READ_ONLY: u32 = 0x88b8;
+const GL_STREAM_READ: u32 = 0x88e1;
 const GL_SRC_ALPHA: u32 = 0x0302;
 const GL_TEXTURE_2D: u32 = 0x0de1;
 const GL_TEXTURE_MAG_FILTER: u32 = 0x2800;
@@ -106,6 +109,7 @@ unsafe extern "system" {
     fn glBlendFunc(source: u32, destination: u32);
     fn glColor4f(red: f32, green: f32, blue: f32, alpha: f32);
     fn glDeleteTextures(count: i32, textures: *const u32);
+    fn glFinish();
     fn glDisable(capability: u32);
     fn glEnable(capability: u32);
     fn glEnd();
@@ -115,9 +119,7 @@ unsafe extern "system" {
     fn glOrtho(left: f64, right: f64, bottom: f64, top: f64, near: f64, far: f64);
     fn glPopAttrib();
     fn glPopMatrix();
-    #[cfg(test)]
     fn glReadBuffer(mode: u32);
-    #[cfg(test)]
     fn glReadPixels(
         x: i32,
         y: i32,
@@ -143,6 +145,293 @@ unsafe extern "system" {
     );
     fn glTexParameteri(target: u32, name: u32, value: i32);
     fn glVertex2f(x: f32, y: f32);
+    fn glViewport(x: i32, y: i32, width: i32, height: i32);
+}
+
+type GlGenFramebuffers = unsafe extern "system" fn(i32, *mut u32);
+type GlBindFramebuffer = unsafe extern "system" fn(u32, u32);
+type GlFramebufferTexture2D = unsafe extern "system" fn(u32, u32, u32, u32, i32);
+type GlCheckFramebufferStatus = unsafe extern "system" fn(u32) -> u32;
+type GlDeleteFramebuffers = unsafe extern "system" fn(i32, *const u32);
+type GlGenBuffers = unsafe extern "system" fn(i32, *mut u32);
+type GlBindBuffer = unsafe extern "system" fn(u32, u32);
+type GlBufferData = unsafe extern "system" fn(u32, isize, *const c_void, u32);
+type GlMapBuffer = unsafe extern "system" fn(u32, u32) -> *mut c_void;
+type GlUnmapBuffer = unsafe extern "system" fn(u32) -> u8;
+type GlDeleteBuffers = unsafe extern "system" fn(i32, *const u32);
+
+struct GlExtensions {
+    gen_framebuffers: GlGenFramebuffers,
+    bind_framebuffer: GlBindFramebuffer,
+    framebuffer_texture_2d: GlFramebufferTexture2D,
+    check_framebuffer_status: GlCheckFramebufferStatus,
+    delete_framebuffers: GlDeleteFramebuffers,
+    gen_buffers: GlGenBuffers,
+    bind_buffer: GlBindBuffer,
+    buffer_data: GlBufferData,
+    map_buffer: GlMapBuffer,
+    unmap_buffer: GlUnmapBuffer,
+    delete_buffers: GlDeleteBuffers,
+}
+
+impl GlExtensions {
+    fn load() -> Result<Self, String> {
+        unsafe fn symbol(name: &'static [u8]) -> Result<*mut c_void, String> {
+            // SAFETY: every caller passes a static NUL-terminated OpenGL name.
+            let pointer = unsafe { get_proc_address(ptr::null_mut(), name.as_ptr().cast()) };
+            if pointer.is_null() {
+                Err(format!(
+                    "The OpenGL driver does not expose {}.",
+                    String::from_utf8_lossy(&name[..name.len() - 1])
+                ))
+            } else {
+                Ok(pointer)
+            }
+        }
+        // SAFETY: each resolved OpenGL symbol is cast to its documented ABI.
+        unsafe {
+            Ok(Self {
+                gen_framebuffers: std::mem::transmute::<*mut c_void, GlGenFramebuffers>(symbol(
+                    b"glGenFramebuffers\0",
+                )?),
+                bind_framebuffer: std::mem::transmute::<*mut c_void, GlBindFramebuffer>(symbol(
+                    b"glBindFramebuffer\0",
+                )?),
+                framebuffer_texture_2d: std::mem::transmute::<*mut c_void, GlFramebufferTexture2D>(
+                    symbol(b"glFramebufferTexture2D\0")?,
+                ),
+                check_framebuffer_status: std::mem::transmute::<
+                    *mut c_void,
+                    GlCheckFramebufferStatus,
+                >(symbol(b"glCheckFramebufferStatus\0")?),
+                delete_framebuffers: std::mem::transmute::<*mut c_void, GlDeleteFramebuffers>(
+                    symbol(b"glDeleteFramebuffers\0")?,
+                ),
+                gen_buffers: std::mem::transmute::<*mut c_void, GlGenBuffers>(symbol(
+                    b"glGenBuffers\0",
+                )?),
+                bind_buffer: std::mem::transmute::<*mut c_void, GlBindBuffer>(symbol(
+                    b"glBindBuffer\0",
+                )?),
+                buffer_data: std::mem::transmute::<*mut c_void, GlBufferData>(symbol(
+                    b"glBufferData\0",
+                )?),
+                map_buffer: std::mem::transmute::<*mut c_void, GlMapBuffer>(symbol(
+                    b"glMapBuffer\0",
+                )?),
+                unmap_buffer: std::mem::transmute::<*mut c_void, GlUnmapBuffer>(symbol(
+                    b"glUnmapBuffer\0",
+                )?),
+                delete_buffers: std::mem::transmute::<*mut c_void, GlDeleteBuffers>(symbol(
+                    b"glDeleteBuffers\0",
+                )?),
+            })
+        }
+    }
+}
+
+/// Owns the texture-backed framebuffer rendered by libmpv and a three-buffer
+/// pixel-pack queue. Each submitted frame is mapped immediately so video stays
+/// synchronized with libmpv audio; the slots rotate to avoid reallocations.
+pub(crate) struct OffscreenReadback {
+    gl: GlExtensions,
+    framebuffer: u32,
+    color_texture: u32,
+    pbos: [u32; 3],
+    width: i32,
+    height: i32,
+    cursor: usize,
+    submitted: usize,
+}
+
+impl OffscreenReadback {
+    pub(crate) fn create(width: i32, height: i32) -> Result<Self, String> {
+        let gl = GlExtensions::load()?;
+        let mut framebuffer = 0;
+        let mut color_texture = 0;
+        let mut pbos = [0; 3];
+        // SAFETY: a WGL context is current and all output arrays have the
+        // requested number of entries.
+        unsafe {
+            (gl.gen_framebuffers)(1, &mut framebuffer);
+            glGenTextures(1, &mut color_texture);
+            (gl.gen_buffers)(pbos.len() as i32, pbos.as_mut_ptr());
+        }
+        let mut result = Self {
+            gl,
+            framebuffer,
+            color_texture,
+            pbos,
+            width: 0,
+            height: 0,
+            cursor: 0,
+            submitted: 0,
+        };
+        if framebuffer == 0 || color_texture == 0 || pbos.contains(&0) {
+            return Err("Could not allocate the offscreen preview surface.".into());
+        }
+        result.resize(width, height)?;
+        Ok(result)
+    }
+
+    pub(crate) fn framebuffer(&self) -> i32 {
+        self.framebuffer as i32
+    }
+
+    pub(crate) fn bind(&mut self, width: i32, height: i32) -> Result<(), String> {
+        if self.width != width || self.height != height {
+            self.resize(width, height)?;
+        }
+        // SAFETY: this framebuffer belongs to the current context and has a
+        // complete color attachment after resize succeeds.
+        unsafe {
+            (self.gl.bind_framebuffer)(GL_FRAMEBUFFER, self.framebuffer);
+            glViewport(0, 0, self.width, self.height);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn readback_frame(&mut self) -> Result<Option<Vec<u8>>, String> {
+        let bytes = frame_byte_len(self.width, self.height)?;
+        let write_slot = self.cursor;
+        // SAFETY: the FBO and PBO names belong to this current context. A null
+        // pixels pointer directs glReadPixels into the bound pixel-pack buffer.
+        unsafe {
+            (self.gl.bind_framebuffer)(GL_FRAMEBUFFER, self.framebuffer);
+            glReadBuffer(GL_COLOR_ATTACHMENT0);
+            (self.gl.bind_buffer)(GL_PIXEL_PACK_BUFFER, self.pbos[write_slot]);
+            glReadPixels(
+                0,
+                0,
+                self.width,
+                self.height,
+                GL_RGBA_FORMAT,
+                GL_UNSIGNED_BYTE,
+                ptr::null_mut(),
+            );
+            (self.gl.bind_buffer)(GL_PIXEL_PACK_BUFFER, 0);
+        }
+        self.cursor = (self.cursor + 1) % self.pbos.len();
+        self.submitted = self.submitted.saturating_add(1);
+        let read_slot = write_slot;
+        let mut pixels = vec![0; bytes];
+        // SAFETY: mapping the slot synchronizes this read with the preceding
+        // glReadPixels. The map covers the allocation made in resize and is
+        // unmapped exactly once.
+        unsafe {
+            // Some Windows OpenGL drivers do not make an immediately mapped
+            // pixel-pack transfer visible without an explicit completion
+            // point. This keeps the delivered frame aligned with mpv audio.
+            glFinish();
+            (self.gl.bind_buffer)(GL_PIXEL_PACK_BUFFER, self.pbos[read_slot]);
+            let mapped = (self.gl.map_buffer)(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+            if mapped.is_null() {
+                (self.gl.bind_buffer)(GL_PIXEL_PACK_BUFFER, 0);
+                self.unbind();
+                return Err("Could not map the completed preview frame.".into());
+            }
+            ptr::copy_nonoverlapping(mapped.cast::<u8>(), pixels.as_mut_ptr(), bytes);
+            if (self.gl.unmap_buffer)(GL_PIXEL_PACK_BUFFER) == 0 {
+                (self.gl.bind_buffer)(GL_PIXEL_PACK_BUFFER, 0);
+                self.unbind();
+                return Err("The completed preview frame became invalid while reading it.".into());
+            }
+            (self.gl.bind_buffer)(GL_PIXEL_PACK_BUFFER, 0);
+        }
+        self.unbind();
+        Ok(Some(pixels))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn readback_now(&self) -> Result<Vec<u8>, String> {
+        let bytes = frame_byte_len(self.width, self.height)?;
+        let mut pixels = vec![0; bytes];
+        // SAFETY: this FBO is complete and pixels has exactly enough storage.
+        unsafe {
+            (self.gl.bind_framebuffer)(GL_FRAMEBUFFER, self.framebuffer);
+            (self.gl.bind_buffer)(GL_PIXEL_PACK_BUFFER, 0);
+            glReadBuffer(GL_COLOR_ATTACHMENT0);
+            glReadPixels(
+                0,
+                0,
+                self.width,
+                self.height,
+                GL_RGBA_FORMAT,
+                GL_UNSIGNED_BYTE,
+                pixels.as_mut_ptr().cast(),
+            );
+            (self.gl.bind_framebuffer)(GL_FRAMEBUFFER, 0);
+        }
+        Ok(pixels)
+    }
+
+    fn resize(&mut self, width: i32, height: i32) -> Result<(), String> {
+        let bytes = frame_byte_len(width, height)?;
+        // SAFETY: all names belong to the current context; null texture/PBO
+        // data requests bounded storage without reading client memory.
+        unsafe {
+            glBindTexture(GL_TEXTURE_2D, self.color_texture);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGBA,
+                width,
+                height,
+                0,
+                GL_RGBA_FORMAT,
+                GL_UNSIGNED_BYTE,
+                ptr::null(),
+            );
+            (self.gl.bind_framebuffer)(GL_FRAMEBUFFER, self.framebuffer);
+            (self.gl.framebuffer_texture_2d)(
+                GL_FRAMEBUFFER,
+                GL_COLOR_ATTACHMENT0,
+                GL_TEXTURE_2D,
+                self.color_texture,
+                0,
+            );
+            if (self.gl.check_framebuffer_status)(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE {
+                (self.gl.bind_framebuffer)(GL_FRAMEBUFFER, 0);
+                return Err("The OpenGL driver rejected the offscreen preview surface.".into());
+            }
+            for pbo in self.pbos {
+                (self.gl.bind_buffer)(GL_PIXEL_PACK_BUFFER, pbo);
+                (self.gl.buffer_data)(
+                    GL_PIXEL_PACK_BUFFER,
+                    bytes as isize,
+                    ptr::null(),
+                    GL_STREAM_READ,
+                );
+            }
+            (self.gl.bind_buffer)(GL_PIXEL_PACK_BUFFER, 0);
+            (self.gl.bind_framebuffer)(GL_FRAMEBUFFER, 0);
+        }
+        self.width = width;
+        self.height = height;
+        self.cursor = 0;
+        self.submitted = 0;
+        Ok(())
+    }
+
+    fn unbind(&self) {
+        // SAFETY: zero restores the context's default framebuffer.
+        unsafe { (self.gl.bind_framebuffer)(GL_FRAMEBUFFER, 0) };
+    }
+}
+
+impl Drop for OffscreenReadback {
+    fn drop(&mut self) {
+        // SAFETY: the render worker drops this while its WGL context is current.
+        unsafe {
+            (self.gl.bind_buffer)(GL_PIXEL_PACK_BUFFER, 0);
+            (self.gl.bind_framebuffer)(GL_FRAMEBUFFER, 0);
+            (self.gl.delete_buffers)(self.pbos.len() as i32, self.pbos.as_ptr());
+            (self.gl.delete_framebuffers)(1, &self.framebuffer);
+            glDeleteTextures(1, &self.color_texture);
+        }
+    }
 }
 
 #[link(name = "gdi32")]
@@ -153,7 +442,6 @@ unsafe extern "system" {
         format: i32,
         descriptor: *const PixelFormatDescriptor,
     ) -> i32;
-    fn SwapBuffers(hdc: *mut c_void) -> i32;
 }
 
 #[link(name = "opengl32")]
@@ -178,7 +466,7 @@ pub(crate) struct WglContext {
 
 impl WglContext {
     /// # Safety
-    /// `hwnd` must be a live child window owned by the current process.
+    /// `hwnd` must be a live hidden window owned by the current process.
     pub(crate) unsafe fn create(hwnd: isize) -> Result<Self, String> {
         let hwnd = hwnd as *mut c_void;
         // SAFETY: `hwnd` is a live window owned by this process, per the
@@ -214,42 +502,16 @@ impl WglContext {
             .then_some(())
             .ok_or_else(|| "Could not make the libmpv OpenGL context current.".into())
     }
+}
 
-    pub(crate) fn swap_buffers(&self) -> Result<(), String> {
-        // SAFETY: `self.hdc` is owned by this context and still valid.
-        (unsafe { SwapBuffers(self.hdc) } != 0)
-            .then_some(())
-            .ok_or_else(|| "Could not present the libmpv OpenGL frame.".into())
-    }
-
-    /// Captures the current back buffer on the owning WGL thread. This is for
-    /// native render validation only; video frames never cross into WebView.
-    #[cfg(test)]
-    pub(crate) fn read_front_rgba(&self, width: i32, height: i32) -> Result<Vec<u8>, String> {
-        let width = usize::try_from(width.max(1)).map_err(|_| "Invalid capture width.")?;
-        let height = usize::try_from(height.max(1)).map_err(|_| "Invalid capture height.")?;
-        let bytes = width
-            .checked_mul(height)
-            .and_then(|pixels| pixels.checked_mul(4))
-            .filter(|bytes| *bytes <= 128 * 1024 * 1024)
-            .ok_or_else(|| "Native render capture exceeds its bounded size.".to_string())?;
-        let mut pixels = vec![0; bytes];
-        // SAFETY: the caller holds the current GL context, and `pixels` was
-        // sized to exactly width * height * 4 bytes above.
-        unsafe {
-            glReadBuffer(GL_FRONT);
-            glReadPixels(
-                0,
-                0,
-                width as i32,
-                height as i32,
-                GL_RGBA_FORMAT,
-                GL_UNSIGNED_BYTE,
-                pixels.as_mut_ptr().cast(),
-            );
-        }
-        Ok(pixels)
-    }
+fn frame_byte_len(width: i32, height: i32) -> Result<usize, String> {
+    let width = usize::try_from(width.max(1)).map_err(|_| "Invalid capture width.")?;
+    let height = usize::try_from(height.max(1)).map_err(|_| "Invalid capture height.")?;
+    width
+        .checked_mul(height)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .filter(|bytes| *bytes <= 128 * 1024 * 1024)
+        .ok_or_else(|| "Native render capture exceeds its bounded size.".to_string())
 }
 
 /// # Safety
@@ -404,7 +666,7 @@ impl CaptionTexture {
     pub(crate) fn draw(&self, viewport: VideoViewport) -> Result<(), String> {
         // Caption frames currently represent one full broadcast plane. Normalise
         // source coordinates to that plane so 2K/4K/8K logical geometry remains
-        // display-relative when the native child surface is resized.
+        // display-relative when the Canvas render surface is resized.
         let left = viewport.x as f32 + self.x as f32 / self.width as f32 * viewport.width as f32;
         let top = viewport.y as f32 + self.y as f32 / self.height as f32 * viewport.height as f32;
         let right = viewport.x as f32

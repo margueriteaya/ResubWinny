@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { ChevronRight, CircleCheck, CirclePlay, ListVideo, LoaderCircle, SquarePlay, Stethoscope, TriangleAlert } from "@lucide/svelte";
+  import { ChevronRight, CircleCheck, ListVideo, LoaderCircle, SquarePlay, Stethoscope, TriangleAlert } from "@lucide/svelte";
   import type { PlaybackTimeMapping, PreviewCommand, UserMode } from "../../backend";
   import { t } from "../../i18n";
   import TaskDiagnostics from "./TaskDiagnostics.svelte";
   import TaskTimeline from "./TaskTimeline.svelte";
   import PlayerControls from "./PlayerControls.svelte";
+  import PreviewCanvas from "./PreviewCanvas.svelte";
   import MacSegmentedControl from "../../components/MacSegmentedControl.svelte";
   import { projectRangeForMedia, type MediaTimeMs, type ProjectTimeMs } from "./time-mapping";
 
@@ -94,8 +95,8 @@
   } = $props();
   let playbackMappingDetails: HTMLDetailsElement | undefined = $state();
 
-  // Pane drags change this rectangle without resizing the document or window.
-  // Follow the actual surface so its native child HWND stays inside the player.
+  // Pane drags change the Canvas size without resizing the document or window.
+  // Keep the offscreen render target at the component's physical resolution.
   $effect(() => {
     if (!desktopRuntime || !nativePreview) return;
     const observer = new ResizeObserver(() => onResizePreview());
@@ -152,7 +153,9 @@
   </div>
   {#if taskTab === "preview"}
     <div class="player-shell">
-      <div class="native-preview" data-liquid-ignore bind:this={nativePreview}><div class="native-notice"><CirclePlay size={30} /><b>{playerRunning ? t("workspace.nativePreviewActive") : t("workspace.nativePreview")}</b><p>{playerRunning ? t("workspace.nativePreviewActiveDescription") : t("workspace.nativePreviewDescription")}</p></div></div>
+      <div class="native-preview" bind:this={nativePreview}>
+        <PreviewCanvas running={playerRunning} title={playerRunning ? t("workspace.nativePreviewActive") : t("workspace.nativePreview")} description={playerRunning ? t("workspace.nativePreviewActiveDescription") : t("workspace.nativePreviewDescription")} {onError} />
+      </div>
       <PlayerControls running={playerRunning} paused={playerPaused} available={previewAvailable} {projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} durationKnown={durationMs !== null} volume={previewVolume} onStart={onStartPreview} onTogglePause={() => onPlayerCommand("toggle-pause")} onStop={onStopPreview} onFit={onResizePreview} onSkipBack={() => onPlayerCommand("seek-back")} onSkipForward={() => onPlayerCommand("seek-forward")} {onToggleMute} {onSetVolume} {onSeekProject} {onSeekTarget} {onError} />
     </div>
     <div class="preview-status"><span>{t("workspace.scanned").replace("{0}", (bytesRead / 1024 ** 3).toFixed(2))}</span><span>{t("workspace.decodedEvents").replace("{0}", captions.toLocaleString())}</span></div>
@@ -184,7 +187,7 @@
   .workbench-status { display: flex; justify-self: end; align-items: center; gap: 6px; margin: 0; min-width: 0; color: var(--rw-success); font-size: 12px; line-height: 16px; white-space: nowrap; }
   .workbench-status.warning { color: var(--rw-warning); }.workbench-status.active { color: var(--rw-accent); }.workbench-status.active :global(svg) { animation: status-spin 1.2s linear infinite; }
   .player-shell { container: player / inline-size; margin-top: 10px; overflow: hidden; border: 1px solid var(--rw-border); border-radius: 6px; background: var(--rw-content); }
-  .native-preview { margin: 0; min-height: clamp(270px, 38vh, 380px); border-radius: 0; }
+  .native-preview { margin: 0; }
   .preview-status { display:flex; justify-content:space-between; padding:8px 1px 0; color:var(--rw-muted); font-size:12px; line-height:16px; }
   .playback-mapping { margin-top:10px; overflow:hidden; border:1px solid var(--rw-border-subtle); border-radius:7px; background:var(--rw-content); }
   .playback-mapping summary { display:flex; align-items:center; justify-content:space-between; min-height:48px; padding:7px 11px; cursor:pointer; list-style:none; }.playback-mapping summary::-webkit-details-marker { display:none; }
@@ -193,6 +196,5 @@
   .mapping-controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:12px; border-top:1px solid var(--rw-border-subtle); }.mapping-controls>p { grid-column:1/-1; margin:0 0 2px; color:var(--rw-text-secondary); font-size:12px; line-height:1.5; }.mapping-controls label { display:grid; gap:5px; min-width:0; color:var(--rw-text-secondary); font-size:12px; font-weight:620; }.mapping-controls input { min-width:0; width:100%; padding:7px 8px; font-size:12px; }.mapping-controls .quiet-button { grid-column:1/-1; justify-self:start; min-height:32px; border:1px solid var(--rw-border); border-radius:6px; color:var(--rw-text); background:var(--rw-surface-muted); font-size:12px; }
   @keyframes status-spin { to { transform:rotate(1turn); } }
   @container content (max-width: 700px) { .tabs { grid-template-columns:auto minmax(0,1fr); }.tabs>span[aria-hidden="true"] { display:none; }.workbench-status { overflow:hidden; }.workbench-status span { overflow:hidden; text-overflow:ellipsis; }.mapping-controls { grid-template-columns:1fr; } }
-  @media (max-height:700px) { .native-preview { min-height:168px; } }
   @media (prefers-reduced-motion: reduce) { .workbench-status.active :global(svg) { animation:none; } }
 </style>

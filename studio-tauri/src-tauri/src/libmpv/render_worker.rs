@@ -13,6 +13,7 @@ pub struct LibMpvRenderWorker {
 #[cfg(windows)]
 #[derive(Clone, Default)]
 pub struct RenderWorkerStats {
+    pub frames_rendered: u64,
     pub frames_presented: u64,
     pub presents_per_second: f64,
     pub caption_texture_uploads: u64,
@@ -62,6 +63,7 @@ impl LibMpvRenderWorker {
         hwnd: isize,
         width: i32,
         height: i32,
+        frame_pool: Option<Arc<crate::preview::frame_bridge::PreviewFramePool>>,
     ) -> Result<Self, String> {
         let (sender, receiver) = mpsc::channel();
         let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
@@ -76,6 +78,7 @@ impl LibMpvRenderWorker {
                     hwnd,
                     width.max(1),
                     height.max(1),
+                    frame_pool,
                     receiver,
                     ready_sender,
                     worker_stats,
@@ -233,6 +236,7 @@ fn render_worker_main(
     hwnd: isize,
     mut width: i32,
     mut height: i32,
+    frame_pool: Option<Arc<crate::preview::frame_bridge::PreviewFramePool>>,
     receiver: Receiver<RenderWorkerMessage>,
     ready: mpsc::SyncSender<Result<(), String>>,
     stats: Arc<Mutex<RenderWorkerStats>>,
@@ -254,6 +258,15 @@ fn render_worker_main(
         Ok(player) => player,
         Err(error) => {
             let _ = ready.send(Err(error));
+            return;
+        }
+    };
+    let mut output = match crate::windows_gl::OffscreenReadback::create(width, height) {
+        Ok(output) => output,
+        Err(error) => {
+            let _ = ready.send(Err(error));
+            // SAFETY: the WGL context remains current on this thread.
+            unsafe { player.destroy_render_context() };
             return;
         }
     };
@@ -387,10 +400,25 @@ fn render_worker_main(
                 }
             }
         }
-        // SAFETY: this thread's WGL context is current and the default
-        // framebuffer is bound.
-        match unsafe { player.render_frame(width, height, caption_dirty) } {
+        if let Err(error) = output.bind(width, height) {
+            if !ready_sent {
+                let _ = ready.send(Err(error.clone()));
+                ready_sent = true;
+            }
+            record_render_error(&stats, &error);
+            break;
+        }
+        // SAFETY: this thread's WGL context is current and output owns a
+        // complete texture-backed framebuffer in that context.
+        match unsafe { player.render_frame(output.framebuffer(), width, height, caption_dirty) } {
             Ok(true) => {
+                if let Ok(mut stats) = stats.lock() {
+                    stats.frames_rendered = stats.frames_rendered.saturating_add(1);
+                }
+                if output.bind(width, height).is_err() {
+                    record_render_error(&stats, "Could not restore the offscreen preview target.");
+                    break;
+                }
                 if let Some(caption) = caption.as_ref()
                     && caption
                         .draw(crate::windows_gl::fit_video_viewport(
@@ -403,31 +431,48 @@ fn render_worker_main(
                     record_render_error(&stats, "Could not blend the native caption texture.");
                     break;
                 }
-                if surface.swap_buffers().is_err() {
-                    record_render_error(&stats, "Could not present the native libmpv frame.");
-                    break;
-                }
-                // SAFETY: called on the render thread immediately after its own
-                // buffer swap, with the WGL context still current.
+                let readback = output.readback_frame();
+                let delivered_result = match (frame_pool.as_ref(), readback) {
+                    (_, Err(error)) => Err(error),
+                    (Some(frame_pool), Ok(Some(pixels))) => {
+                        frame_pool.write_rgba(&pixels, width, height)
+                    }
+                    (Some(_), Ok(None)) => Ok(false),
+                    (None, Ok(_)) => Ok(true),
+                };
+                let delivered = match delivered_result {
+                    Ok(delivered) => delivered,
+                    Err(error) => {
+                        if !ready_sent {
+                            let _ = ready.send(Err(error.clone()));
+                            ready_sent = true;
+                        }
+                        record_render_error(&stats, &error);
+                        break;
+                    }
+                };
+                // SAFETY: called after the rendered frame has entered the PBO
+                // delivery pipeline, with the WGL context still current.
                 unsafe { player.report_swap() };
                 #[cfg(test)]
                 if let Some(reply) = pending_capture.take() {
-                    let _ = reply.send(surface.read_front_rgba(width, height).map(|rgba| {
-                        NativeRenderFrame {
-                            width,
-                            height,
-                            rgba,
-                        }
+                    let _ = reply.send(output.readback_now().map(|rgba| NativeRenderFrame {
+                        width,
+                        height,
+                        rgba,
                     }));
                 }
-                if let Ok(mut stats) = stats.lock() {
+                if delivered && let Ok(mut stats) = stats.lock() {
                     stats.frames_presented = stats.frames_presented.saturating_add(1);
                 }
-                if !ready_sent {
+                if delivered && !ready_sent {
                     let _ = ready.send(Ok(()));
                     ready_sent = true;
                 }
-                caption_dirty = false;
+                // A paused source may not produce another mpv update. Keep
+                // forcing the same composited frame until the PBO pipeline has
+                // delivered it to the shared Canvas pool.
+                caption_dirty = !delivered;
             }
             Ok(false) => {}
             Err(error) => {

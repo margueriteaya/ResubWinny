@@ -173,29 +173,6 @@ main { position: relative; }
 .track span:nth-child(2) { min-width: 0; flex: 1; }
 .muted { color: var(--rw-muted); font-size: 13px; }
 
-.native-preview {
-  position: relative;
-  display: grid;
-  place-items: center;
-  min-height: 304px;
-  overflow: hidden;
-  color: #dce9ff;
-  background: linear-gradient(135deg, #0e2a4d, #365d88 45%, #0c1d31);
-}
-.native-preview::before {
-  position: absolute;
-  inset: 0;
-  opacity: .18;
-  background:
-    radial-gradient(circle at 70% 25%, #eef8ff 0 3%, transparent 3.5%),
-    linear-gradient(10deg, transparent 35%, #1d3246 36% 55%, #0f1a28 56%);
-  content: "";
-}
-.native-notice { position: relative; display: grid; place-items: center; gap: 7px; text-align: center; }
-.native-notice p { max-width: 280px; margin: 0; color: #c0d0e1; font-size: 12px; }
-.native-preview.native-preview-active { background: #000; }
-.native-preview.native-preview-active::before,
-.native-preview.native-preview-active .native-notice { display: none; }
 .preview-status { display: flex; justify-content: space-between; color: var(--rw-muted); font-size: 13px; }
 .preview-unavailable { margin: 10px 0 0; color: #a85314; font-size: 12px; line-height: 1.4; }
 

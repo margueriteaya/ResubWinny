@@ -24,14 +24,16 @@ export type LegalDocumentSummary = { id: LegalDocumentId; title: string; categor
 export type LegalDocumentContent = { id: LegalDocumentId; title: string; content: string }
 export type TaskHistoryRecord = { name: string; path: string; size: number; container: string; status: string; time: string; warnings: number; captions: number; jobId?: string }
 export type PreviewCommand = 'toggle-pause' | 'seek-back' | 'seek-forward' | 'frame-back' | 'frame-forward'
-export type PreviewRect = { x: number; y: number; width: number; height: number }
+export type PreviewSurfaceSize = { width: number; height: number }
 export type PreviewSurfaceCapability = { id: string; available: boolean; experimental: boolean; unavailableReasonCode: string | null }
 export type PreviewCapabilities = { videoBackend: string; captionOverlayModes: PreviewSurfaceCapability[]; selectedCaptionOverlay: string; captionPlaneModes: string[]; availableCaptionPlaneModes: string[] }
 export type PreviewRuntime = { backend: string; platform: string; libraryPath: string | null; available: boolean; renderApiAvailable: boolean; detail: string }
 export type PreviewRenderDiagnostics = {
   route: string
   active: boolean
+  framesRendered: number
   framesPresented: number
+  framesDropped: number
   presentsPerSecond: number
   captionTextureUploads: number
   captionTextureClears: number
@@ -39,7 +41,6 @@ export type PreviewRenderDiagnostics = {
   surfaceWidth: number | null
   surfaceHeight: number | null
   decoderMode: string | null
-  fallbackReason: string | null
   lastError: string | null
 }
 export type JobState = 'Created' | 'Inspecting' | 'Ready' | 'Queued' | 'Starting' | 'Running' | 'Pausing' | 'Paused' | 'Resuming' | 'Cancelling' | 'Cancelled' | 'Completed' | 'Failed' | 'Interrupted'

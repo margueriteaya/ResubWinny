@@ -2,7 +2,7 @@ import {
   backend,
   type PlaybackTimeMapping,
   type PreviewCommand,
-  type PreviewRect,
+  type PreviewSurfaceSize,
 } from "../../backend";
 import {
   NativePreviewController,
@@ -94,17 +94,15 @@ export class PreviewSession {
   isCurrentIntent(intent: number) { return intent === this.seekIntent; }
   whenStopped() { return this.stopPromise; }
 
-  private rect(): PreviewRect {
+  private rect(): PreviewSurfaceSize {
     const element = this.host();
     if (!element) throw new Error("Native preview host is not mounted.");
     const bounds = element.getBoundingClientRect();
     const scale = window.devicePixelRatio;
-    return {
-      x: Math.round(bounds.left * scale),
-      y: Math.round(bounds.top * scale),
-      width: Math.round(bounds.width * scale),
-      height: Math.round(bounds.height * scale),
-    };
+    const width = Math.max(32, Math.round(bounds.width * scale));
+    const height = Math.max(32, Math.round(bounds.height * scale));
+    const fit = Math.min(1, 1920 / width, 1080 / height, Math.sqrt((1920 * 1080) / (width * height)));
+    return { width: Math.max(32, Math.round(width * fit)), height: Math.max(32, Math.round(height * fit)) };
   }
 
   start(source: string, setMapping: (mapping: PlaybackTimeMapping) => void, callbacks: PreviewCallbacks) {
@@ -188,7 +186,7 @@ export class PreviewSession {
       if (this.bindings.desktopRuntime()) await this.stop(callbacks);
     } finally {
       // A failed IPC acknowledgement cannot leave the UI attached to the
-      // previous page's native child surface.
+      // previous page's shared Canvas frame stream.
       this.bindings.setRunning(false);
       this.bindings.setPaused(true);
     }

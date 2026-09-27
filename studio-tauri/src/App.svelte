@@ -314,14 +314,8 @@
     if (page === "settings" && !SettingsPageComponent)
       void import("./features/settings/SettingsPage.svelte").then((module) => SettingsPageComponent = module.default);
   });
-  // mpv owns a native surface. Once it starts, remove the WebView placeholder
-  // so the instructional layer cannot be mistaken for video state.
-  $effect(() => {
-    nativePreview?.classList.toggle("native-preview-active", playerRunning);
-  });
-  // A language switch deliberately remounts the WebView page tree so every
-  // legacy translation call refreshes.  Rebind the native child HWND to the
-  // replacement placeholder immediately instead of leaving a stale rectangle.
+  // A language switch remounts the page tree. Re-measure the replacement
+  // Canvas so the offscreen renderer keeps the correct physical resolution.
   $effect(() => {
     if (playerRunning && nativePreview) untrack(() => void resizePreview());
   });

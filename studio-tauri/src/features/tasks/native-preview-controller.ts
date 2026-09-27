@@ -2,7 +2,7 @@ import {
   backend,
   type BroadcastMetadata,
   type PlaybackTimeMapping,
-  type PreviewRect,
+  type PreviewSurfaceSize,
 } from "../../backend";
 import { mediaTimeMs as asMediaTimeMs, type MediaTimeMs } from "./time-mapping";
 
@@ -53,7 +53,7 @@ export class NativePreviewController {
   private lastBroadcastSyncAt = 0;
   private lastCaptionSyncAt = 0;
   private source = "";
-  private rect: PreviewRect | null = null;
+  private rect: PreviewSurfaceSize | null = null;
   private lastTimeSeconds: number | null = null;
   private lastPaused = true;
   private consecutiveSyncFailures = 0;
@@ -127,7 +127,7 @@ export class NativePreviewController {
 
   async start(
     source: string,
-    rect: PreviewRect,
+    rect: PreviewSurfaceSize,
     setMapping: (mapping: PlaybackTimeMapping) => void,
     callbacks: PreviewCallbacks,
   ): Promise<boolean> {
@@ -186,7 +186,7 @@ export class NativePreviewController {
     }
   }
 
-  async resize(rect: PreviewRect) {
+  async resize(rect: PreviewSurfaceSize) {
     if (this.running) {
       this.rect = { ...rect };
       await backend.resizePreview(rect);

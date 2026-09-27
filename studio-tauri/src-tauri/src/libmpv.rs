@@ -165,43 +165,6 @@ pub fn render_api_available(path: &Path) -> Result<bool, String> {
 }
 
 impl LibMpvPlayer {
-    pub fn start(library_path: &Path, window_id: isize, source: &Path) -> Result<Self, String> {
-        let api = LibMpv::load(library_path)?;
-        // SAFETY: mpv_create takes no arguments and returns an owned handle or
-        // null, which is checked immediately below.
-        let handle = unsafe { (api.create)() };
-        if handle.is_null() {
-            return Err("libmpv could not allocate a playback instance.".into());
-        }
-        let player = Self {
-            api,
-            handle,
-            render_context: None,
-        };
-        player.set_option("wid", &window_id.to_string())?;
-        // `wid` is the compatibility route when the render API or per-source
-        // WGL initialization is unavailable.
-        player.set_option("vo", "gpu")?;
-        player.set_option("hwdec", "auto-safe")?;
-        player.set_option("force-window", "yes")?;
-        player.set_option("keep-open", "yes")?;
-        player.set_option("pause", "yes")?;
-        // Captions are composed by the Rust backend from the archive model.
-        // Do not let mpv select and paint a second embedded subtitle stream.
-        player.set_option("sid", "no")?;
-        player.set_option("secondary-sid", "no")?;
-        player.set_option("sub-auto", "no")?;
-        player.set_option("sub-visibility", "no")?;
-        player.set_option("terminal", "no")?;
-        // SAFETY: `player.handle` came from mpv_create above and is non-null.
-        // All options were set before initialization, as libmpv requires.
-        if unsafe { (player.api.initialize)(player.handle) } < 0 {
-            return Err("libmpv could not initialize the native playback instance.".into());
-        }
-        player.command(&["loadfile", &source.to_string_lossy(), "replace"])?;
-        Ok(player)
-    }
-
     /// Starts the OpenGL render API before loading a media source. The caller
     /// must keep the matching OpenGL context current for this player's entire
     /// render-context lifetime, including `destroy_render_context`.
@@ -291,15 +254,17 @@ impl LibMpvPlayer {
         Ok(player)
     }
 
-    /// Draws an mpv frame into the current default OpenGL framebuffer.
+    /// Draws an mpv frame into the supplied OpenGL framebuffer.
     /// `force` redraws the last video frame so a low-frequency caption-plane
     /// change is visible even while video playback is paused.
     /// # Safety
     ///
     /// The OpenGL context passed to `start_render` must be current on the
-    /// calling thread, and the default framebuffer must be bound.
+    /// calling thread, and `framebuffer` must name a complete framebuffer in
+    /// that context.
     pub unsafe fn render_frame(
         &self,
+        framebuffer: i32,
         width: i32,
         height: i32,
         force: bool,
@@ -316,7 +281,7 @@ impl LibMpvPlayer {
             return Ok(false);
         }
         let mut fbo = MpvOpenGlFbo {
-            fbo: 0,
+            fbo: framebuffer,
             width,
             height,
             internal_format: 0,
@@ -346,8 +311,7 @@ impl LibMpvPlayer {
         Ok(true)
     }
 
-    /// Reports a completed platform-buffer swap to libmpv. This must happen
-    /// after `SwapBuffers`, not merely after drawing into the WGL back buffer.
+    /// Reports that the completed frame entered the presentation pipeline.
     /// # Safety
     ///
     /// Call only from the thread whose GL context is current, right after
@@ -424,17 +388,6 @@ impl LibMpvPlayer {
         // need when a native preview window has letterbox bars.
         self.double_property("video-out-params/aspect")
             .map(|value| value.filter(|value| *value > 0.0))
-    }
-
-    pub fn osd_dimensions(&self) -> Result<Option<(i32, i32)>, String> {
-        let width = self.double_property("osd-width")?;
-        let height = self.double_property("osd-height")?;
-        let Some((width, height)) = width.zip(height) else {
-            return Ok(None);
-        };
-        let width = width.round() as i32;
-        let height = height.round() as i32;
-        Ok((width > 0 && height > 0).then_some((width, height)))
     }
 
     /// Returns libmpv's actual decoder selection, not the policy requested by

@@ -17,6 +17,7 @@
   --rw-surface-raised: rgba(255, 255, 255, .82);
   --rw-surface-muted: #f1f2f4;
   --rw-content: #fff;
+  --rw-video-canvas: #000;
   --rw-border: rgba(60, 60, 67, .18);
   --rw-border-subtle: rgba(60, 60, 67, .10);
   --rw-accent: #0a84ff;
