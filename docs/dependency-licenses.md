@@ -523,7 +523,7 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `@tauri-apps/cli-win32-arm64-msvc` | `2.11.4` | Apache-2.0 OR MIT |
 | `@tauri-apps/cli-win32-ia32-msvc` | `2.11.4` | Apache-2.0 OR MIT |
 | `@tauri-apps/cli-win32-x64-msvc` | `2.11.4` | Apache-2.0 OR MIT |
-| `@tauri-apps/plugin-dialog` | `2.7.2` | MIT OR Apache-2.0 |
+| `@tauri-apps/plugin-dialog` | `2.7.3` | MIT OR Apache-2.0 |
 | `@tsconfig/svelte` | `5.0.8` | MIT |
 | `@types/estree` | `1.0.9` | MIT |
 | `acorn` | `8.17.0` | MIT |
