@@ -533,7 +533,7 @@ Generated inventory: 466 Cargo packages and 91 npm packages.
 | `clsx` | `2.1.1` | MIT |
 | `deepmerge` | `4.3.1` | MIT |
 | `detect-libc` | `2.1.2` | Apache-2.0 |
-| `devalue` | `5.8.2` | MIT |
+| `devalue` | `5.9.4` | MIT |
 | `esm-env` | `1.2.2` | MIT |
 | `esrap` | `2.3.0` | MIT |
 | `fdir` | `6.5.0` | MIT |
