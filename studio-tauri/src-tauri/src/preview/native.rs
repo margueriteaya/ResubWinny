@@ -11,9 +11,9 @@ use windows::{
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
             CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow,
-            HWND_TOP, RegisterClassW, SW_HIDE, SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowPos,
-            ShowWindow, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_NOACTIVATE,
-            WS_VISIBLE,
+            FindWindowExW, GWL_STYLE, GetWindowLongPtrW, HWND_TOP, RegisterClassW, SW_HIDE,
+            SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos, ShowWindow, WNDCLASSW,
+            WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_NOACTIVATE, WS_VISIBLE,
         },
     },
     core::w,
@@ -62,6 +62,36 @@ fn preview_window_instance() -> Result<HINSTANCE, String> {
         .map_err(Clone::clone)
 }
 
+fn clip_parent_around_native_children(parent: HWND) {
+    // WebView2 continuously paints this content host. Excluding child HWND
+    // rectangles from that paint keeps its compositor from covering a
+    // successfully swapped OpenGL preview frame.
+    // SAFETY: `parent` is a live window owned by this process.
+    unsafe {
+        let style = GetWindowLongPtrW(parent, GWL_STYLE);
+        SetWindowLongPtrW(parent, GWL_STYLE, style | WS_CLIPCHILDREN.0 as isize);
+    }
+}
+
+fn native_preview_parent(main_window: HWND) -> HWND {
+    // Wry puts the windowed WebView2 controller inside this direct child. A
+    // preview parented to the outer Tauri HWND can sit below WebView2's own
+    // composition visual even when Win32 reports it first in sibling order.
+    // Parenting inside the content host gives the preview the same origin as
+    // DOM client coordinates and makes it a true sibling of the WebView.
+    // SAFETY: `main_window` is live; FindWindowExW only reads its direct child
+    // list and the class-name literals are NUL-terminated.
+    unsafe {
+        FindWindowExW(
+            Some(main_window),
+            None,
+            w!("WRY_WEBVIEW"),
+            windows::core::PCWSTR::null(),
+        )
+        .unwrap_or(main_window)
+    }
+}
+
 fn stop_host(state: &AppState) {
     if let Ok(mut slot) = state.player.lock()
         && let Some(player) = slot.take()
@@ -105,23 +135,25 @@ fn start_preview_impl(
         return Err("The native preview surface has no usable size.".into());
     }
     stop_host(state.inner());
-    let parent = app
+    let main_window = app
         .get_webview_window("main")
         .ok_or("The main application window is unavailable.")?
         .hwnd()
         .map_err(|e| format!("Could not access the native window: {e}"))?;
+    let parent = native_preview_parent(main_window);
+    clip_parent_around_native_children(parent);
     let instance = preview_window_instance()?;
     // The DOM rectangle is measured in WebView client pixels. A true child
     // HWND uses the same client coordinate space and follows the main window
     // synchronously while it moves, unlike an owned screen-positioned popup.
-    // SAFETY: the class was registered above, and `parent` is the live main
-    // window handle obtained from Tauri.
+    // SAFETY: the class was registered above, and `parent` is the live Wry
+    // content host (or the live Tauri window on the compatibility fallback).
     let host = unsafe {
         CreateWindowExW(
             WS_EX_NOACTIVATE,
             w!("ResubWinnyPreviewHost"),
             w!("ResubWinnyMpvHost"),
-            WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+            WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
             rect.x,
             rect.y,
             rect.width,
@@ -565,7 +597,7 @@ mod tests {
     };
 
     #[test]
-    fn child_preview_follows_the_main_window_without_a_webview_resize() {
+    fn child_preview_uses_the_webview_host_and_follows_the_main_window() {
         // SAFETY: both windows are created and destroyed by this test on the
         // same thread. Their HWNDs remain live for every Win32 call below.
         unsafe {
@@ -584,6 +616,37 @@ mod tests {
                 None,
             )
             .expect("create parent window");
+            let module = GetModuleHandleW(None).expect("test module");
+            let webview_class = WNDCLASSW {
+                lpfnWndProc: Some(preview_window_proc),
+                hInstance: HINSTANCE(module.0),
+                lpszClassName: w!("WRY_WEBVIEW"),
+                ..Default::default()
+            };
+            let _ = RegisterClassW(&webview_class);
+            let webview = CreateWindowExW(
+                Default::default(),
+                w!("WRY_WEBVIEW"),
+                w!("ResubWinnyWebViewParentTest"),
+                WS_CHILD | WS_VISIBLE,
+                0,
+                0,
+                400,
+                300,
+                Some(parent),
+                None,
+                None,
+                None,
+            )
+            .expect("create webview content host");
+            let preview_parent = native_preview_parent(parent);
+            assert_eq!(preview_parent, webview);
+            clip_parent_around_native_children(preview_parent);
+            assert_ne!(
+                GetWindowLongPtrW(preview_parent, GWL_STYLE) & WS_CLIPCHILDREN.0 as isize,
+                0,
+                "the WebView host must exclude the native preview from painting"
+            );
             let child = CreateWindowExW(
                 WS_EX_NOACTIVATE,
                 w!("STATIC"),
@@ -593,13 +656,13 @@ mod tests {
                 40,
                 200,
                 100,
-                Some(parent),
+                Some(preview_parent),
                 None,
                 None,
                 None,
             )
             .expect("create child preview window");
-            assert_eq!(GetParent(child), Ok(parent));
+            assert_eq!(GetParent(child), Ok(preview_parent));
             let mut before = RECT::default();
             GetWindowRect(child, &mut before).expect("get initial child bounds");
             SetWindowPos(parent, None, 180, 165, 400, 300, SWP_NOACTIVATE)
@@ -609,6 +672,7 @@ mod tests {
             assert_eq!(after.left - before.left, 80);
             assert_eq!(after.top - before.top, 65);
             DestroyWindow(child).expect("destroy child window");
+            DestroyWindow(webview).expect("destroy webview content host");
             DestroyWindow(parent).expect("destroy parent window");
         }
     }
