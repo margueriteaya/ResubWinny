@@ -25,7 +25,8 @@
 | Worker 导出器 | 公共导出器边界仍位于 `exporters/mod.rs`；ASS、TTML、文本格式、B24 编排、证据和 Ruby 布局位于按格式聚焦的模块中。 |
 | Worker TTML | B62 语义、严格 XML 文档解码和 TS/PES 扫描分别位于独立的 `ttml`、`document` 和 `scan` 模块中。 |
 | 实验性 TLV/MMTP | 基础数据包/MPU 处理、信令/MPT、证据写入和受约束路径分别位于独立模块中。 |
-| Worker 测试 | 语料库、TS/M2TS、B24/时间线、TTML、TLV、归档和合成协议套件在独立文件中各自管理其夹具；完整基线为 146 项测试。 |
+| 共享字幕语义 | `crates/caption-semantics` 是 Worker 与桌面后端共同依赖的普通库：共享代码作为独立依赖编译，不再按路径分别纳入两个 crate；仅由一侧调用的公开条目无需死代码豁免。 |
+| Worker 测试 | 语料库、TS/M2TS、B24/时间线、TTML、TLV、归档和合成协议套件在独立文件中各自管理其夹具；完整基线为 202 项测试。 |
 | libmpv | 动态客户端 ABI/播放与 Windows 渲染 Worker 已分离；渲染测试已隔离。 |
 | 桌面时间线 | 公共分页/呈现保留在 `timeline.rs`；有界实时窗口和追加游标状态隔离在 `timeline/cache.rs` 中。 |
 | Svelte 应用 | 主题/区域设置偏好、多任务协调、DRCS 字典状态、任务呈现和输出格式元数据已移入功能控制器。多任务、DRCS 和设置视图现在位于其所属功能目录下，而非源码根目录。 |
@@ -35,7 +36,11 @@
 成功检查后的默认值由纯任务设置转换产生；外壳不再逐字段重建输出路径、初始轨道/格式选择或源通知。批处理控制器负责队列生命周期和编辑项轨道投影，而跨功能任务激活仍在组合根中。
 `HistorySession` 负责有界任务历史持久化，`LayoutSession` 负责响应式外壳转换。`runtime-session.ts` 集中管理任务运行时重置；`feedback-session.ts` 集中管理有界通知和后端错误消息；`selection-session.ts` 集中管理输出格式、保留和轨道选择转换；`bootstrap-session.ts` 加载相互独立的桌面启动资源；`application-lifecycle-session.ts` 负责桌面事件订阅和清理；`recovery-session.ts` 负责检查点资格判定和重放。这些会话将结果投影到 Svelte 值中，但不会成为第二个全局存储。
 
-目前最大的生产文件是 Worker `exporters/ass.rs`（约 1,185 行）、`caption/ruby.rs`（约 1,080 行）、`App.svelte`（约 1,100 行）、Worker `caption/ttml.rs`（约 764 行）、桌面端 `jobs/repository.rs`（约 720 行）以及前端 `features/batch/BatchQueue.svelte`（约 632 行）。导出器、任务和预览入口模块现在是小型所有权边界，而非实现收纳桶。进一步拆分应遵循 ASS 事件构造、Ruby 关联/布局、应用会话生命周期、仓库关注点以及多任务表格/预设关注点，而不是任意的行数阈值。
+`PreviewNavigationSession` 负责预览标签切换、宿主布局完成后的播放恢复和跨标签跳转，并在等待旧播放器停止后再次检查请求是否仍有效。界面状态继续保留在 Svelte 外壳中。
+
+`ExportWorkflow` 负责导出校验、索引取消与导出的衔接，并拒绝来源切换后的过期请求。`BatchTaskSession` 负责打开批任务并阻止旧归档查询覆盖新任务；`OnboardingSession` 负责首次引导的保存、失败与重试流程。外壳只提供状态读写和界面事件绑定。
+
+目前最大的生产文件是 Worker `exporters/ass.rs`（约 1,536 行）、桌面端 `timeline.rs`（约 1,443 行）、`App.svelte`（约 1,129 行）、Worker `caption/ttml.rs`（约 1,220 行）、`caption/ruby.rs`（约 1,111 行）、前端 `features/tasks/TaskTimeline.svelte`（约 895 行）、桌面端 `jobs/repository.rs`（约 763 行）以及前端 `features/batch/BatchQueue.svelte`（约 676 行）。导出器、任务和预览入口模块现在是小型所有权边界，而非实现收纳桶。进一步拆分应遵循 ASS 事件构造、Ruby 关联/布局、应用会话生命周期、仓库关注点以及多任务表格/预设关注点，而不是任意的行数阈值。
 
 时间域在其所有权边界上均为显式。前端和桌面映射层区分媒体毫秒与项目毫秒，而 Worker 将 33 位 MPEG PES 时钟表示为 `Pts90k`，并仅在进入字幕 IR、证据或时间线处理时将其转换为毫秒。MMT 呈现 NTP 仍是独立的传输概念。
 
@@ -48,12 +53,12 @@
 - Worker、桌面 crate 和模糊测试 crate 的 Cargo 输出统一在 `build/cargo/` 下；Vite 输出位于 `build/frontend/`。
 - `scripts/clean.ps1` 会移除当前输出以及过时的根目录、模糊测试、Vite 和 Tauri 输出位置。`-Dependencies` 还会移除 `node_modules`。
 - Worker 和桌面 Clippy 在 CI 中使用 `-D warnings` 运行。
-- 当前已验证基线为 146 项 Worker 测试和 106 项通过的桌面测试。四项真实录像/归档环境及性能测试仍为选择性启用，因为它们需要 Windows 桌面会话、合法录像或归档路径，以及路径特定的性能阈值。
-- 前端契约检查目前覆盖 58 个有类型命令、64 个源文件和四个完整的内置区域设置文件；Svelte 构建无诊断信息。
+- 当前已验证基线为 202 项 Worker 测试、18 项共享字幕语义测试和 134 项通过的桌面测试。五项真实录像/归档环境及性能测试仍为选择性启用，因为它们需要 Windows 桌面会话、合法录像或归档路径，以及路径特定的性能阈值。
+- 前端契约检查目前覆盖 62 个有类型命令、82 个源文件和四个完整的内置区域设置文件；Svelte 构建无诊断信息。
 - `scripts/check.ps1` 是格式化、Worker 和桌面测试/lint、前端构建、模糊测试编译及生成依赖许可证清单的唯一本地入口点。
 - `scripts/build.ps1` 是唯一打包入口点。其 Windows 默认值为捆绑配置，该配置会显式安装并验证固定版本的运行时；`-Libmpv External` 会生成不含 libmpv 的包，并要求用户提供兼容运行时。Tauri 基础配置本身不会静默捆绑运行时。
 - 常规 CI 路径有四个聚焦作业：一个共享静态质量门槛、一个三平台 Rust 测试矩阵、模糊测试目标编译和依赖审计。每周计划工作流会对每个模糊测试目标执行有界的 30 秒运行；拉取请求保留仅编译的模糊测试覆盖。`cargo-deny` 对 Worker、桌面端和模糊测试清单强制执行已签入的许可证/来源策略。耗时较长的 LGPL libmpv 构建为手动执行，并与拉取请求 CI 隔离。它直接在 GitHub Ubuntu 运行器上运行，并在相应源代码归档旁记录完整的工具/包环境。
-- `scripts/verify-repository.ps1` 拒绝生成/下载的工件、嵌套仓库、超大跟踪文件和发布版本漂移。`scripts/package-source.ps1` 从干净的 Git 修订版创建按哈希寻址的源代码归档；两条路径都已在临时仓库中实际运行。
+- `scripts/verify-repository.ps1` 拒绝生成或下载的文件、嵌套仓库、超大跟踪文件和发布版本漂移。`scripts/package-source.ps1` 从干净的 Git 修订版创建按哈希寻址的源代码归档；两条路径都已在临时仓库中实际运行。
 - GitHub 议题和拉取请求模板记录合法样本边界、受影响的传输路径、模型不变量和验证证据。
 
 ## 公开发布阻碍项
@@ -61,16 +66,16 @@
 - 每次依赖更新时，必须保持 `THIRD_PARTY_NOTICES.md` 与 `third_party/versions.json` 同步。现已记录准确的 libaribcaption/libmpv 修订版、哈希、许可证、源位置和动态替换说明。
 - 必须将大型 Windows libmpv 二进制文件排除在 Git 之外。`scripts/setup-libmpv.ps1` 会验证其固定版本归档和解压后哈希；Windows CI 和打包会调用该显式设置步骤。
 - 必须保持已供应的 libaribcaption 提交与源快照哈希同步。其嵌套 Git 元数据已移除；今后的更新在进入根仓库之前必须通过 `scripts/prepare-vendored-source.ps1`。
-- 必须为确切捆绑的 Windows libmpv 构建镜像一个持久、完整的对应源代码归档及构建脚本。适用的 LGPL 文本、构建来源、哈希和替换机制现已记录，但不能只将上游 URL 视为最终发布工件。
+- 必须为确切捆绑的 Windows libmpv 构建镜像一个持久、完整的对应源代码归档及构建脚本。适用的 LGPL 文本、构建来源、哈希和替换机制现已记录，但不能只将上游 URL 视为最终发布产物。
 - 必须确保字体旁的 Rounded M+ 1m for ARIB 来源/许可证文件包含在每个安装程序和二进制归档中。已通过 SHA-256 将捆绑二进制文件与其记录的上游文件匹配。
 - `CONTRIBUTING.md`、`SECURITY.md` 和受支持的工具链策略现已存在。Windows Alpha 候选工作流会运行完整打包门槛并写入安装程序哈希，但不会创建公开发布。
 - 必须记录行为准则决定。Signed Stable 发布需要受保护的签名身份，但明确披露且满足源代码、哈希、来源和许可证门槛的 Unsigned Windows Alpha 不需要。
-- 必须移除架构文档中不再符合实际实现的声明，并确保全部三种语言版本描述相同的已验证及实验性能力边界。
+- 必须移除架构文档中不再符合实际实现的声明，并确保全部四种语言版本描述相同的已验证及实验性能力边界。
 
 ## 建议顺序
 
-1. 构建可审计的 Unsigned Windows Alpha 流水线，发布准确的标签和提交、完整工件哈希、未签名构建警告、通知以及捆绑 libmpv 的对应源代码回执。
-2. 针对源选择、原生预览、动态广播元数据、多任务控制、语言包、输出规划和工件发布执行已打包 Windows 端到端验收。源选择、暂停的原生视频、动态元数据、118 事件索引和最终归档时间线恢复已用 `bs4k_test_2.ts` 验证；其余工作流仍需打包验收。
+1. 构建可审计的 Unsigned Windows Alpha 流水线，发布准确的标签和提交、完整产物哈希、未签名构建警告、通知以及捆绑 libmpv 的对应源代码回执。
+2. 针对源选择、原生预览、动态广播元数据、多任务控制、语言包、输出规划和产物发布执行已打包 Windows 端到端验收。源选择、暂停的原生视频、动态元数据、118 事件索引和最终归档时间线恢复已用 `bs4k_test_2.ts` 验证；其余工作流仍需打包验收。
 3. 维护私有的真实广播兼容性矩阵，并仅发布其结果。不得添加合成广播生成来替代合法持有的录像，并须将 TLV/MMTP 明确保持为实验性功能。
 4. 为纯前端行为和生成的 Rust 到 TypeScript DTO 类型添加聚焦测试，且不得引入前端测试框架或 RPC 框架。
 5. 为确切捆绑的 LGPL libmpv 构建生成固定、完整的对应源代码包；在此完成之前，当前开发 DLL 会阻碍公开二进制分发。

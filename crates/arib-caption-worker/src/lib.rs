@@ -7,12 +7,8 @@ use std::{
 };
 
 mod archive;
-#[path = "../../../shared/arib_symbols.rs"]
-mod arib_symbols;
 mod arib_text;
 mod caption;
-#[path = "../../../shared/caption_features.rs"]
-mod caption_features;
 mod cli;
 mod config;
 mod drcs;
@@ -35,6 +31,10 @@ pub mod synthetic;
 mod time;
 mod timeline;
 mod transport;
+
+// Shared broadcast caption semantics live in their own crate so each item is
+// compiled once; re-export them under the paths the modules already use.
+pub(crate) use caption_semantics::{arib_symbols, caption_features};
 
 pub(crate) use archive::*;
 pub(crate) use caption::*;

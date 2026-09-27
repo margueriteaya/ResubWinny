@@ -1,20 +1,38 @@
 <script lang="ts">
-  export let value = 0;
-  export let min = 0;
-  export let max = 100;
-  export let step = 1;
-  export let disabled = false;
-  export let ariaLabel = "";
-  export let role = "slider";
-  export let ariaControls = "";
-  export let ariaOrientation: "horizontal" | "vertical" = "horizontal";
-  export let className = "";
-  export let onInput: (value: number) => void = () => {};
-  export let onChange: (value: number) => void = () => {};
-  export let onCancel: (value: number) => void = () => {};
-  let interacting = false;
-  let committedValue = value;
-  let suppressNextChange = false;
+  let {
+    value = $bindable(0),
+    min = 0,
+    max = 100,
+    step = 1,
+    disabled = false,
+    ariaLabel = "",
+    ariaValueText = "",
+    role = "slider",
+    ariaControls = "",
+    ariaOrientation = "horizontal",
+    className = "",
+    onInput = () => {},
+    onChange = () => {},
+    onCancel = () => {},
+  }: {
+    value?: number;
+    min?: number;
+    max?: number;
+    step?: number;
+    disabled?: boolean;
+    ariaLabel?: string;
+    ariaValueText?: string;
+    role?: string;
+    ariaControls?: string;
+    ariaOrientation?: "horizontal" | "vertical";
+    className?: string;
+    onInput?: (value: number) => void;
+    onChange?: (value: number) => void;
+    onCancel?: (value: number) => void;
+  } = $props();
+  let interacting = $state(false);
+  let committedValue = $state(value);
+  let suppressNextChange = $state(false);
 
   function input(event: Event, commit = false) {
     value = Number((event.currentTarget as HTMLInputElement).value);
@@ -41,12 +59,18 @@
     suppressNextChange = true;
     onCancel(value);
   }
-  $: if (!interacting) committedValue = value;
-  $: progress = max === min ? 0 : Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+  // Track the committed value while the control is idle so a cancelled drag
+  // can restore it.
+  $effect(() => {
+    if (!interacting) committedValue = value;
+  });
+  const progress = $derived(
+    max === min ? 0 : Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100)),
+  );
 </script>
 
 <span class={`mac-slider ${className}`} class:disabled style={`--slider-progress:${progress}%;--slider-thumb-offset:${progress * 0.16}px`}>
-  <input type="range" {min} {max} {step} {value} {disabled} {role} aria-label={ariaLabel} aria-controls={ariaControls || undefined} aria-orientation={ariaOrientation} aria-valuemin={min} aria-valuemax={max} aria-valuenow={value} oninput={(event) => input(event)} onchange={(event) => input(event, true)} onpointercancel={cancel} onblur={cancel} />
+  <input type="range" {min} {max} {step} {value} {disabled} {role} aria-label={ariaLabel} aria-valuetext={ariaValueText || undefined} aria-controls={ariaControls || undefined} aria-orientation={ariaOrientation} aria-valuemin={min} aria-valuemax={max} aria-valuenow={value} oninput={(event) => input(event)} onchange={(event) => input(event, true)} onpointercancel={cancel} onblur={cancel} />
   <span class="slider-thumb liquid-control" aria-hidden="true"></span>
 </span>
 

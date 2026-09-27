@@ -4,7 +4,7 @@ use std::{collections::BTreeSet, sync::OnceLock};
 // are additional kanji and are intentionally excluded; only rows 90-94 are
 // ARIB additional symbols used for special marks and pictograms.
 const GAIJI_TABLE_SOURCE: &str =
-    include_str!("../third_party/libaribcaption/src/decoder/b24_gaiji_table.hpp");
+    include_str!("../../../third_party/libaribcaption/src/decoder/b24_gaiji_table.hpp");
 const ROW_WIDTH: usize = 94;
 const ADDITIONAL_SYMBOL_START: usize = 5 * ROW_WIDTH;
 const ADDITIONAL_SYMBOL_LEN: usize = 5 * ROW_WIDTH;
@@ -12,15 +12,15 @@ const ADDITIONAL_SYMBOL_KU: std::ops::RangeInclusive<u32> = 90..=94;
 
 static ADDITIONAL_SYMBOLS: OnceLock<BTreeSet<u32>> = OnceLock::new();
 
-pub(crate) fn is_arib_additional_symbol(character: char) -> bool {
+pub fn is_arib_additional_symbol(character: char) -> bool {
     is_arib_additional_symbol_codepoint(character as u32)
 }
 
-pub(crate) fn is_arib_additional_symbol_codepoint(codepoint: u32) -> bool {
+pub fn is_arib_additional_symbol_codepoint(codepoint: u32) -> bool {
     additional_symbols().contains(&codepoint) && !is_daily_japanese_text(codepoint)
 }
 
-pub(crate) fn is_arib_additional_symbol_ku(ku: u32) -> bool {
+pub fn is_arib_additional_symbol_ku(ku: u32) -> bool {
     ADDITIONAL_SYMBOL_KU.contains(&ku)
 }
 

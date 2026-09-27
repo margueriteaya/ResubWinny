@@ -1,8 +1,4 @@
-//! Declares native video-surface routes independently from caption rendering.
-//!
-//! The Windows render route owns a WGL surface and complete libmpv render loop.
-//! A client-overlay route remains an explicit per-source fallback when the
-//! runtime lacks that API or native render initialization fails.
+//! Declares the in-process libmpv render route independently from caption rendering.
 
 pub(crate) trait PreviewSurfaceRoute {
     fn id(&self) -> &'static str;
@@ -10,22 +6,7 @@ pub(crate) trait PreviewSurfaceRoute {
     fn experimental(&self) -> bool;
 }
 
-struct LibMpvClientOverlaySurface;
 struct LibMpvRenderSurface;
-
-impl PreviewSurfaceRoute for LibMpvClientOverlaySurface {
-    fn id(&self) -> &'static str {
-        "libmpv-client-overlay"
-    }
-
-    fn requires_render_api(&self) -> bool {
-        false
-    }
-
-    fn experimental(&self) -> bool {
-        false
-    }
-}
 
 impl PreviewSurfaceRoute for LibMpvRenderSurface {
     fn id(&self) -> &'static str {
@@ -41,15 +22,13 @@ impl PreviewSurfaceRoute for LibMpvRenderSurface {
     }
 }
 
-static CLIENT_OVERLAY: LibMpvClientOverlaySurface = LibMpvClientOverlaySurface;
 static RENDER: LibMpvRenderSurface = LibMpvRenderSurface;
 
-pub(crate) fn declared_routes() -> [&'static dyn PreviewSurfaceRoute; 2] {
-    [&CLIENT_OVERLAY, &RENDER]
+pub(crate) fn declared_routes() -> [&'static dyn PreviewSurfaceRoute; 1] {
+    [&RENDER]
 }
 
 pub(crate) fn capabilities(
-    client_runtime_ready: bool,
     render_surface_ready: bool,
     native_embedding_supported: bool,
 ) -> Vec<crate::models::PreviewSurfaceCapability> {
@@ -57,18 +36,12 @@ pub(crate) fn capabilities(
         .into_iter()
         .map(|route| {
             let available = native_embedding_supported
-                && if route.requires_render_api() {
-                    render_surface_ready
-                } else {
-                    client_runtime_ready
-                };
+                && (!route.requires_render_api() || render_surface_ready);
             let unavailable_reason_code = (!available).then(|| {
                 if !native_embedding_supported {
                     "preview.platform_not_implemented".to_owned()
-                } else if route.requires_render_api() {
-                    "preview.render_surface_not_implemented".to_owned()
                 } else {
-                    "preview.libmpv_runtime_unavailable".to_owned()
+                    "preview.render_surface_not_implemented".to_owned()
                 }
             });
             crate::models::PreviewSurfaceCapability {
@@ -87,22 +60,20 @@ mod tests {
 
     #[test]
     fn render_surface_is_available_only_when_the_platform_runtime_is_ready() {
-        let routes = capabilities(true, true, true);
+        let routes = capabilities(true, true);
         assert!(routes[0].available);
         assert!(!routes[0].experimental);
-        assert!(routes[1].available);
-        assert!(!routes[1].experimental);
-        assert!(routes[1].unavailable_reason_code.is_none());
-        let missing_render = capabilities(true, false, true);
+        assert!(routes[0].unavailable_reason_code.is_none());
+        let missing_render = capabilities(false, true);
         assert_eq!(
-            missing_render[1].unavailable_reason_code.as_deref(),
+            missing_render[0].unavailable_reason_code.as_deref(),
             Some("preview.render_surface_not_implemented")
         );
-        let unsupported = capabilities(true, false, false);
+        let unsupported = capabilities(false, false);
         assert_eq!(
             unsupported[0].unavailable_reason_code.as_deref(),
             Some("preview.platform_not_implemented")
         );
-        assert_eq!(declared_routes()[1].id(), "libmpv-render");
+        assert_eq!(declared_routes()[0].id(), "libmpv-render");
     }
 }

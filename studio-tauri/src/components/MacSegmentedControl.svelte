@@ -1,13 +1,25 @@
 <script lang="ts">
-  export let value = "";
-  export let options: { value: string; label: string; icon?: any }[] = [];
-  export let ariaLabel = "";
-  export let size: "regular" | "toolbar" = "regular";
-  export let iconOnly = false;
-  export let disabled = false;
-  export let onChange: (value: string) => void = () => {};
-  let keyboardNavigation = false;
-  $: selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
+  let {
+    value = $bindable(""),
+    options = [],
+    ariaLabel = "",
+    size = "regular",
+    iconOnly = false,
+    disabled = false,
+    onChange = () => {},
+  }: {
+    value?: string;
+    options?: { value: string; label: string; icon?: any }[];
+    ariaLabel?: string;
+    size?: "regular" | "toolbar";
+    iconOnly?: boolean;
+    disabled?: boolean;
+    onChange?: (value: string) => void;
+  } = $props();
+  let keyboardNavigation = $state(false);
+  const selectedIndex = $derived(
+    Math.max(0, options.findIndex((option) => option.value === value)),
+  );
 
   function selectOption(index: number, group: HTMLElement | null) {
     if (disabled) return;
@@ -36,7 +48,7 @@
   {#if size !== "toolbar"}<span class="segment-indicator" aria-hidden="true"></span>{/if}
   {#each options as option, index (option.value)}
     <button class:liquid-control={size === "toolbar"} class:selected={value === option.value} data-tooltip={iconOnly ? option.label : undefined} aria-label={iconOnly ? option.label : undefined} type="button" role="radio" aria-checked={value === option.value} tabindex={disabled ? -1 : selectedIndex === index ? 0 : -1} {disabled} onclick={() => { value = option.value; onChange(value); }} onkeydown={(event) => handleKeydown(event, index)}>
-      {#if option.icon}<svelte:component this={option.icon} size={14} strokeWidth={1.8} />{/if}{#if !iconOnly}<span>{option.label}</span>{/if}
+      {#if option.icon}<option.icon size={14} strokeWidth={1.8} />{/if}{#if !iconOnly}<span>{option.label}</span>{/if}
     </button>
   {/each}
 </div>
