@@ -25,10 +25,65 @@ jobs:
     name: Verify and publish release assets
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+      ARTIFACT_NAME: ${{ inputs.artifact_name }}
     steps:
-      - uses: actions/download-artifact@v8
+      - name: Verify release candidate provenance
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          function Invoke-GitHubApi([string] $Path) {
+            $response = gh api $Path
+            if ($LASTEXITCODE -ne 0) {
+              throw "GitHub API request failed: $Path"
+            }
+            return $response | ConvertFrom-Json
+          }
+
+          if ($env:RELEASE_TAG -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?$') {
+            throw "Invalid release tag: $env:RELEASE_TAG"
+          }
+          [long] $runId = 0
+          if (-not [long]::TryParse($env:ARTIFACT_RUN_ID, [ref] $runId) -or $runId -le 0) {
+            throw "Invalid candidate workflow run ID: $env:ARTIFACT_RUN_ID"
+          }
+          $expectedArtifactName = "resubwinny-unsigned-windows-alpha-$env:RELEASE_TAG"
+          if ($env:ARTIFACT_NAME -cne $expectedArtifactName) {
+            throw "Unexpected candidate artifact name: $env:ARTIFACT_NAME"
+          }
+
+          $tagRef = Invoke-GitHubApi "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$env:RELEASE_TAG"
+          if ($tagRef.object.type -cne 'tag') {
+            throw 'Release tags must be annotated tags.'
+          }
+          $tagObject = Invoke-GitHubApi "repos/$env:GITHUB_REPOSITORY/git/tags/$($tagRef.object.sha)"
+          if ($tagObject.object.type -cne 'commit') {
+            throw 'The annotated release tag must point directly to a commit.'
+          }
+          $releaseCommit = $tagObject.object.sha
+
+          $release = Invoke-GitHubApi "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG"
+          if (-not $release.draft -or $release.tag_name -cne $env:RELEASE_TAG) {
+            throw 'Release assets may only be published to the matching draft release.'
+          }
+
+          $run = Invoke-GitHubApi "repos/$env:GITHUB_REPOSITORY/actions/runs/$runId"
+          if ($run.path -cne '.github/workflows/windows-alpha-candidate.yml' -or
+              $run.event -cne 'workflow_dispatch' -or
+              $run.status -cne 'completed' -or
+              $run.conclusion -cne 'success' -or
+              $run.head_repository.full_name -cne $env:GITHUB_REPOSITORY -or
+              $run.head_sha -cne $releaseCommit) {
+            throw 'The candidate artifact must come from a successful trusted workflow run for the release commit.'
+          }
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: ${{ inputs.artifact_name }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: candidate
           github-token: ${{ github.token }}
           run-id: ${{ inputs.artifact_run_id }}
@@ -40,7 +95,7 @@ jobs:
             throw 'The release candidate does not contain RELEASE-MANIFEST.json.'
           }
           $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
-          if ($manifest.tag -cne '${{ inputs.release_tag }}') {
+          if ($manifest.tag -cne $env:RELEASE_TAG) {
             throw "Candidate tag mismatch: $($manifest.tag)"
           }
           foreach ($artifact in $manifest.artifacts) {
@@ -78,13 +133,13 @@ jobs:
               Where-Object { $_.Extension -ceq '.msi' -or $_.Name -clike '*-setup.exe' } |
               Sort-Object Name
           )
-          $release = gh release view '${{ inputs.release_tag }}' `
+          $release = gh release view $env:RELEASE_TAG `
             --repo $env:GITHUB_REPOSITORY `
             --json assets | ConvertFrom-Json
           $wantedNames = @($assets.Name)
           foreach ($publishedAsset in @($release.assets)) {
             if ($publishedAsset.name -notin $wantedNames) {
-              gh release delete-asset '${{ inputs.release_tag }}' $publishedAsset.name `
+              gh release delete-asset $env:RELEASE_TAG $publishedAsset.name `
                 --repo $env:GITHUB_REPOSITORY `
                 --yes
               if ($LASTEXITCODE -ne 0) {
@@ -92,20 +147,20 @@ jobs:
               }
             }
           }
-          $arguments = @('release', 'upload', '${{ inputs.release_tag }}')
+          $arguments = @('release', 'upload', $env:RELEASE_TAG)
           $arguments += @($assets | ForEach-Object FullName)
           $arguments += @('--repo', $env:GITHUB_REPOSITORY, '--clobber')
           & gh @arguments
           if ($LASTEXITCODE -ne 0) {
             throw "Release asset upload failed with exit code $LASTEXITCODE."
           }
-          $release = gh release view '${{ inputs.release_tag }}' `
+          $release = gh release view $env:RELEASE_TAG `
             --repo $env:GITHUB_REPOSITORY `
             --json assets | ConvertFrom-Json
           if (@($release.assets).Count -ne 2) {
             throw "Published asset count mismatch: $(@($release.assets).Count) / $($assets.Count)"
           }
-          gh release edit '${{ inputs.release_tag }}' `
+          gh release edit $env:RELEASE_TAG `
             --repo $env:GITHUB_REPOSITORY `
             --draft=false `
             --prerelease
