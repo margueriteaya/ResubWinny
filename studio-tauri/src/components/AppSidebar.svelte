@@ -147,7 +147,7 @@
     stroke-width: 1.8;
     transition: color var(--rw-motion-responsive) var(--rw-ease-out), transform var(--rw-motion-responsive) var(--rw-ease-out);
   }
-  .sidebar-navigation button.active :global(svg) { color: var(--rw-accent); transform: scale(1.04); }
+  .sidebar-navigation button.active :global(svg) { color: currentColor; }
   .sidebar-navigation em {
     position: absolute;
     z-index: 1;
