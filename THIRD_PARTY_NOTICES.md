@@ -11,7 +11,7 @@ machine-readable provenance record.
 - Version: `v1.1.2`
 - Commit: `c64c23b8905ba514b87c9789269e9f66f949ffe0`
 - Source snapshot SHA-256:
-  `FDEFC6BC6EBB73BC5DCD2BD3DBB24CBB2D4DFD6A577BD1A3617E91AC646787A8`
+  `182F461A5E7EAC4F9DE5FF59457043B7078E8F6F9906931EEEDD602B11FDDD51`
 - License: MIT
 - Copyright: Copyright (c) 2022 magicxqq
 - Local license: `third_party/libaribcaption/LICENSE`
@@ -29,6 +29,11 @@ apart from ordinary characters. The patch touches
 `src/decoder/decoder_impl.cpp` and `src/decoder/decoder_impl.hpp`. It adds
 fields and passes through existing call sites; upstream behaviour is otherwise
 unchanged. The snapshot hashes above cover the patched tree.
+
+ResubWinny also validates bitmap dimensions and allocation sizes before
+constructing renderer buffers. This local safety patch prevents signed integer
+overflow when caption-controlled dimensions are unusually large. The snapshot
+hash above covers both local patches.
 
 ## libaribtlv
 
@@ -56,6 +61,12 @@ included.
 
 Zlib is built from the pinned source snapshot as a private static dependency
 of libaribtlv. Shared/system Zlib discovery is not used by that build route.
+
+ResubWinny carries local safety fixes for the vendored snapshot: `zcalloc`
+performs its allocation multiplication in `size_t`, and the Windows-only
+`testzlib` diagnostic uses format specifiers that match its `long` and `int`
+arguments. The snapshot hashes in `third_party/versions.json` cover these
+patches.
 
 ## libmpv for Windows x86_64
 
