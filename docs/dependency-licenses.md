@@ -561,11 +561,11 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `macos-traffic-lights` | `1.1.0` | MIT |
 | `magic-string` | `0.30.21` | MIT |
 | `mri` | `1.2.0` | MIT |
-| `nanoid` | `3.3.18` | MIT |
+| `nanoid` | `3.3.19` | MIT |
 | `obug` | `2.1.4` | MIT |
 | `picocolors` | `1.1.1` | ISC |
-| `picomatch` | `4.0.5` | MIT |
-| `postcss` | `8.5.26` | MIT |
+| `picomatch` | `4.0.7` | MIT |
+| `postcss` | `8.5.28` | MIT |
 | `readdirp` | `4.1.2` | MIT |
 | `rolldown` | `1.2.6` | MIT |
 | `sade` | `1.8.1` | MIT |
@@ -575,7 +575,7 @@ Generated inventory: 472 Cargo packages and 91 npm packages.
 | `tinyglobby` | `0.2.17` | MIT |
 | `tslib` | `2.8.1` | 0BSD |
 | `typescript` | `5.9.3` | Apache-2.0 |
-| `vite` | `8.2.2` | MIT |
+| `vite` | `8.3.0` | MIT |
 | `vitefu` | `1.1.3` | MIT |
 | `zimmerframe` | `1.1.4` | MIT |
 
