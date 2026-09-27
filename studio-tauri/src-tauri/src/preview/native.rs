@@ -12,8 +12,8 @@ use windows::{
         UI::WindowsAndMessaging::{
             CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow,
             HWND_TOP, RegisterClassW, SW_HIDE, SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowPos,
-            ShowWindow, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_NOACTIVATE,
-            WS_CHILD, WS_VISIBLE,
+            ShowWindow, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_NOACTIVATE,
+            WS_VISIBLE,
         },
     },
     core::w,
@@ -260,64 +260,6 @@ pub fn resize_preview(state: State<'_, Arc<AppState>>, rect: PreviewRect) -> Res
         player.player.resize(rect.width, rect.height);
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use windows::Win32::{
-        Foundation::RECT,
-        UI::WindowsAndMessaging::{GetParent, GetWindowRect, WS_POPUP},
-    };
-
-    #[test]
-    fn child_preview_follows_the_main_window_without_a_webview_resize() {
-        // SAFETY: both windows are created and destroyed by this test on the
-        // same thread. Their HWNDs remain live for every Win32 call below.
-        unsafe {
-            let parent = CreateWindowExW(
-                Default::default(),
-                w!("STATIC"),
-                w!("ResubWinnyPreviewParentTest"),
-                WS_POPUP,
-                100,
-                100,
-                400,
-                300,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("create parent window");
-            let child = CreateWindowExW(
-                WS_EX_NOACTIVATE,
-                w!("STATIC"),
-                w!("ResubWinnyPreviewChildTest"),
-                WS_CHILD | WS_VISIBLE,
-                30,
-                40,
-                200,
-                100,
-                Some(parent),
-                None,
-                None,
-                None,
-            )
-            .expect("create child preview window");
-            assert_eq!(GetParent(child), Ok(parent));
-            let mut before = RECT::default();
-            GetWindowRect(child, &mut before).expect("get initial child bounds");
-            SetWindowPos(parent, None, 180, 165, 400, 300, SWP_NOACTIVATE)
-                .expect("move parent window");
-            let mut after = RECT::default();
-            GetWindowRect(child, &mut after).expect("get moved child bounds");
-            assert_eq!(after.left - before.left, 80);
-            assert_eq!(after.top - before.top, 65);
-            DestroyWindow(child).expect("destroy child window");
-            DestroyWindow(parent).expect("destroy parent window");
-        }
-    }
 }
 
 pub fn stop_preview(state: State<'_, Arc<AppState>>) {
@@ -612,4 +554,62 @@ pub fn preview_broadcast_metadata(
             metadata: metadata.clone(),
         });
     Ok(metadata)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::{
+        Foundation::RECT,
+        UI::WindowsAndMessaging::{GetParent, GetWindowRect, WS_POPUP},
+    };
+
+    #[test]
+    fn child_preview_follows_the_main_window_without_a_webview_resize() {
+        // SAFETY: both windows are created and destroyed by this test on the
+        // same thread. Their HWNDs remain live for every Win32 call below.
+        unsafe {
+            let parent = CreateWindowExW(
+                Default::default(),
+                w!("STATIC"),
+                w!("ResubWinnyPreviewParentTest"),
+                WS_POPUP,
+                100,
+                100,
+                400,
+                300,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("create parent window");
+            let child = CreateWindowExW(
+                WS_EX_NOACTIVATE,
+                w!("STATIC"),
+                w!("ResubWinnyPreviewChildTest"),
+                WS_CHILD | WS_VISIBLE,
+                30,
+                40,
+                200,
+                100,
+                Some(parent),
+                None,
+                None,
+                None,
+            )
+            .expect("create child preview window");
+            assert_eq!(GetParent(child), Ok(parent));
+            let mut before = RECT::default();
+            GetWindowRect(child, &mut before).expect("get initial child bounds");
+            SetWindowPos(parent, None, 180, 165, 400, 300, SWP_NOACTIVATE)
+                .expect("move parent window");
+            let mut after = RECT::default();
+            GetWindowRect(child, &mut after).expect("get moved child bounds");
+            assert_eq!(after.left - before.left, 80);
+            assert_eq!(after.top - before.top, 65);
+            DestroyWindow(child).expect("destroy child window");
+            DestroyWindow(parent).expect("destroy parent window");
+        }
+    }
 }
