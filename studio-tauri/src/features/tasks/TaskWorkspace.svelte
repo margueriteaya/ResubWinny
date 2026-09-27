@@ -34,6 +34,7 @@
     playerRunning = false,
     playerPaused = true,
     previewAvailable = null,
+    previewVolume = 100,
     nativePreview = null,
     playbackMapping,
     appliedPlaybackMapping,
@@ -57,6 +58,7 @@
     onSeekProject = () => {},
     onSeekTarget = () => {},
     onSetVolume = () => {},
+    onToggleMute = () => {},
     onSaveMapping = () => {},
     onDiagnosticsCount = () => {},
     onError = () => {},
@@ -98,6 +100,7 @@
     playerRunning?: boolean;
     playerPaused?: boolean;
     previewAvailable?: boolean | null;
+    previewVolume?: number;
     nativePreview?: HTMLDivElement | null;
     playbackMapping: PlaybackTimeMapping;
     appliedPlaybackMapping: PlaybackTimeMapping;
@@ -121,6 +124,7 @@
     onSeekProject?: (milliseconds: ProjectTimeMs, final?: boolean) => void | Promise<void>;
     onSeekTarget?: (milliseconds: ProjectTimeMs, final?: boolean) => void;
     onSetVolume?: (volume: number) => void;
+    onToggleMute?: () => void;
     onSaveMapping?: () => void;
     onDiagnosticsCount?: (count: number) => void;
     onError?: (message: string) => void;
@@ -235,10 +239,10 @@
       <div class="pane-separator source-separator" role="separator" aria-orientation="vertical" aria-label={t("workspace.resizeSource")} aria-valuemin="220" aria-valuemax="320" aria-valuenow={sourceWidth} tabindex="0" onpointerdown={(event) => resizePane("source", event)} onkeydown={(event) => resizeFromKeyboard("source", event)}></div>
     {/if}
     <TaskPreviewPanel
-      {taskTab} {currentJobId} {archivePath} {desktopRuntime} {logs} {captions} {warnings} selectedTrackCount={selectedTracks.size} {diagnosticsCount} {bytesRead} {progress} {isExporting} {previewIndexing} {projectTimeMs} {durationMs} {playerRunning} {playerPaused} {previewAvailable} {compactViewport} {userMode} trackLabel={userMode === "nerd" ? selectedTrackLabel : ""} trackName={selectedTrackName} trackDetail={selectedTrackDetail}
+      {taskTab} {currentJobId} {archivePath} {desktopRuntime} {logs} {captions} {warnings} selectedTrackCount={selectedTracks.size} {diagnosticsCount} {bytesRead} {progress} {isExporting} {previewIndexing} {projectTimeMs} {durationMs} {playerRunning} {playerPaused} {previewAvailable} {previewVolume} {compactViewport} {userMode} trackLabel={userMode === "nerd" ? selectedTrackLabel : ""} trackName={selectedTrackName} trackDetail={selectedTrackDetail}
       bind:nativePreview bind:playbackMapping {appliedPlaybackMapping} {playbackMappingBusy}
       onSelectTab={onSelectTab} onPlayerCommand={onPlayerCommand} onStartPreview={onStartPreview} onStopPreview={onStopPreview}
-      onResizePreview={onResizePreview} {onSeekProject} {onSeekTarget} {onSetVolume} onSaveMapping={onSaveMapping}
+      onResizePreview={onResizePreview} {onSeekProject} {onSeekTarget} {onSetVolume} {onToggleMute} onSaveMapping={onSaveMapping}
       onDiagnosticsCount={onDiagnosticsCount} onError={onError}
     />
     {#if !outputIsCollapsed}

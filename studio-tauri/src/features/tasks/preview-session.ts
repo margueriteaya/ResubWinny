@@ -8,6 +8,7 @@ import {
   NativePreviewController,
   type PreviewCallbacks,
 } from "./native-preview-controller";
+import { VolumeCommandQueue } from "./player-volume";
 import {
   mediaTimeMs,
   mediaToProjectTime,
@@ -71,13 +72,23 @@ export class PreviewSession {
   private resizeFrame = 0;
   private resizeInFlight = false;
   private resizePending = false;
+  private readonly volumeQueue: VolumeCommandQueue;
   private pageGeneration = 0;
   private resumeMediaTimeMs: MediaTimeMs | null = null;
 
   constructor(
     private readonly host: () => HTMLDivElement | null,
     private readonly bindings: PreviewSessionBindings,
-  ) {}
+  ) {
+    this.volumeQueue = new VolumeCommandQueue({
+      send: (volume) => this.bindings.desktopRuntime() && this.bindings.running()
+        ? this.controller.setVolume(volume)
+        : Promise.resolve(),
+      onError: this.bindings.onError,
+      schedule: (callback) => requestAnimationFrame(callback),
+      cancel: (handle) => cancelAnimationFrame(handle),
+    });
+  }
 
   isRunning() { return this.controller.isRunning(); }
   currentIntent() { return this.seekIntent; }
@@ -107,6 +118,7 @@ export class PreviewSession {
     if (this.resizeFrame) cancelAnimationFrame(this.resizeFrame);
     this.resizeFrame = 0;
     this.resizePending = false;
+    this.volumeQueue.dispose();
     return this.controller.dispose();
   }
 
@@ -221,13 +233,8 @@ export class PreviewSession {
     }
   }
 
-  async setVolume(volume: number) {
-    if (!this.bindings.desktopRuntime() || !this.bindings.running()) return;
-    try {
-      await this.controller.setVolume(volume);
-    } catch (reason) {
-      this.bindings.onError(reason);
-    }
+  setVolume(volume: number) {
+    this.volumeQueue.enqueue(volume);
   }
 
   queueStop(stop: () => Promise<void>) {

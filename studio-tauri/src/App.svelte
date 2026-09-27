@@ -8,6 +8,7 @@
   import { OnboardingSession } from "./features/onboarding/session";
   import { PreviewNavigationSession } from "./features/tasks/preview-navigation-session";
   import { PreviewSession } from "./features/tasks/preview-session";
+  import { clampPreviewVolume, toggledPreviewVolume } from "./features/tasks/player-volume";
   import { SourceSession } from "./features/tasks/source-session";
   import { ExportWorkflow } from "./features/tasks/export-workflow";
   import { ExportSession } from "./features/tasks/export-session";
@@ -240,6 +241,8 @@
   let nativePreview: HTMLDivElement | null = $state(null);
   let playerRunning = $state(false);
   let playerPaused = $state(true);
+  let previewVolume = $state(100);
+  let lastNonZeroPreviewVolume = $state(100);
   let previewAvailable: boolean | null = $state(null);
   let projectCursorMs: ProjectTimeMs = $state(asProjectTimeMs(0));
   let renderBusy = $state(false);
@@ -376,7 +379,7 @@
     desktopRuntime,
     subscribeTaskEvents: (handler) => backend.subscribeTaskEvents(handler),
     onTaskEvent: (payload) => taskEventSession.handle(payload),
-    playerRunning: () => playerRunning,
+    playerRunning: () => playerRunning && page === "tasks" && taskTab === "preview",
     onRecordingDrop: (source) => void loadSource(source),
     onPlayerCommand: (command) => void playerCommand(command),
     onSurfaceChange: () => void resizePreview(),
@@ -657,6 +660,7 @@
           },
           setDuration: (timeMs) => (previewDurationMs = timeMs),
           setPaused: (paused) => (playerPaused = paused),
+          volume: () => previewVolume,
           setBroadcastMetadata: (metadata) => {
             if (!inspection) return;
             inspection = {
@@ -740,8 +744,14 @@
   async function performSeekPreviewProject(milliseconds: ProjectTimeMs, final = true, intent = previewSession.currentIntent()) {
     await previewNavigation.seek(milliseconds, final, intent);
   }
-  async function setPreviewVolume(volume: number) {
-    await previewSession.setVolume(volume);
+  function setPreviewVolume(volume: number) {
+    previewVolume = clampPreviewVolume(volume);
+    if (previewVolume > 0) lastNonZeroPreviewVolume = previewVolume;
+    previewSession.setVolume(previewVolume);
+  }
+
+  function togglePreviewMute() {
+    setPreviewVolume(toggledPreviewVolume(previewVolume, lastNonZeroPreviewVolume));
   }
 
   async function savePlaybackMapping() {
@@ -1014,6 +1024,7 @@
         {progress}
         projectTimeMs={projectCursorMs}
         durationMs={previewDurationMs}
+        {previewVolume}
         {playerRunning}
         {playerPaused}
         {previewAvailable}
@@ -1051,6 +1062,7 @@
         onSeekProject={seekPreviewProject}
         onSeekTarget={setPreviewSeekTarget}
         onSetVolume={setPreviewVolume}
+        onToggleMute={togglePreviewMute}
         onSaveMapping={savePlaybackMapping}
         onDiagnosticsCount={(count: number) => (diagnosticsCount = count)}
         onError={(message: string) => (error = formatMessage("error.backend", { message }))}

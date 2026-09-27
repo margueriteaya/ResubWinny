@@ -6,6 +6,7 @@
     step = 1,
     disabled = false,
     ariaLabel = "",
+    ariaValueText = "",
     role = "slider",
     ariaControls = "",
     ariaOrientation = "horizontal",
@@ -20,6 +21,7 @@
     step?: number;
     disabled?: boolean;
     ariaLabel?: string;
+    ariaValueText?: string;
     role?: string;
     ariaControls?: string;
     ariaOrientation?: "horizontal" | "vertical";
@@ -68,7 +70,7 @@
 </script>
 
 <span class={`mac-slider ${className}`} class:disabled style={`--slider-progress:${progress}%;--slider-thumb-offset:${progress * 0.16}px`}>
-  <input type="range" {min} {max} {step} {value} {disabled} {role} aria-label={ariaLabel} aria-controls={ariaControls || undefined} aria-orientation={ariaOrientation} aria-valuemin={min} aria-valuemax={max} aria-valuenow={value} oninput={(event) => input(event)} onchange={(event) => input(event, true)} onpointercancel={cancel} onblur={cancel} />
+  <input type="range" {min} {max} {step} {value} {disabled} {role} aria-label={ariaLabel} aria-valuetext={ariaValueText || undefined} aria-controls={ariaControls || undefined} aria-orientation={ariaOrientation} aria-valuemin={min} aria-valuemax={max} aria-valuenow={value} oninput={(event) => input(event)} onchange={(event) => input(event, true)} onpointercancel={cancel} onblur={cancel} />
   <span class="slider-thumb liquid-control" aria-hidden="true"></span>
 </span>
 

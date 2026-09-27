@@ -2,6 +2,8 @@ import { BatchTaskSession } from '../studio-tauri/src/features/batch/task-sessio
 import { OnboardingSession } from '../studio-tauri/src/features/onboarding/session.ts'
 import { ExportWorkflow } from '../studio-tauri/src/features/tasks/export-workflow.ts'
 import { PreviewNavigationSession } from '../studio-tauri/src/features/tasks/preview-navigation-session.ts'
+import { clampPreviewVolume, toggledPreviewVolume, VolumeCommandQueue } from '../studio-tauri/src/features/tasks/player-volume.ts'
+import { playerShortcut } from '../studio-tauri/src/shell/player-shortcuts.ts'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { emptyTaskEventState, featureCountSummary, invalidateRuntimeFeatureConflict, reduceTaskEvent } from '../studio-tauri/src/features/tasks/event-state.ts'
@@ -13,6 +15,50 @@ import { togglePreferredFormat } from '../studio-tauri/src/features/home/export-
 import { capabilitySummary } from '../studio-tauri/src/features/tasks/format-capabilities.ts'
 
 const preservation = { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true }
+
+test('preview mute restores the last audible level and clamps invalid input', () => {
+  assert.equal(clampPreviewVolume(145), 100)
+  assert.equal(clampPreviewVolume(-5), 0)
+  assert.equal(clampPreviewVolume(Number.NaN), 100)
+  assert.equal(toggledPreviewVolume(47, 47), 0)
+  assert.equal(toggledPreviewVolume(0, 47), 47)
+  assert.equal(toggledPreviewVolume(0, 0), 1)
+})
+
+test('preview volume sends only the latest target while a native command is pending', async () => {
+  const sent = []
+  const scheduled = []
+  let finishFirst
+  const first = new Promise((resolve) => { finishFirst = resolve })
+  const queue = new VolumeCommandQueue({
+    send: async (value) => { sent.push(value); if (sent.length === 1) await first },
+    onError: (reason) => { throw reason },
+    schedule: (callback) => { scheduled.push(callback); return scheduled.length },
+    cancel: () => {},
+  })
+  queue.enqueue(20)
+  queue.enqueue(80)
+  assert.equal(scheduled.length, 1)
+  scheduled.shift()()
+  assert.deepEqual(sent, [80])
+  queue.enqueue(30)
+  queue.enqueue(47)
+  finishFirst()
+  await new Promise(setImmediate)
+  assert.deepEqual(sent, [80, 47])
+  queue.dispose()
+})
+
+test('player shortcuts keep five-second seeks and use Shift for frame steps', () => {
+  const key = (code, shiftKey = false, repeat = false) => ({ code, shiftKey, repeat, altKey: false, ctrlKey: false, metaKey: false })
+  assert.equal(playerShortcut(key('Space')), 'toggle-pause')
+  assert.equal(playerShortcut(key('Space', false, true)), null)
+  assert.equal(playerShortcut(key('ArrowLeft')), 'seek-back')
+  assert.equal(playerShortcut(key('ArrowRight')), 'seek-forward')
+  assert.equal(playerShortcut(key('ArrowLeft', true)), 'frame-back')
+  assert.equal(playerShortcut(key('ArrowRight', true)), 'frame-forward')
+  assert.equal(playerShortcut({ ...key('ArrowRight'), metaKey: true }), null)
+})
 
 test('home preferences keep the last explicitly selected format', () => {
   assert.deepEqual(togglePreferredFormat(['TTML'], 'TTML'), ['TTML'])

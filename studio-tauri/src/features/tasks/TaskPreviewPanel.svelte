@@ -1,13 +1,12 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
-  import { ChevronRight, CircleCheck, CirclePlay, ListVideo, LoaderCircle, Maximize2, Pause, Play, Square, SquarePlay, Stethoscope, TriangleAlert, Volume2 } from "@lucide/svelte";
+  import { ChevronRight, CircleCheck, CirclePlay, ListVideo, LoaderCircle, SquarePlay, Stethoscope, TriangleAlert } from "@lucide/svelte";
   import type { PlaybackTimeMapping, PreviewCommand, UserMode } from "../../backend";
   import { t } from "../../i18n";
   import TaskDiagnostics from "./TaskDiagnostics.svelte";
   import TaskTimeline from "./TaskTimeline.svelte";
-  import MacSlider from "../../components/MacSlider.svelte";
+  import PlayerControls from "./PlayerControls.svelte";
   import MacSegmentedControl from "../../components/MacSegmentedControl.svelte";
-  import { projectRangeForMedia, projectTimeMs as asProjectTimeMs, type MediaTimeMs, type ProjectTimeMs } from "./time-mapping";
+  import { projectRangeForMedia, type MediaTimeMs, type ProjectTimeMs } from "./time-mapping";
 
   type TaskTab = "preview" | "events" | "diagnostics";
   let {
@@ -29,6 +28,7 @@
     playerRunning = false,
     playerPaused = true,
     previewAvailable = null,
+    previewVolume = 100,
     nativePreview = $bindable(null),
     playbackMapping = $bindable(),
     appliedPlaybackMapping,
@@ -46,6 +46,7 @@
     onSeekProject = () => {},
     onSeekTarget = () => {},
     onSetVolume = () => {},
+    onToggleMute = () => {},
     onSaveMapping = () => {},
     onDiagnosticsCount = () => {},
     onError = () => {},
@@ -68,6 +69,7 @@
     playerRunning?: boolean;
     playerPaused?: boolean;
     previewAvailable?: boolean | null;
+    previewVolume?: number;
     nativePreview?: HTMLDivElement | null;
     playbackMapping: PlaybackTimeMapping;
     appliedPlaybackMapping: PlaybackTimeMapping;
@@ -85,15 +87,12 @@
     onSeekProject?: (milliseconds: ProjectTimeMs, final?: boolean) => void | Promise<void>;
     onSeekTarget?: (milliseconds: ProjectTimeMs, final?: boolean) => void;
     onSetVolume?: (volume: number) => void;
+    onToggleMute?: () => void;
     onSaveMapping?: () => void;
     onDiagnosticsCount?: (count: number) => void;
     onError?: (message: string) => void;
   } = $props();
   let playbackMappingDetails: HTMLDetailsElement | undefined = $state();
-  let scrubberActive = $state(false);
-  let scrubberTargetMs = $state(0);
-  let scrubberFrame: number | undefined;
-  let pendingScrubberTarget: number | null = null;
 
   function openPlaybackMapping() {
     const details = playbackMappingDetails;
@@ -106,61 +105,12 @@
     });
   }
 
-  const formatTime = (milliseconds: number) => {
-    const seconds = Math.max(0, Math.floor(milliseconds / 1000));
-    const hours = Math.floor(seconds / 3_600);
-    const minutes = Math.floor(seconds / 60) % 60;
-    const body = `${String(minutes).padStart(hours ? 2 : 1, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-    return hours ? `${hours}:${body}` : body;
-  };
-
-  function queueScrubberSeek(timeMs: number, final: boolean) {
-    scrubberTargetMs = Math.max(projectRange.startMs, Math.min(projectRange.endMs, Math.round(timeMs)));
-    onSeekTarget(asProjectTimeMs(scrubberTargetMs), final);
-    scrubberActive = !final;
-    if (final) {
-      pendingScrubberTarget = null;
-      if (scrubberFrame !== undefined) {
-        cancelAnimationFrame(scrubberFrame);
-        scrubberFrame = undefined;
-      }
-      dispatchScrubberSeek(scrubberTargetMs, true);
-      return;
-    }
-    pendingScrubberTarget = scrubberTargetMs;
-    if (scrubberFrame === undefined)
-      scrubberFrame = requestAnimationFrame(flushScrubberSeekFrame);
-  }
-
-  function dispatchScrubberSeek(timeMs: number, final: boolean) {
-    try {
-      const operation = onSeekProject(asProjectTimeMs(timeMs), final);
-      if (operation && typeof (operation as Promise<void>).catch === "function")
-        void Promise.resolve(operation).catch((reason) => onError(String(reason)));
-    } catch (reason) {
-      onError(String(reason));
-    }
-  }
-
-  function flushScrubberSeekFrame() {
-    scrubberFrame = undefined;
-    if (pendingScrubberTarget === null) return;
-    const target = pendingScrubberTarget;
-    pendingScrubberTarget = null;
-    dispatchScrubberSeek(target, false);
-  }
-
-  function cancelScrubber() {
-    if (!scrubberActive) return;
-    queueScrubberSeek(scrubberTargetMs, true);
-  }
   const taskTabOptions = $derived([
     { value: "preview", label: t("workspace.captionPreview"), icon: SquarePlay },
     { value: "events", label: `${t("workspace.eventList")} · ${captions.toLocaleString()}`, icon: ListVideo },
     { value: "diagnostics", label: `${t("workspace.diagnostics")} · ${diagnosticsCount}`, icon: Stethoscope },
   ].filter((option) => option.value !== "diagnostics" || userMode === "nerd" || diagnosticsCount > 0 || warnings > 0));
   const projectRange = $derived(projectRangeForMedia(durationMs, appliedPlaybackMapping));
-  const scrubberValueMs = $derived(scrubberActive ? scrubberTargetMs : projectTimeMs);
   const mappingIsAutomatic = $derived(
     playbackMapping.segmentId === "recording-origin"
       && playbackMapping.mediaAnchorMs === 0
@@ -180,14 +130,6 @@
           ? t("task.statusWarnings").replace("{0}", String(Math.max(diagnosticsCount, warnings)))
           : t("task.statusReady").replace("{0}", String(selectedTrackCount)),
   );
-  onDestroy(() => {
-    if (scrubberFrame !== undefined) cancelAnimationFrame(scrubberFrame);
-    if (scrubberActive || pendingScrubberTarget !== null) {
-      scrubberActive = false;
-      onSeekTarget(asProjectTimeMs(scrubberTargetMs), true);
-      dispatchScrubberSeek(scrubberTargetMs, true);
-    }
-  });
 </script>
 
 <section class="preview-panel">
@@ -202,11 +144,7 @@
   {#if taskTab === "preview"}
     <div class="player-shell">
       <div class="native-preview" data-liquid-ignore bind:this={nativePreview}><div class="native-notice"><CirclePlay size={30} /><b>{playerRunning ? t("workspace.nativePreviewActive") : t("workspace.nativePreview")}</b><p>{playerRunning ? t("workspace.nativePreviewActiveDescription") : t("workspace.nativePreviewDescription")}</p></div></div>
-      <div class="player-controls">
-        <div class="player-time"><span>{formatTime(scrubberValueMs)}</span><span>/ {durationMs ? formatTime(projectRange.endMs) : "--:--"}</span></div>
-        <MacSlider className="player-scrubber" ariaLabel={t("preview.seekTimeline")} min={projectRange.startMs} max={projectRange.endMs} value={scrubberValueMs} disabled={!playerRunning || !durationMs} onInput={(value) => queueScrubberSeek(value, false)} onChange={(value) => queueScrubberSeek(value, true)} onCancel={cancelScrubber} />
-        <div class="player-buttons"><button class:play-icon={!playerRunning || playerPaused} class="player-button primary" data-tooltip={playerRunning ? t("workspace.pauseResume") : t("common.startPreview")} aria-label={playerRunning ? t("workspace.pauseResume") : t("common.startPreview")} onclick={playerRunning ? () => onPlayerCommand("toggle-pause") : onStartPreview} disabled={!playerRunning && previewAvailable === false}>{#if playerRunning && !playerPaused}<Pause size={18} />{:else}<Play size={18} />{/if}</button><span class="volume"><Volume2 size={17} /><MacSlider ariaLabel={t("preview.volume")} min={0} max={100} value={100} disabled={!playerRunning} onChange={onSetVolume} /></span><button class="player-button" data-tooltip={t("workspace.fitPreview")} aria-label={t("workspace.fitPreview")} onclick={onResizePreview} disabled={!playerRunning}><Maximize2 size={16} /></button><button class="player-button stop" data-tooltip={t("common.stopPreview")} aria-label={t("common.stopPreview")} onclick={onStopPreview} disabled={!playerRunning}><Square size={15} /></button></div>
-      </div>
+      <PlayerControls running={playerRunning} paused={playerPaused} available={previewAvailable} {projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} durationKnown={durationMs !== null} volume={previewVolume} onStart={onStartPreview} onTogglePause={() => onPlayerCommand("toggle-pause")} onStop={onStopPreview} onFit={onResizePreview} onSkipBack={() => onPlayerCommand("seek-back")} onSkipForward={() => onPlayerCommand("seek-forward")} {onToggleMute} {onSetVolume} {onSeekProject} {onSeekTarget} {onError} />
     </div>
     <div class="preview-status"><span>{t("workspace.scanned").replace("{0}", (bytesRead / 1024 ** 3).toFixed(2))}</span><span>{t("workspace.decodedEvents").replace("{0}", captions.toLocaleString())}</span></div>
     <TaskTimeline {archivePath} {desktopRuntime} live={isExporting || previewIndexing} editor {trackLabel} {trackName} {trackDetail} projectTimeMs={projectTimeMs} rangeStartMs={projectRange.startMs} rangeEndMs={projectRange.endMs} playing={playerRunning && !playerPaused} expectedCount={captions} onSeek={onSeekProject} {onSeekTarget} onOpenMapping={openPlaybackMapping} {onError} />
@@ -236,15 +174,8 @@
   .tabs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); column-gap: 12px; }
   .workbench-status { display: flex; justify-self: end; align-items: center; gap: 6px; margin: 0; min-width: 0; color: var(--rw-success); font-size: 12px; line-height: 16px; white-space: nowrap; }
   .workbench-status.warning { color: var(--rw-warning); }.workbench-status.active { color: var(--rw-accent); }.workbench-status.active :global(svg) { animation: status-spin 1.2s linear infinite; }
-  .player-shell { margin-top: 19px; overflow: hidden; border: 1px solid var(--rw-border); border-radius: 7px; background: var(--rw-content); }
-  .native-preview { margin: 0; min-height: 304px; border-radius: 0; }
-  .player-controls { display: grid; grid-template-columns: var(--rw-timeline-gutter) minmax(120px, 1fr); column-gap: 0; row-gap: 10px; align-items: center; padding: 10px; color: var(--rw-text); background: var(--rw-surface-muted); }
-  .player-time { display: flex; width: var(--rw-timeline-gutter); min-width: 0; padding-right: 11px; gap: 5px; font: 12px "Cascadia Mono", monospace; white-space: nowrap; }
-  .player-time span + span { color: var(--rw-text-secondary); }
-  :global(.player-scrubber){width:100%}
-  .player-buttons { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; }
-  .player-button { display:grid; place-items:center; width:34px; height:32px; padding:0; color:var(--rw-text); border:1px solid var(--rw-glass-border); border-radius:5px; background:var(--rw-glass-control); box-shadow:var(--rw-control-shadow); }.player-button :global(svg){display:block;margin:0}.player-button.play-icon :global(svg){transform:translateX(1px)}
-  .player-button.primary { color:var(--rw-accent-text); background:var(--rw-glass-control); border-color:var(--rw-glass-border); }.player-button.stop { margin-left:auto; }.volume{display:flex;align-items:center;gap:7px;min-width:130px;margin-left:8px;color:var(--rw-text-secondary)}.volume :global(.mac-slider){width:92px}@media(hover:hover) and (pointer:fine){.player-button:hover:not(:disabled){background:var(--rw-glass-control-hover)}}
+  .player-shell { container: player / inline-size; margin-top: 10px; overflow: hidden; border: 1px solid var(--rw-border); border-radius: 6px; background: var(--rw-content); }
+  .native-preview { margin: 0; min-height: clamp(270px, 38vh, 380px); border-radius: 0; }
   .preview-status { display:flex; justify-content:space-between; padding:8px 1px 0; color:var(--rw-muted); font-size:12px; line-height:16px; }
   .playback-mapping { margin-top:10px; overflow:hidden; border:1px solid var(--rw-border-subtle); border-radius:7px; background:var(--rw-content); }
   .playback-mapping summary { display:flex; align-items:center; justify-content:space-between; min-height:48px; padding:7px 11px; cursor:pointer; list-style:none; }.playback-mapping summary::-webkit-details-marker { display:none; }
@@ -253,5 +184,6 @@
   .mapping-controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:12px; border-top:1px solid var(--rw-border-subtle); }.mapping-controls>p { grid-column:1/-1; margin:0 0 2px; color:var(--rw-text-secondary); font-size:12px; line-height:1.5; }.mapping-controls label { display:grid; gap:5px; min-width:0; color:var(--rw-text-secondary); font-size:12px; font-weight:620; }.mapping-controls input { min-width:0; width:100%; padding:7px 8px; font-size:12px; }.mapping-controls .quiet-button { grid-column:1/-1; justify-self:start; min-height:32px; border:1px solid var(--rw-border); border-radius:6px; color:var(--rw-text); background:var(--rw-surface-muted); font-size:12px; }
   @keyframes status-spin { to { transform:rotate(1turn); } }
   @container content (max-width: 700px) { .tabs { grid-template-columns:auto minmax(0,1fr); }.tabs>span[aria-hidden="true"] { display:none; }.workbench-status { overflow:hidden; }.workbench-status span { overflow:hidden; text-overflow:ellipsis; }.mapping-controls { grid-template-columns:1fr; } }
+  @media (max-height:700px) { .native-preview { min-height:168px; } }
   @media (prefers-reduced-motion: reduce) { .workbench-status.active :global(svg) { animation:none; } }
 </style>
