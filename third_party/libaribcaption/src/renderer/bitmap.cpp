@@ -17,6 +17,8 @@
  */
 
 #include <cassert>
+#include <limits>
+#include <stdexcept>
 #include "renderer/bitmap.hpp"
 
 namespace aribcaption {
@@ -55,15 +57,34 @@ Bitmap::Bitmap(int width, int height, PixelFormat pixel_format) :
     assert(width > 0 && height > 0);
     assert(pixel_format == PixelFormat::kRGBA8888);
 
-    stride_ = width * 4;
-
-    uint32_t remainder = stride_ % kAlignedTo;
-    if (remainder) {
-        uint32_t padding = kAlignedTo - remainder;
-        stride_ += static_cast<int>(padding);
+    if (width <= 0 || height <= 0 || pixel_format != PixelFormat::kRGBA8888) {
+        throw std::invalid_argument("invalid bitmap dimensions or pixel format");
     }
 
-    pixels.resize(stride_ * height);
+    constexpr size_t kBytesPerPixel = sizeof(ColorRGBA);
+    const size_t max_stride = static_cast<size_t>(std::numeric_limits<int>::max());
+    if (static_cast<size_t>(width) > max_stride / kBytesPerPixel) {
+        throw std::length_error("bitmap stride exceeds supported range");
+    }
+
+    size_t stride = static_cast<size_t>(width) * kBytesPerPixel;
+
+    size_t remainder = stride % kAlignedTo;
+    if (remainder) {
+        size_t padding = kAlignedTo - remainder;
+        if (stride > max_stride - padding) {
+            throw std::length_error("bitmap stride exceeds supported range");
+        }
+        stride += padding;
+    }
+
+    const size_t rows = static_cast<size_t>(height);
+    if (stride > pixels.max_size() / rows) {
+        throw std::length_error("bitmap allocation exceeds supported range");
+    }
+
+    stride_ = static_cast<int>(stride);
+    pixels.resize(stride * rows);
 }
 
 }  // namespace aribcaption
