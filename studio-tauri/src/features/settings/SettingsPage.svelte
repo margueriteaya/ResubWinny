@@ -17,7 +17,7 @@
     persistSettings = async (settings) => settings,
     onError = () => {},
     onShowOnboarding = () => {},
-    panel = 'general',
+    panel = $bindable('general'),
   }: {
     saveCaptionFont?: (font: string) => void;
     onSettingsSaved?: (settings: AppSettings) => void | Promise<void>;

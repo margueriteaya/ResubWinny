@@ -90,6 +90,38 @@ for (const command of commands) {
   if (!new RegExp(`::${command}\\b`).test(handlerSource)) violations.push(`Tauri command ${command} is exposed by the frontend but not registered in main.rs`)
 }
 
+// A parent's `bind:prop` only flows back when the child declares that prop
+// with $bindable(). Svelte 5 compiles a missing $bindable without complaint
+// in some forwarding shapes, and the binding then silently stays at its
+// default: the native preview host once stayed null this way, so starting
+// preview did nothing. Check every bind against the child's $props().
+const componentProps = new Map()
+for (const path of sourceFiles.filter((file) => file.endsWith('.svelte'))) {
+  const text = await readFile(path, 'utf8')
+  const declaration = text.match(/let \{([\s\S]*?)\}\s*:\s*\{[\s\S]*?\}\s*=\s*\$props\(\)/)
+  if (!declaration) continue
+  const props = new Map()
+  for (const line of declaration[1].split('\n')) {
+    const prop = line.trim().match(/^(\w+)\s*(?:=\s*(.*?))?,?$/)
+    if (prop) props.set(prop[1], /\$bindable\(/.test(prop[2] ?? ''))
+  }
+  componentProps.set(path.split(/[\\/]/).pop().replace(/\.svelte$/, ''), props)
+}
+// The shell lazy-loads page components into `<Name>Component` variables.
+for (const [name, props] of [...componentProps]) componentProps.set(`${name}Component`, props)
+for (const path of sourceFiles.filter((file) => file.endsWith('.svelte'))) {
+  const text = await readFile(path, 'utf8')
+  for (const tag of text.matchAll(/<([A-Z]\w*)\b([^>]*?)\/?>/gs)) {
+    const props = componentProps.get(tag[1])
+    if (!props) continue
+    for (const bind of tag[2].matchAll(/\bbind:(\w+)/g)) {
+      if (bind[1] === 'this') continue
+      if (props.get(bind[1]) !== true)
+        violations.push(`${relative(frontendRoot, path)} binds ${tag[1]}.${bind[1]}, but that prop is not declared with $bindable()`)
+    }
+  }
+}
+
 if (violations.length) {
   console.error('Frontend contract verification failed:')
   for (const violation of violations) console.error(`- ${violation}`)
