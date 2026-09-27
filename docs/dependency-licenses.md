@@ -577,7 +577,7 @@ Generated inventory: 475 Cargo packages and 91 npm packages.
 | `svelte-check` | `4.7.6` | MIT |
 | `tinyglobby` | `0.2.17` | MIT |
 | `tslib` | `2.8.1` | 0BSD |
-| `typescript` | `5.9.3` | Apache-2.0 |
+| `typescript` | `6.0.3` | Apache-2.0 |
 | `vite` | `8.3.0` | MIT |
 | `vitefu` | `1.1.3` | MIT |
 | `zimmerframe` | `1.1.4` | MIT |
