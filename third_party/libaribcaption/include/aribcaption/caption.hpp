@@ -125,6 +125,12 @@ struct CaptionChar {
      */
     uint32_t pua_codepoint = 0;
 
+    // Original ARIB graphic-set coordinates. ku/ten are one-based and remain
+    // zero when the character did not come from a two-byte graphic set.
+    uint32_t source_graphic_set = 0;
+    uint32_t source_ku = 0;
+    uint32_t source_ten = 0;
+
     /**
      * DRCS character's code. Only appears if if CaptionCharType is kDRCS or kDRCSReplaced.
      * It is a private code which is unrelated to Unicode.

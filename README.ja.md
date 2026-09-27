@@ -13,7 +13,7 @@ ResubWinny は Windows 上で動作する、日本のコンテンツ全般の映
 
 現在の収束期間では日本の放送録画字幕に注力しています。BD/DVD グラフィック字幕 OCR、プラグインシステム、AI 翻訳、および macOS/Linux のネイティブプレビューは明確に延期されており、現在のロードマップまたは受け入れ範囲には含まれません。DRCS については、ローカルの hash → Unicode マッピングの改善のみを継続し、汎用 OCR システムへの拡張は行いません。
 
-プロジェクトの現在のバージョンは `v0.2.2-α`（ソースコードバージョン `0.2.2-alpha.1`）です。現在も開発段階にあります。
+プロジェクトの現在のバージョンは `v0.2.3-α`（ソースコードバージョン `0.2.3-alpha.1`）です。現在も開発段階にあります。
 
 ## 特長
 
@@ -232,14 +232,15 @@ build/cargo/release/bundle/
 ```text
 ResubWinny/
 ├── crates/
-│   └── arib-caption-worker/       # ストリーム解析、パース、字幕モデル、CLI、エクスポーター
-│       ├── src/caption/           # B24、TTML/B62、Ruby セマンティクス
-│       ├── src/transport/         # MPEG-TS、M2TS、実験的な TLV/MMTP
-│       ├── src/exporters/         # ASS、TTML、SRT、WebVTT、archive などの出力
-│       └── src/tests/             # Worker のモジュール別回帰テスト
+│   ├── arib-caption-worker/       # ストリーム解析、パース、字幕モデル、CLI、エクスポーター
+│   │   ├── src/caption/           # B24、TTML/B62、Ruby セマンティクス
+│   │   ├── src/transport/         # MPEG-TS、M2TS、実験的な TLV/MMTP
+│   │   ├── src/exporters/         # ASS、TTML、SRT、WebVTT、archive などの出力
+│   │   └── src/tests/             # Worker のモジュール別回帰テスト
+│   └── caption-semantics/         # Worker とデスクトップバックエンドで共有する放送字幕セマンティクス
 ├── native/
 │   └── aribcaption-bridge/        # libaribcaption の限定的な C ABI ブリッジ
-├── shared/                        # Worker とデスクトップバックエンドで共有する識別ルール
+├── shared/                        # Worker とフロントエンドで共有する形式能力データ
 ├── studio-tauri/
 │   ├── src/                       # Svelte フロントエンド
 │   │   ├── backend/               # 型付き Tauri API とイベントエントリーポイント

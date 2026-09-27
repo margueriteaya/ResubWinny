@@ -439,6 +439,9 @@ mod tests {
     #[test]
     fn keeps_a_worker_confirmed_artifact_completed_after_later_failure() {
         let mut record = artifact("new.ass".into(), "new.ass.part".into());
+        record.kind = "drcs-report".into();
+        record.path = "new.drcs.json".into();
+        record.temporary_path.clear();
         record.status = "completed".into();
         assert_eq!(reconciled_artifact_status(&record, "failed"), "completed");
     }
@@ -464,6 +467,22 @@ mod tests {
             reconciled_artifact_status(&preserved, "cancelled"),
             "incomplete"
         );
+        std::fs::remove_file(part).expect("cleanup");
+    }
+
+    #[test]
+    fn export_conflict_never_reconciles_a_part_file_as_completed() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("resubwinny-conflict-{stamp}.ass"));
+        let part = path.with_extension("ass.part");
+        std::fs::write(&part, b"unpublishable partial output").expect("partial output");
+        let record = artifact(path, part.clone());
+
+        assert_eq!(reconciled_artifact_status(&record, "failed"), "incomplete");
+
         std::fs::remove_file(part).expect("cleanup");
     }
 
@@ -651,6 +670,7 @@ pub fn create_job(
     archive: bool,
     raw: bool,
     track_id: Option<u16>,
+    logical_track: Option<String>,
     drcs_report: bool,
     drcs_mappings: Vec<DrcsMappingInput>,
     formats: Option<Vec<String>>,
@@ -669,6 +689,7 @@ pub fn create_job(
         archive,
         raw,
         track_id,
+        logical_track,
         drcs_report,
         drcs_mappings,
         export_selection: ExportSelection {

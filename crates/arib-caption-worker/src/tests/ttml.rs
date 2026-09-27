@@ -31,6 +31,53 @@ fn parses_namespace_prefixed_ttml_elements_by_local_name() {
 }
 
 #[test]
+fn parses_explicit_ttml_accessibility_roles_in_caption_coordinates() {
+    let xml = r#"<tt xmlns='http://www.w3.org/ns/ttml' xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><div>
+      <p begin='0s' end='1s'>  前<br/><span ttm:role='sound music'>ドア音</span> 後  </p>
+    </div></body></tt>"#;
+    let caption = parse_ttml_captions(xml, 0).remove(0);
+
+    assert_eq!(caption.text, "前\nドア音 後");
+    assert_eq!(caption.accessibility_cues.len(), 1);
+    assert_eq!(caption.accessibility_cues[0].start, 2);
+    assert_eq!(caption.accessibility_cues[0].end, 5);
+    assert_eq!(caption.accessibility_cues[0].roles, ["music", "sound"]);
+}
+
+#[test]
+fn ignores_dialog_and_unknown_ttml_roles() {
+    let xml = r#"<tt xmlns='http://www.w3.org/ns/ttml' xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><div>
+      <p begin='0s' end='1s'><span ttm:role='dialog custom'>本文</span></p>
+    </div></body></tt>"#;
+
+    let caption = parse_ttml_captions(xml, 0).remove(0);
+
+    assert!(caption.accessibility_cues.is_empty());
+}
+
+#[test]
+fn merges_nested_ttml_accessibility_roles_without_double_counting() {
+    let xml = r#"<tt xmlns='http://www.w3.org/ns/ttml' xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><div>
+      <p begin='0s' end='1s' ttm:role='description'>説明<span ttm:role='sound'>音</span></p>
+    </div></body></tt>"#;
+
+    let caption = parse_ttml_captions(xml, 0).remove(0);
+
+    assert_eq!(caption.accessibility_cues.len(), 1);
+    assert_eq!(
+        (
+            caption.accessibility_cues[0].start,
+            caption.accessibility_cues[0].end
+        ),
+        (0, 3)
+    );
+    assert_eq!(
+        caption.accessibility_cues[0].roles,
+        ["description", "sound"]
+    );
+}
+
+#[test]
 fn rejects_private_pes_with_zero_filled_fake_pts() {
     let pes = [
         0x00, 0x00, 0x01, 0xbd, 0x00, 0x20, 0x80, 0x80, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -277,6 +324,524 @@ fn preserves_safe_ttml_ruby_and_span_markup_for_ttml_interchange() {
     assert_eq!(binding.base_run_end - binding.base_run_start, 1);
     assert_eq!(binding.placement, RubyPlacement::Above);
     assert_eq!(safe_ttml_inline_body("<script>x</script>"), None);
+}
+
+#[test]
+fn explicit_accessibility_roles_follow_the_preservation_choice() {
+    let caption = parse_ttml_captions(
+        r#"<tt xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><p begin='0s' end='1s'>前<span ttm:role='sound'>ドア音</span>後</p></body></tt>"#,
+        0,
+    )
+    .remove(0);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let directory = std::env::temp_dir().join(format!("arib-ttml-accessibility-{stamp}"));
+    fs::create_dir_all(&directory).expect("temporary directory");
+
+    for preserve_accessibility in [true, false] {
+        let options = ConversionOptions {
+            preserve_accessibility,
+            ..Default::default()
+        };
+        let ass = directory.join(format!("{preserve_accessibility}.ass"));
+        let ttml = directory.join(format!("{preserve_accessibility}.ttml"));
+        let mut ass_writer = BufWriter::new(File::create(&ass).expect("ASS output"));
+        write_ass_header(&mut ass_writer).expect("ASS header");
+        write_ass_ttml_group(&mut ass_writer, std::slice::from_ref(&caption), &options)
+            .expect("ASS caption");
+        ass_writer.flush().expect("ASS flush");
+        let mut ttml_writer = BufWriter::new(File::create(&ttml).expect("TTML output"));
+        write_ttml_header(&mut ttml_writer).expect("TTML header");
+        write_ttml_caption(&mut ttml_writer, &caption, &options).expect("TTML caption");
+        write_ttml_footer(&mut ttml_writer).expect("TTML footer");
+        ttml_writer.flush().expect("TTML flush");
+
+        let ass_text = fs::read_to_string(&ass).expect("ASS text");
+        let ttml_text = fs::read_to_string(&ttml).expect("TTML text");
+        assert_eq!(ass_text.contains("ドア音"), preserve_accessibility);
+        assert_eq!(ttml_text.contains("ドア音"), preserve_accessibility);
+        assert_eq!(
+            ttml_text.contains("ttm:role='sound'"),
+            preserve_accessibility
+        );
+        roxmltree::Document::parse(&ttml_text).expect("valid exported TTML");
+    }
+    fs::remove_dir_all(directory).expect("cleanup accessibility outputs");
+}
+
+#[test]
+fn b62_caption_group_pairs_and_filters_cross_fragment_delimiters() {
+    let mut captions = parse_ttml_captions(
+        r#"<tt><body><div>
+          <p begin='0s' end='1s'>＜たった１錠。</p>
+          <p begin='0s' end='1s'>わたしオン！＞</p>
+        </div></body></tt>"#,
+        0,
+    );
+    annotate_ttml_group_semantics(&mut captions);
+    assert_eq!(captions.len(), 2);
+    assert_eq!(captions[0].resolved_accessibility_ranges, vec![0..1]);
+    assert_eq!(captions[1].resolved_accessibility_ranges, vec![6..7]);
+
+    let options = ConversionOptions {
+        preserve_accessibility: false,
+        ..Default::default()
+    };
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let directory = std::env::temp_dir().join(format!("arib-ttml-cross-fragment-{stamp}"));
+    fs::create_dir_all(&directory).expect("temporary directory");
+    let ass = directory.join("captions.ass");
+    let ttml = directory.join("captions.ttml");
+    let mut ass_writer = BufWriter::new(File::create(&ass).expect("ASS output"));
+    write_ass_header(&mut ass_writer).expect("ASS header");
+    write_ass_ttml_group(&mut ass_writer, &captions, &options).expect("ASS captions");
+    ass_writer.flush().expect("ASS flush");
+    let mut ttml_writer = BufWriter::new(File::create(&ttml).expect("TTML output"));
+    write_ttml_header(&mut ttml_writer).expect("TTML header");
+    for caption in &captions {
+        write_ttml_caption(&mut ttml_writer, caption, &options).expect("TTML caption");
+    }
+    write_ttml_footer(&mut ttml_writer).expect("TTML footer");
+    ttml_writer.flush().expect("TTML flush");
+
+    for text in [
+        fs::read_to_string(&ass).expect("ASS text"),
+        fs::read_to_string(&ttml).expect("TTML text"),
+    ] {
+        assert!(text.contains("たった１錠。"));
+        assert!(text.contains("わたしオン！"));
+        assert!(!text.contains('＜'));
+        assert!(!text.contains('＞'));
+    }
+    fs::remove_dir_all(directory).expect("cleanup outputs");
+}
+
+#[test]
+fn b62_caption_group_quote_state_preserves_title_parentheses() {
+    let mut captions = parse_ttml_captions(
+        r#"<tt><body><div>
+          <p begin='0s' end='1s'>曲「スゥ・ル・シエル・ド・パリ</p>
+          <p begin='0s' end='1s'>（パリの空の下）」。</p>
+        </div></body></tt>"#,
+        0,
+    );
+    annotate_ttml_group_semantics(&mut captions);
+    assert_eq!(captions.len(), 2);
+    assert!(captions[1].resolved_accessibility_ranges.is_empty());
+    assert!(captions[1].broadcast_semantics_resolved);
+
+    let options = ConversionOptions {
+        preserve_accessibility: false,
+        ..Default::default()
+    };
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let output = std::env::temp_dir().join(format!("arib-ttml-title-{stamp}.ttml"));
+    let mut writer = BufWriter::new(File::create(&output).expect("TTML output"));
+    write_ttml_header(&mut writer).expect("TTML header");
+    for caption in &captions {
+        write_ttml_caption(&mut writer, caption, &options).expect("TTML caption");
+    }
+    write_ttml_footer(&mut writer).expect("TTML footer");
+    writer.flush().expect("TTML flush");
+    let text = fs::read_to_string(&output).expect("TTML text");
+    assert!(text.contains("（パリの空の下）」"));
+    fs::remove_file(output).expect("cleanup output");
+}
+
+#[test]
+fn continuation_arrow_carries_b62_quote_state_to_the_next_caption() {
+    let mut captions = parse_ttml_captions(
+        r#"<tt><body><div>
+          <p begin='0s' end='1s'>曲「スゥ・ル・シエル・ド・パリ➡</p>
+          <p begin='1s' end='2s'>（パリの空の下）」。</p>
+        </div></body></tt>"#,
+        0,
+    );
+    let mut state = crate::caption_features::CaptionSequenceState::default();
+    let (first, second) = captions.split_at_mut(1);
+    annotate_ttml_group_semantics_with_state(first, &mut state);
+    annotate_ttml_group_semantics_with_state(second, &mut state);
+
+    assert_eq!(
+        first[0].resolved_accessibility_ranges.last(),
+        Some(&(15..16))
+    );
+    assert!(second[0].resolved_accessibility_ranges.is_empty());
+    assert!(second[0].broadcast_semantics_resolved);
+}
+
+#[test]
+fn continuation_arrow_carries_b62_broadcast_delimiters_to_the_next_caption() {
+    let mut captions = parse_ttml_captions(
+        r#"<tt><body><div>
+          <p begin='0s' end='1s'>(加寿彦)｟ダークエネルギーっていうのは➡</p>
+          <p begin='1s' end='2s'>作用する｠</p>
+        </div></body></tt>"#,
+        0,
+    );
+    let mut state = crate::caption_features::CaptionSequenceState::default();
+    let (first, second) = captions.split_at_mut(1);
+    annotate_ttml_group_semantics_with_state(first, &mut state);
+    annotate_ttml_group_semantics_with_state(second, &mut state);
+
+    assert!(first[0].resolved_accessibility_ranges.contains(&(5..6)));
+    assert_eq!(second[0].resolved_accessibility_ranges, vec![4..5]);
+    assert!(second[0].broadcast_semantics_resolved);
+}
+
+#[test]
+fn preserves_paragraph_level_accessibility_role_on_ttml_output() {
+    let caption = parse_ttml_captions(
+        r#"<tt xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><p begin='0s' end='1s' ttm:role='narration'>語り</p></body></tt>"#,
+        0,
+    )
+    .remove(0);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let output = std::env::temp_dir().join(format!("arib-ttml-role-{stamp}.ttml"));
+    let mut writer = BufWriter::new(File::create(&output).expect("TTML output"));
+    write_ttml_header(&mut writer).expect("TTML header");
+    write_ttml_caption(&mut writer, &caption, &ConversionOptions::default()).expect("caption");
+    write_ttml_footer(&mut writer).expect("TTML footer");
+    writer.flush().expect("flush");
+
+    let text = fs::read_to_string(&output).expect("TTML text");
+    assert!(text.contains("ttm:role=\"narration\""), "{text}");
+    roxmltree::Document::parse(&text).expect("valid exported TTML");
+    fs::remove_file(output).expect("cleanup TTML output");
+}
+
+#[test]
+fn dropping_ruby_removes_annotations_but_keeps_styled_base_text() {
+    let options = ConversionOptions {
+        preserve_ruby: false,
+        ..Default::default()
+    };
+    for body in [
+        "<ruby><span tts:ruby='base' tts:color='#ff0000'>漢</span><rt><span>かん</span></rt></ruby><span>終</span>",
+        "<span tts:ruby='container'><span tts:ruby='base' tts:color='#ff0000'>漢</span><span tts:ruby='text'>かん</span></span><span>終</span>",
+    ] {
+        let filtered = filter_ttml_preserved_body(body, &TtmlCaptionStyle::default(), &options)
+            .expect("rich body");
+        assert!(!filtered.contains("かん"));
+        assert!(!filtered.contains("ruby"));
+        assert!(filtered.contains("tts:color='#ff0000'"));
+        assert_eq!(ttml_plain_text(&filtered), "漢終");
+    }
+}
+
+#[test]
+fn drops_only_resource_backed_b62_drcs_text() {
+    let body = "<span arib-tt:font-face='subt://9'>&#xE000;</span><span arib-tt:font-face='subt://9'>字</span>終";
+    let mut options = ConversionOptions {
+        drcs_mode: DrcsMode::UseUserMapping,
+        ..Default::default()
+    };
+    options.drcs_replacements.insert(0xe000, "映".into());
+    let unresolved = filter_ttml_preserved_body(body, &TtmlCaptionStyle::default(), &options)
+        .expect("unresolved rich body");
+    assert_eq!(ttml_plain_text(&unresolved), "&#xE000;字終");
+
+    options.preserve_drcs = false;
+    let dropped = filter_ttml_preserved_body(body, &TtmlCaptionStyle::default(), &options)
+        .expect("dropped rich body");
+    assert_eq!(ttml_plain_text(&dropped), "字終");
+}
+
+fn attach_test_b62_resource(caption: &mut TtmlCaption, bytes: &[u8]) -> String {
+    let digest = resource_sha256(bytes);
+    caption.source = Some(TtmlCaptionSource {
+        route: "test",
+        source_offset: 0,
+        mmpt_packet_id: 1,
+        mpu_sequence_number: Some(1),
+        mmtp_sequence_number: None,
+        presentation_ntp: None,
+        normalized_pts: None,
+        reference_start_pts: None,
+        reference_start_ntp: None,
+        reference_start_time_leap_indicator: None,
+        timeline_basis: TlvTimelineBasis::MptPresentationNtp,
+        track_id: None,
+        component_tag: None,
+        timing_mode: None,
+        operation_mode: None,
+        display_mode: None,
+        compression_type: None,
+        random_access: false,
+        discontinuity: false,
+        discontinuity_reasons: 0,
+        xml_encoding: "UTF-8".into(),
+        resources: vec![TtmlResourceMetadata {
+            index: 9,
+            data_type: 1,
+            byte_length: bytes.len(),
+            content_sha256: digest.clone(),
+            format_hint: Some("woff2"),
+            format_validation: "header-validated",
+            width: None,
+            height: None,
+            preview_available: false,
+        }],
+        resources_complete: true,
+    });
+    b62_drcs_mapping_key(&digest, 0xe000)
+}
+
+#[test]
+fn scoped_b62_mapping_changes_ass_ttml_srt_and_webvtt_output() {
+    let mut caption = parse_ttml_captions(
+        r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><p begin='0s' end='1s'><span arib-tt:font-face='subt://9'>&#xE000;</span>終</p></body></tt>"#,
+        0,
+    )
+    .remove(0);
+    let mapping_key = attach_test_b62_resource(&mut caption, b"font-resource-a");
+    let mut options = ConversionOptions {
+        drcs_mode: DrcsMode::UseUserMapping,
+        overwrite: true,
+        ..Default::default()
+    };
+    options
+        .ttml_drcs_replacements
+        .insert(mapping_key, "映".into());
+
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let directory = std::env::temp_dir().join(format!("arib-b62-scoped-map-{stamp}"));
+    fs::create_dir_all(&directory).expect("temporary directory");
+    let ass = directory.join("mapped.ass");
+    let ttml = directory.join("mapped.ttml");
+    let mut ass_writer = BufWriter::new(File::create(&ass).expect("ASS output"));
+    write_ass_header(&mut ass_writer).expect("ASS header");
+    write_ass_ttml_group(&mut ass_writer, std::slice::from_ref(&caption), &options)
+        .expect("ASS caption");
+    ass_writer.flush().expect("ASS flush");
+    let mut ttml_writer = BufWriter::new(File::create(&ttml).expect("TTML output"));
+    write_ttml_header(&mut ttml_writer).expect("TTML header");
+    write_ttml_caption(&mut ttml_writer, &caption, &options).expect("TTML caption");
+    write_ttml_footer(&mut ttml_writer).expect("TTML footer");
+    ttml_writer.flush().expect("TTML flush");
+    let srt = write_srt_from_ass(&ass, true)
+        .expect("SRT")
+        .expect("SRT path");
+    let vtt = write_webvtt_from_ass(&ass, true)
+        .expect("WebVTT")
+        .expect("WebVTT path");
+
+    for output in [&ass, &ttml, &srt, &vtt] {
+        let text = fs::read_to_string(output).expect("mapped output");
+        assert!(text.contains('映'), "{}: {text}", output.display());
+        assert!(text.contains('終'), "{}: {text}", output.display());
+        assert!(!text.contains('\u{e000}'), "{}: {text}", output.display());
+    }
+    assert!(!fs::read_to_string(&ttml).unwrap().contains("font-face"));
+    fs::remove_dir_all(directory).expect("cleanup mapped outputs");
+}
+
+#[test]
+fn scoped_b62_mapping_reaches_standalone_ruby_ass_text() {
+    let mut captions = parse_ttml_captions(
+        r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><div>
+          <p begin='0s' end='1s'>漢</p>
+          <p begin='0s' end='1s'><span arib-tt:font-face='subt://9'>&#xE000;</span></p>
+        </div></body></tt>"#,
+        0,
+    );
+    let mapping_key = attach_test_b62_resource(&mut captions[1], b"ruby-font-resource");
+    captions[1].ruby_bindings.push(TtmlRubyBinding {
+        ruby_text: "\u{e000}".into(),
+        base_caption_index: 0,
+        base_run_start: 0,
+        base_run_end: 1,
+        base_start: 0,
+        base_end: 1,
+        base_text: "漢".into(),
+        base_cell_boxes: vec![RubyLayoutBox {
+            x: 960,
+            y: 920,
+            width: 42,
+            height: 42,
+        }],
+        base_box: Some(RubyLayoutBox {
+            x: 960,
+            y: 920,
+            width: 42,
+            height: 42,
+        }),
+        source_ruby_box: Some(RubyLayoutBox {
+            x: 960,
+            y: 890,
+            width: 42,
+            height: 18,
+        }),
+        placement: RubyPlacement::Above,
+        writing_mode: RubyWritingMode::HorizontalTb,
+        resolver: RubyBindingResolver::SourceGeometry,
+        ruby_style: TtmlCaptionStyle::default(),
+    });
+    let mut options = ConversionOptions {
+        drcs_mode: DrcsMode::UseUserMapping,
+        ..Default::default()
+    };
+    options
+        .ttml_drcs_replacements
+        .insert(mapping_key, "映".into());
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let output = std::env::temp_dir().join(format!("arib-b62-ruby-map-{stamp}.ass"));
+    let mut writer = BufWriter::new(File::create(&output).expect("ASS output"));
+    write_ass_header(&mut writer).expect("ASS header");
+    write_ass_ttml_group(&mut writer, &captions, &options).expect("ASS captions");
+    writer.flush().expect("ASS flush");
+
+    let ass = fs::read_to_string(&output).expect("mapped ASS");
+    assert!(ass.contains('映'), "{ass}");
+    assert!(!ass.contains('\u{e000}'), "{ass}");
+    fs::remove_file(output).expect("cleanup mapped Ruby ASS");
+}
+
+#[test]
+fn b62_drcs_drop_reaches_ass_and_ttml_outputs() {
+    let caption = parse_ttml_captions(
+        r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><p begin='0s' end='1s'><span arib-tt:font-face='subt://9'>&#xE000;</span></p></body></tt>"#,
+        0,
+    )
+    .remove(0);
+    let options = ConversionOptions {
+        drcs_mode: DrcsMode::UseUserMapping,
+        preserve_drcs: false,
+        overwrite: true,
+        ..Default::default()
+    };
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let directory = std::env::temp_dir().join(format!("arib-b62-drcs-output-{stamp}"));
+    fs::create_dir_all(&directory).expect("temporary directory");
+    let ass = directory.join("dropped.ass");
+    let ttml = directory.join("dropped.ttml");
+
+    let mut ass_writer = BufWriter::new(File::create(&ass).expect("ASS output"));
+    write_ass_header(&mut ass_writer).expect("ASS header");
+    write_ass_ttml_group(&mut ass_writer, std::slice::from_ref(&caption), &options)
+        .expect("ASS caption");
+    ass_writer.flush().expect("ASS flush");
+    let mut ttml_writer = BufWriter::new(File::create(&ttml).expect("TTML output"));
+    write_ttml_header(&mut ttml_writer).expect("TTML header");
+    write_ttml_caption(&mut ttml_writer, &caption, &options).expect("TTML caption");
+    write_ttml_footer(&mut ttml_writer).expect("TTML footer");
+    ttml_writer.flush().expect("TTML flush");
+
+    assert!(
+        !fs::read_to_string(ass)
+            .expect("dropped ASS text")
+            .contains("Dialogue:")
+    );
+    assert!(
+        !fs::read_to_string(ttml)
+            .expect("dropped TTML text")
+            .contains("<p ")
+    );
+    fs::remove_dir_all(directory).expect("cleanup dropped outputs");
+}
+
+#[test]
+fn resolves_b62_drcs_font_style_at_the_character_run() {
+    let xml = r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><head><styling>
+      <style xml:id='drcs' arib-tt:font-face='subt://9'/>
+    </styling></head><body><p begin='0s' end='1s'>
+      <span>字</span><span xml:id='wrapper'><span style='drcs'>&#xE000;</span></span>
+    </p></body></tt>"#;
+    let caption = parse_ttml_captions(xml, 0).remove(0);
+
+    assert_eq!(caption.drcs_uses.len(), 1);
+    assert_eq!(caption.drcs_uses[0].source_codepoint, 0xe000);
+    assert_eq!(caption.drcs_uses[0].resource_index, 9);
+}
+
+#[test]
+fn escaped_numeric_text_is_not_double_decoded_as_b62_drcs() {
+    let xml = r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body>
+      <p begin='0s' end='1s' arib-tt:font-face='subt://9'>&amp;#xE000;</p>
+    </body></tt>"#;
+    let caption = parse_ttml_captions(xml, 0).remove(0);
+
+    assert_eq!(caption.text, "&#xE000;");
+    assert!(caption.drcs_uses.is_empty());
+}
+
+#[test]
+fn ttml_output_removes_unpublished_b62_font_resource_reference() {
+    let caption = parse_ttml_captions(
+        r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body>
+          <p begin='0s' end='1s' arib-tt:font-face='subt://9'>字</p>
+        </body></tt>"#,
+        0,
+    )
+    .remove(0);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let output = std::env::temp_dir().join(format!("arib-b62-font-strip-{stamp}.ttml"));
+    let mut writer = BufWriter::new(File::create(&output).expect("TTML output"));
+    write_ttml_header(&mut writer).expect("TTML header");
+    write_ttml_caption(&mut writer, &caption, &ConversionOptions::default()).expect("TTML caption");
+    write_ttml_footer(&mut writer).expect("TTML footer");
+    writer.flush().expect("TTML flush");
+
+    let text = fs::read_to_string(&output).expect("TTML text");
+    assert!(!text.contains("font-face"));
+    assert!(roxmltree::Document::parse(&text).is_ok());
+    fs::remove_file(output).expect("cleanup TTML output");
+}
+
+#[test]
+fn dropping_accessibility_or_gaiji_keeps_ttml_ruby_and_inline_colour() {
+    let xml = "<tt><body><p begin='0s' end='1s'>♪<ruby><span tts:ruby='base' tts:color='#ff0000'>漢</span><rt><span tts:ruby='text'>かん</span></rt></ruby><span>終&amp;</span></p></body></tt>";
+    let caption = parse_ttml_captions(xml, 0).pop().expect("caption");
+    for (preserve_gaiji, preserve_accessibility) in [(false, true), (true, false), (false, false)] {
+        let options = ConversionOptions {
+            preserve_gaiji,
+            preserve_accessibility,
+            ..Default::default()
+        };
+        let output = std::env::temp_dir().join(format!(
+            "arib-independent-ruby-{}-{preserve_gaiji}-{preserve_accessibility}.ttml",
+            std::process::id()
+        ));
+        let mut writer = BufWriter::new(File::create(&output).expect("output"));
+        write_ttml_header(&mut writer).unwrap();
+        write_ttml_caption(&mut writer, &caption, &options).unwrap();
+        write_ttml_footer(&mut writer).unwrap();
+        writer.flush().unwrap();
+        let text = fs::read_to_string(&output).unwrap();
+        assert!(
+            text.contains("tts:ruby='text'"),
+            "body={:?} output={text}",
+            caption.rich_body
+        );
+        assert!(text.contains("tts:color='#ff0000'"));
+        assert!(text.contains("かん"));
+        assert!(text.contains("終&amp;"));
+        assert_eq!(text.contains('♪'), preserve_accessibility);
+        fs::remove_file(&output).unwrap();
+    }
 }
 
 #[test]

@@ -49,7 +49,7 @@ new one-off command variants:
 | `get_preview_runtime` | reports the discovered libmpv runtime plus render-API symbol availability without claiming a render surface exists |
 | `get_preview_render_diagnostics` | reports the active native route and bounded render-thread counters/errors; absence of a worker returns a stable inactive result |
 | `render_at` | returns a bounded caption-plane snapshot for a requested archive time without sending video frames through WebView |
-| `sync_preview_overlay` | reads the embedded libmpv time, renders a bounded native plane, and applies, clears, or deduplicates the Windows overlay without WebView timing or layout |
+| `sync_preview_overlay` | reads in-process libmpv time, renders a bounded caption plane, and updates, clears, or deduplicates the backend caption texture without WebView timing or layout |
 | `get_playback_time_mapping` / `update_playback_time_mapping` | gets or replaces the validated media-time → project-time segment mapping used by native caption preview |
 | `get_timeline_window` / `get_timeline_window_filtered` | streams a bounded archive page for completed-task browsing |
 | `get_timeline_recent_window_filtered` | incrementally tails complete JSONL records and returns only the latest bounded live event page |
@@ -98,12 +98,7 @@ bounded continuation across automatic columns. Complex ruby grouping, complete
 vertical orientation, and standard stroke behaviour remain declarative metadata until their native
 implementations are tested; the UI must not imitate them with arbitrary CSS
 shadows or fixed black boxes.
-`captionOverlayModes` is an array of structured backend route capabilities:
-`id`, `available`, `experimental`, and `unavailableReasonCode`. On Windows,
-`libmpv-render` becomes available when the discovered runtime exports the full
-render API; the backend selects it by default and falls back per source to
-`libmpv-client-overlay` if render-worker startup fails. The UI presents the
-backend's actual route and never selects a renderer itself.
+`captionOverlayModes` is a structured backend capability array with `id`, `available`, `experimental`, and `unavailableReasonCode`. Windows currently exposes only the in-process `libmpv-render` route: a hidden parentless offscreen WGL host supplies an OpenGL DC, while the render thread composes video and Rust captions into an FBO and reads RGBA back through three PBO slots. The UI publishes the pixel slots and control slot through WebView2 SharedBuffer to the Canvas inside the player component; it never selects a renderer.
 
 ## Worker event envelope
 
@@ -135,8 +130,8 @@ Known limitations are product constraints, not hidden fallbacks:
   `tlv_mmtp_experimental` is intentionally evidence-first and must not be
   presented as general BS4K/8K support without a real corpus.
 - Checkpoints currently perform a source-identity-verified full replay from the trusted recording origin because native B24 and partial-artifact state are not serializable.
-- The current Windows video surface is owned by in-process `libmpv`; no `mpv.exe` sidecar or JSON named pipe is used. Where the runtime exports the complete render API, the backend selects `libmpv-render`, owns the WGL context and BGRA texture blend path, and falls back to client overlay only if that specific startup fails. It requests `hwdec=auto-safe`, allowing compatible copy-back acceleration but not promising zero-copy D3D/ANGLE interoperability. `get_preview_render_diagnostics` returns the selected route, live surface dimensions, presents-per-second, texture operation counts, aspect, requested decoder policy, and libmpv's actual `hwdec-current` when the loaded source reports it. Long 2K/4K/8K profiling remains a release-quality gate rather than an implied capability.
-- `get_preview_capabilities` reports each route as `{ id, available, experimental,
+- The current Windows video surface is owned by in-process `libmpv`; there is no `mpv.exe` sidecar, JSON named pipe, visible or child HWND, or client overlay. `libmpv-render` runs on a hidden parentless WGL host whose only role is to provide a DC. The render thread composes video and Rust captions into an offscreen FBO, reads RGBA back through three PBO slots, and the Tauri UI STA publishes three pixel SharedBuffer slots plus one control SharedBuffer slot. The Canvas inside the player consumes the newest frame named by the control slot and drops stale frames. `get_preview_render_diagnostics` returns the active route, surface dimensions, presents per second, shared-slot counters, aspect, requested decoder policy, and libmpv actual `hwdec-current` when the source reports it. Long 2K/4K/8K profiling remains a release-quality gate.
+- `get_preview_capabilities` reports the current route as { id, available, experimental, unavailableReasonCode }. Video and caption pixels reach the Canvas inside the player through WebView2 SharedBuffer; frame data does not travel through Tauri commands, events, or COM. `render_at` still returns a bounded caption-plane snapshot for an archive time. Non-Windows builds report `preview.platform_not_implemented`.
   unavailableReasonCode }`. It is a presentation contract only: the WebView
   cannot submit caption bitmaps. `render_preview_at` and
   `sync_preview_overlay` compose the bounded native caption plane inside the

@@ -148,6 +148,9 @@ int acb_decoder_feed(acb_decoder* handle, const uint8_t* data, size_t size,
                 target.type = static_cast<uint32_t>(source.type);
                 target.codepoint = source.codepoint;
                 target.pua_codepoint = source.pua_codepoint;
+                target.source_graphic_set = source.source_graphic_set;
+                target.source_ku = source.source_ku;
+                target.source_ten = source.source_ten;
                 target.drcs_code = source.drcs_code;
                 target.x = source.x;
                 target.y = source.y;

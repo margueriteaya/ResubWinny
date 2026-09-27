@@ -9,6 +9,7 @@ import {
   type Track,
 } from "../../backend";
 import { trackKey } from "../tracks";
+import { selectedCaptionTrack } from "./export-eligibility";
 
 export type { ExportFormat, ExportPreservation } from "../../backend";
 export type TaskExportPlan = {
@@ -16,6 +17,7 @@ export type TaskExportPlan = {
   formats: ExportFormat[];
   preservation: ExportPreservation;
   trackId?: number;
+  logicalTrack?: string;
 };
 
 export type SourceTaskSetup = {
@@ -39,10 +41,8 @@ export function createExportPlan(
   selectedTrackKeys: Set<string>,
   outputDirectory = inspection.path.replace(/[\\/][^\\/]+$/, ""),
 ): TaskExportPlan | null {
-  const selectedTrack = inspection.tracks.find((track) =>
-    selectedTrackKeys.has(taskTrackKey(track)),
-  );
-  if (inspection.tracks.length > 0 && !selectedTrack) return null;
+  const selectedTrack = selectedCaptionTrack(inspection.tracks, selectedTrackKeys);
+  if (!selectedTrack) return null;
 
   if (!formats.size || !outputDirectory.trim()) return null;
   const separator = outputDirectory.includes("\\") ? "\\" : "/";
@@ -52,6 +52,7 @@ export function createExportPlan(
     formats: [...formats],
     preservation,
     trackId: taskTrackId(selectedTrack),
+    logicalTrack: selectedTrack?.logicalTrack,
   };
 }
 
@@ -61,19 +62,18 @@ export function inspectTaskSource(path: string) {
 
 export function createSourceTaskSetup(
   inspection: Inspection,
-  defaultFormat: string,
+  preferredFormats: readonly string[],
   message: (code: string, parameters: Record<string, unknown>) => string,
 ): SourceTaskSetup {
   const selectedTrack = inspection.tracks[0];
-  const supportedDefault = ["ASS", "TTML", "JSON", "Raw Data"].includes(defaultFormat)
-    ? defaultFormat as ExportFormat
-    : null;
+  const supportedFormats: ExportFormat[] = ["ASS", "TTML", "SRT", "WebVTT", "JSON", "Raw Data"];
+  const selectedFormats = supportedFormats.filter((format) => preferredFormats.includes(format));
   return {
     outputDirectory: inspection.path.replace(/[\\/][^\\/]+$/, ""),
     selectedTrackKeys: selectedTrack
       ? new Set([taskTrackKey(selectedTrack)])
       : new Set(),
-    selectedFormats: supportedDefault ? new Set([supportedDefault]) : null,
+    selectedFormats: selectedFormats.length ? new Set(selectedFormats) : null,
     logs: [
       message("notice.sourceSelected", { name: inspection.name }),
       message("notice.container", { container: inspection.container }),
@@ -94,7 +94,8 @@ export async function startTaskExport(
     archive: false,
     raw: false,
     trackId: plan.trackId,
-    drcsReport: false,
+    logicalTrack: plan.logicalTrack,
+    drcsReport: true,
     drcsMappings,
     formats: plan.formats,
     preservation: plan.preservation,

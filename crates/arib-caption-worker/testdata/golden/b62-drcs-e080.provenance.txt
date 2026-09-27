@@ -1,0 +1,15 @@
+Generated test resource: b62-drcs-e080.ttf
+SHA-256: 478173772697E69E565A93D0BDFF40A088307139B33FEC4F9A28A6DB7481E56A
+
+Source:
+  ../../../../third_party/rounded-mplus-1m-arib/rounded-mplus-1m-arib.ttf
+
+Generation command:
+  pyftsubset rounded-mplus-1m-arib.ttf --unicodes=U+E080
+
+The source font's provenance and redistribution terms are recorded in:
+  third_party/rounded-mplus-1m-arib/LICENSE.txt
+
+This 1-glyph subset is a deterministic public protocol fixture. It validates
+the bounded B62 font-resource path without embedding or claiming evidence from
+a broadcast recording.

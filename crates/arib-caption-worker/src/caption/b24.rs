@@ -59,7 +59,7 @@ where
     C: FnMut() -> bool,
     R: FnMut(u16, u64, &[u8]) -> io::Result<()>,
 {
-    let mut reader = BufReader::with_capacity(1024 * 1024, File::open(path)?);
+    let mut reader = BufReader::with_capacity(1024 * 1024, crate::input::open_input(path)?);
     let mut packet = [0u8; 188];
     let mut pes = Vec::new();
     let mut pes_pid = None;
@@ -205,6 +205,7 @@ where
     }
     on_pes(pid, pes_offset, pes)?;
     if let Some(scene) = flush_b24_pes(pes, decoder, last_pts, timeline_origin_ms, summary) {
+        summary.features.observe_b24_scene(&scene);
         on_scene(pid, scene)?;
     }
     Ok(())

@@ -430,7 +430,11 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
     for packet_type in 0..2 {
         input.extend(tlv_packet(packet_type, vec![0]));
     }
-    let stem = format!("arib-caption-tlv-dump-{}", std::process::id());
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let stem = format!("arib-caption-tlv-dump-{stamp}");
     let input_path = std::env::temp_dir().join(format!("{stem}.tlv"));
     let output_path = std::env::temp_dir().join(format!("{stem}.jsonl"));
     #[cfg(not(feature = "libaribtlv"))]
@@ -507,12 +511,64 @@ fn dumps_tlv_stpp_payloads_as_streamed_raw_jsonl() {
         assert!((0.0..=1.0).contains(&preview.y));
         assert_eq!(preview.text_color, 0xff12_ab34);
         assert_eq!(preview.background_color, 0xb000_0000);
+
+        let conflict_output = std::env::temp_dir().join(format!("{stem}-conflict.ass"));
+        let conflict_srt = conflict_output.with_extension("srt");
+        let conflict_webvtt = conflict_output.with_extension("vtt");
+        let conflict_part = conflict_output.with_extension("ass.part");
+        fs::write(&conflict_output, "existing final must survive").expect("existing final");
+        fs::write(&conflict_srt, "existing SRT must survive").expect("existing SRT");
+        fs::write(&conflict_webvtt, "existing WebVTT must survive").expect("existing WebVTT");
+        let mut conflict_bytes_read = 0_u64;
+        let conflict = match convert_with_options_and_cancel(
+            &input_path,
+            &conflict_output,
+            ConversionOptions {
+                srt: true,
+                webvtt: true,
+                overwrite: true,
+                ..ConversionOptions::default()
+            },
+            |summary| conflict_bytes_read = conflict_bytes_read.max(summary.bytes_read),
+            || false,
+        ) {
+            Ok(_) => panic!("SRT preservation must conflict with material TTML features"),
+            Err(error) => error,
+        };
+        let conflict = conflict
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<ExportConflict>())
+            .expect("structured export conflict");
+        assert!(conflict.formats.contains(&"SRT".to_owned()));
+        assert_eq!(
+            fs::read_to_string(&conflict_output).expect("existing final"),
+            "existing final must survive"
+        );
+        assert_eq!(
+            fs::read_to_string(&conflict_srt).expect("existing SRT"),
+            "existing SRT must survive"
+        );
+        assert_eq!(
+            fs::read_to_string(&conflict_webvtt).expect("existing WebVTT"),
+            "existing WebVTT must survive"
+        );
+        assert!(
+            conflict_bytes_read < fs::metadata(&input_path).expect("input metadata").len(),
+            "actual export conflict must stop before reading the full recording"
+        );
+        assert!(!conflict_part.exists(), "conflict .part was retained");
+
         fs::remove_file(input_path).expect("cleanup input");
         fs::remove_file(output_path).expect("cleanup output");
         fs::remove_file(converted_path).expect("cleanup ASS");
         fs::remove_file(report.ttml.expect("TTML output")).expect("cleanup TTML");
         fs::remove_file(report.archive.expect("archive output")).expect("cleanup archive");
         fs::remove_file(report.raw.expect("raw output")).expect("cleanup conversion raw");
+        fs::remove_dir_all(report.font_directory.expect("font sidecar"))
+            .expect("cleanup font sidecar");
+        fs::remove_file(conflict_output).expect("cleanup existing final");
+        fs::remove_file(conflict_srt).expect("cleanup existing SRT");
+        fs::remove_file(conflict_webvtt).expect("cleanup existing WebVTT");
     }
 }
 

@@ -6,6 +6,33 @@ use std::collections::HashSet;
 use std::{fs, path::PathBuf, process::Command};
 use tauri::AppHandle;
 
+fn append_tlv_caption_tracks(
+    inspection: &crate::models::WorkerInspection,
+    tracks: &mut Vec<Track>,
+) {
+    for (index, track) in inspection
+        .tracks
+        .iter()
+        .filter(|track| track.kind.as_deref() == Some("stpp"))
+        .enumerate()
+    {
+        let Some(track_id) = track.track_id else {
+            continue;
+        };
+        tracks.push(Track {
+            label: format!("tlv_mmtp_stpp:{}", index + 1),
+            detail: "track.tlv_mmtp_stpp".into(),
+            pid: Some(format!("MMTP 0x{track_id:04X}")),
+            kind: "tlv_mmtp_stpp".into(),
+            ordinal: index + 1,
+            service_id: None,
+            language: None,
+            service_name: None,
+            logical_track: format!("tlv-mmtp:asset=stpp:packet={track_id:04x}"),
+        });
+    }
+}
+
 #[tauri::command]
 pub fn inspect_source(app: AppHandle, path: String) -> Result<Inspection, String> {
     let source = PathBuf::from(&path);
@@ -39,6 +66,12 @@ pub fn inspect_source(app: AppHandle, path: String) -> Result<Inspection, String
         .map(|track| track.caption_pid)
         .collect::<HashSet<_>>();
     for (index, track) in b24_tracks.into_iter().enumerate() {
+        let logical_track = format!(
+            "b24:service={}:component={:02x}:language={}",
+            track.service_id.unwrap_or_default(),
+            track.component_tag,
+            track.language.as_deref().unwrap_or("und")
+        );
         tracks.push(Track {
             // User-facing wording is resolved from `kind` and `ordinal` by
             // the frontend locale pack. These values are stable fallbacks.
@@ -50,9 +83,11 @@ pub fn inspect_source(app: AppHandle, path: String) -> Result<Inspection, String
             service_id: track.service_id,
             language: track.language,
             service_name: track.service_name,
+            logical_track,
         });
     }
     if let Some(data_tracks) = probe.mpeg_ts_data_tracks {
+        let pmt_pid = data_tracks.pmt_pid;
         for (index, pid) in data_tracks
             .pids
             .into_iter()
@@ -75,10 +110,15 @@ pub fn inspect_source(app: AppHandle, path: String) -> Result<Inspection, String
                 service_id: None,
                 language: None,
                 service_name: None,
+                logical_track: format!(
+                    "mpeg-ts-ttml:pmt={pmt_pid}:kind={kind}:ordinal={}",
+                    index + 1
+                ),
             });
         }
     }
     if let Some(data_tracks) = probe.m2ts_data_tracks {
+        let pmt_pid = data_tracks.pmt_pid;
         for (index, pid) in data_tracks.pids.into_iter().enumerate() {
             let kind = if data_tracks.caption_pids.contains(&pid) {
                 "m2ts_ttml_caption"
@@ -96,9 +136,11 @@ pub fn inspect_source(app: AppHandle, path: String) -> Result<Inspection, String
                 service_id: None,
                 language: None,
                 service_name: None,
+                logical_track: format!("m2ts-ttml:pmt={pmt_pid}:kind={kind}:ordinal={}", index + 1),
             });
         }
     }
+    append_tlv_caption_tracks(&probe.inspection, &mut tracks);
     Ok(Inspection {
         name: source
             .file_name()
@@ -115,4 +157,34 @@ pub fn inspect_source(app: AppHandle, path: String) -> Result<Inspection, String
         tracks,
         broadcast: probe.inspection.broadcast,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::WorkerInspection;
+
+    #[test]
+    fn exposes_each_stpp_asset_as_a_separate_selectable_track() {
+        let inspection: WorkerInspection = serde_json::from_value(serde_json::json!({
+            "route_code": "tlv_mmtp_experimental",
+            "route": "TLV",
+            "service": "MMT",
+            "tracks": [
+                { "kind": "hev1", "track_id": 0xf100 },
+                { "kind": "stpp", "track_id": 0xf130 },
+                { "kind": "stpp", "track_id": 0xf138 }
+            ]
+        }))
+        .expect("worker inspection contract");
+        let mut tracks = Vec::new();
+
+        append_tlv_caption_tracks(&inspection, &mut tracks);
+
+        assert_eq!(tracks.len(), 2);
+        assert_eq!(tracks[0].pid.as_deref(), Some("MMTP 0xF130"));
+        assert_eq!(tracks[1].pid.as_deref(), Some("MMTP 0xF138"));
+        assert_ne!(tracks[0].logical_track, tracks[1].logical_track);
+        assert!(tracks.iter().all(|track| track.kind == "tlv_mmtp_stpp"));
+    }
 }

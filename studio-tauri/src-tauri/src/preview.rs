@@ -2,8 +2,8 @@ use crate::{
     caption_renderer,
     models::{
         BroadcastMetadata, CaptionRenderProfile, CaptionRenderSnapshot, PlaybackTimeMapping,
-        PreviewCapabilities, PreviewOverlaySyncResult, PreviewPlaybackState, PreviewRect,
-        PreviewRenderDiagnostics, PreviewRuntime,
+        PreviewCapabilities, PreviewOverlaySyncResult, PreviewPlaybackState,
+        PreviewRenderDiagnostics, PreviewRuntime, PreviewSurfaceSize,
     },
     preview_surface,
     state::AppState,
@@ -19,6 +19,8 @@ use std::{
 };
 use tauri::{AppHandle, Manager, State};
 pub(crate) mod archive;
+#[cfg(windows)]
+pub(crate) mod frame_bridge;
 pub(crate) mod overlay;
 
 pub(crate) use overlay::{playback_file_offset, reset_overlay_sync};
@@ -44,21 +46,16 @@ pub fn get_preview_capabilities(app: AppHandle) -> PreviewCapabilities {
                 .ok()
                 .map(|render_api| (path, render_api))
         });
-    let runtime_ready = runtime.is_some();
     let render_surface_ready = runtime.as_ref().is_some_and(|(_, render_api)| *render_api);
     let native_embedding_supported = cfg!(windows);
-    let client_available = native_embedding_supported && runtime_ready;
     PreviewCapabilities {
-        video_backend: "libmpv-client".into(),
+        video_backend: "libmpv-render".into(),
         caption_overlay_modes: preview_surface::capabilities(
-            client_available,
             native_embedding_supported && render_surface_ready,
             native_embedding_supported,
         ),
         selected_caption_overlay: if native_embedding_supported && render_surface_ready {
             "libmpv-render".into()
-        } else if client_available {
-            "libmpv-client-overlay".into()
         } else {
             "none".into()
         },
@@ -85,16 +82,19 @@ pub fn get_preview_capabilities(app: AppHandle) -> PreviewCapabilities {
 pub fn get_preview_runtime(app: AppHandle) -> PreviewRuntime {
     let resource_dir = app.path().resource_dir().ok();
     match crate::libmpv::discover_library(resource_dir.as_deref()) {
-        Ok(path) => PreviewRuntime {
-            backend: "libmpv-client".into(),
+        Ok(path) => {
+            let render_api_available = crate::libmpv::render_api_available(&path).unwrap_or(false);
+            PreviewRuntime {
+            backend: "libmpv-render".into(),
             platform: std::env::consts::OS.into(),
             library_path: Some(path.display().to_string()),
-            available: true,
-            render_api_available: crate::libmpv::render_api_available(&path).unwrap_or(false),
-            detail: "libmpv runtime discovered. Windows uses the native OpenGL render surface when the runtime exports the complete render API; a failed per-source render setup falls back to the client overlay route.".into(),
-        },
+            available: cfg!(windows) && render_api_available,
+            render_api_available,
+            detail: "libmpv renders in-process to an offscreen OpenGL target. Completed frames are shared with the WebView2 Canvas inside the player component.".into(),
+        }
+        }
         Err(detail) => PreviewRuntime {
-            backend: "libmpv-client".into(),
+            backend: "libmpv-render".into(),
             platform: std::env::consts::OS.into(),
             library_path: None,
             available: false,
@@ -117,7 +117,9 @@ pub fn get_preview_render_diagnostics(
         return Ok(PreviewRenderDiagnostics {
             route: "none".into(),
             active: false,
+            frames_rendered: 0,
             frames_presented: 0,
+            frames_dropped: 0,
             presents_per_second: 0.0,
             caption_texture_uploads: 0,
             caption_texture_clears: 0,
@@ -125,30 +127,16 @@ pub fn get_preview_render_diagnostics(
             surface_width: None,
             surface_height: None,
             decoder_mode: None,
-            fallback_reason: None,
             last_error: None,
         });
     };
-    let Some(stats) = player.player.render_diagnostics() else {
-        return Ok(PreviewRenderDiagnostics {
-            route: "libmpv-client-overlay".into(),
-            active: true,
-            frames_presented: 0,
-            presents_per_second: 0.0,
-            caption_texture_uploads: 0,
-            caption_texture_clears: 0,
-            video_aspect: None,
-            surface_width: None,
-            surface_height: None,
-            decoder_mode: Some("auto-safe".into()),
-            fallback_reason: player.render_fallback_reason.clone(),
-            last_error: None,
-        });
-    };
+    let stats = player.player.render_diagnostics();
     Ok(PreviewRenderDiagnostics {
         route: "libmpv-render".into(),
         active: true,
+        frames_rendered: stats.frames_rendered,
         frames_presented: stats.frames_presented,
+        frames_dropped: u64::from(player.frame_pool.dropped_frames()),
         presents_per_second: stats.presents_per_second,
         caption_texture_uploads: stats.caption_texture_uploads,
         caption_texture_clears: stats.caption_texture_clears,
@@ -156,7 +144,6 @@ pub fn get_preview_render_diagnostics(
         surface_width: Some(stats.surface_width),
         surface_height: Some(stats.surface_height),
         decoder_mode: Some(stats.decoder_mode),
-        fallback_reason: None,
         last_error: stats.last_error,
     })
 }
@@ -169,7 +156,9 @@ pub fn get_preview_render_diagnostics(
     Ok(PreviewRenderDiagnostics {
         route: "none".into(),
         active: false,
+        frames_rendered: 0,
         frames_presented: 0,
+        frames_dropped: 0,
         presents_per_second: 0.0,
         caption_texture_uploads: 0,
         caption_texture_clears: 0,
@@ -177,8 +166,7 @@ pub fn get_preview_render_diagnostics(
         surface_width: None,
         surface_height: None,
         decoder_mode: None,
-        fallback_reason: Some("Native preview is only implemented on Windows.".into()),
-        last_error: None,
+        last_error: Some("Native preview is only implemented on Windows.".into()),
     })
 }
 #[cfg(test)]
@@ -195,16 +183,6 @@ fn parse_mpv_time_response(response: &str) -> Option<f64> {
         .get("data")
         .and_then(serde_json::Value::as_f64)
         .filter(|time| time.is_finite() && *time >= 0.0)
-}
-
-#[cfg(test)]
-fn mpv_overlay_command(path: &Path, x: i32, y: i32, width: i32, height: i32) -> serde_json::Value {
-    serde_json::json!({
-        "command": [
-            "overlay-add", 1, x, y, path.to_string_lossy(), 0, "bgra", width,
-            height, width.saturating_mul(4)
-        ]
-    })
 }
 
 #[path = "preview/native.rs"]
@@ -246,7 +224,7 @@ pub fn start_preview(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
     source: String,
-    rect: PreviewRect,
+    rect: PreviewSurfaceSize,
 ) -> Result<(), String> {
     reset_overlay_sync(state.inner());
     platform_start_preview(app, state, source, rect)
@@ -260,7 +238,7 @@ pub fn recover_preview(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
     source: String,
-    rect: PreviewRect,
+    rect: PreviewSurfaceSize,
     time_seconds: Option<f64>,
     paused: bool,
     volume: f64,
@@ -269,13 +247,21 @@ pub fn recover_preview(
     platform_recover_preview(app, state, source, rect, time_seconds, paused, volume)
 }
 #[tauri::command]
-pub fn resize_preview(state: State<'_, Arc<AppState>>, rect: PreviewRect) -> Result<(), String> {
+pub fn resize_preview(
+    state: State<'_, Arc<AppState>>,
+    rect: PreviewSurfaceSize,
+) -> Result<(), String> {
     platform_resize_preview(state, rect)
 }
 #[tauri::command]
 pub fn stop_preview(state: State<'_, Arc<AppState>>) {
     platform_stop_preview(state.clone());
     reset_overlay_sync(state.inner());
+}
+
+pub(crate) fn shutdown_preview(state: &Arc<AppState>) {
+    #[cfg(windows)]
+    native::shutdown_preview(state);
 }
 
 fn invalidate_overlay_after_seek(state: State<'_, Arc<AppState>>) {

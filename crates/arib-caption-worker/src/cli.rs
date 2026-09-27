@@ -2,6 +2,72 @@ use super::*;
 use std::env;
 use std::sync::{Arc, atomic::Ordering};
 
+fn emit_feature_events(
+    summary: &B24DecodeSummary,
+    seen: &mut CaptionFeatureSummary,
+    complete: bool,
+    options: &ConversionOptions,
+) {
+    for event in feature_events(summary, seen, complete, options) {
+        emit_json(&event);
+    }
+}
+
+fn feature_events(
+    summary: &B24DecodeSummary,
+    seen: &mut CaptionFeatureSummary,
+    complete: bool,
+    options: &ConversionOptions,
+) -> Vec<serde_json::Value> {
+    let logical_track = std::env::var("RESUBWINNY_LOGICAL_TRACK")
+        .unwrap_or_else(|_| "logical-track:default".into());
+    let mut events = Vec::new();
+    let features = [
+        ("ruby", summary.features.ruby),
+        ("drcs", summary.features.drcs),
+        ("position", summary.features.position),
+        ("color", summary.features.color),
+        ("gaiji", summary.features.gaiji),
+        ("accessibility", summary.features.accessibility),
+    ];
+    for (feature, present) in features {
+        let was_present = match feature {
+            "ruby" => seen.ruby,
+            "drcs" => seen.drcs,
+            "position" => seen.position,
+            "color" => seen.color,
+            "gaiji" => seen.gaiji,
+            _ => seen.accessibility,
+        };
+        if present && !was_present {
+            events.push(serde_json::json!({
+                "type": "feature_observed",
+                "feature": feature,
+                "logicalTrack": logical_track,
+                "observedCount": summary.features.observed_counts.get(feature).copied().unwrap_or(1),
+                "details": summary.features.details(feature).cloned().unwrap_or_else(|| serde_json::json!({})),
+                "complete": false
+            }));
+            events.extend(observed_assessment_notices(options, feature));
+        }
+    }
+    *seen = summary.features.clone();
+    if complete {
+        for (feature, _) in features {
+            events.push(serde_json::json!({
+                "type": "feature_summary",
+                "feature": feature,
+                "logicalTrack": logical_track,
+                "state": summary.features.state(feature),
+                "observedCount": summary.features.observed_counts.get(feature).copied().unwrap_or(0),
+                "details": summary.features.details(feature).cloned().unwrap_or_else(|| serde_json::json!({})),
+                "complete": true
+            }));
+        }
+    }
+    events
+}
+
 /// Makes the archive the requested primary artifact after conversion has
 /// completed. The conversion pipeline deliberately writes its ordinary
 /// caption output first; archive-only is a CLI publishing policy layered on
@@ -83,6 +149,13 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
         );
         std::process::exit(2);
     };
+    if command == "capabilities" {
+        emit_json(&serde_json::json!({
+            "type": "capabilities",
+            "capabilities": serde_json::from_str::<serde_json::Value>(include_str!("../../../shared/format_capabilities.json"))?
+        }));
+        return Ok(());
+    }
     if command != "inspect"
         && command != "broadcast-at"
         && command != "decode-b24"
@@ -234,7 +307,8 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                     match load_drcs_mapping(Path::new(&mapping_path)) {
                         Ok(mapping) => {
                             options.drcs_mode = DrcsMode::UseUserMapping;
-                            options.drcs_replacements = mapping;
+                            options.drcs_replacements = mapping.b24;
+                            options.ttml_drcs_replacements = mapping.b62;
                         }
                         Err(error) => {
                             eprintln!("could not load DRCS mapping: {error}");
@@ -271,6 +345,12 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
         spawn_control_listener(Arc::clone(&control));
         let progress_control = Arc::clone(&control);
         let cancel_control = Arc::clone(&control);
+        let mut seen_features = CaptionFeatureSummary::default();
+        let assessment_options = options.clone();
+        let requested_drcs_report = options.drcs_report;
+        for notice in initial_assessment_notices(&assessment_options) {
+            emit_json(&notice);
+        }
         emit_stage("decoding");
         let report = if command == "convert-b24" {
             convert_b24_with_options_and_cancel(
@@ -284,6 +364,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                     emit_json(
                         &serde_json::json!({"type": "progress", "bytes_read": summary.bytes_read, "captions": summary.captions, "warnings": summary.decoder_errors}),
                     );
+                    emit_feature_events(summary, &mut seen_features, false, &assessment_options);
                 },
                 move || cancel_control.wait_if_paused(),
             )
@@ -299,6 +380,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                     emit_json(
                         &serde_json::json!({"type": "progress", "bytes_read": summary.bytes_read, "captions": summary.captions, "warnings": summary.decoder_errors}),
                     );
+                    emit_feature_events(summary, &mut seen_features, false, &assessment_options);
                 },
                 move || cancel_control.wait_if_paused(),
             )
@@ -309,8 +391,48 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
                 emit_json(&serde_json::json!({"type": "cancelled", "reason": error.to_string()}));
                 return Ok(());
             }
-            Err(error) => return Err(error.into()),
+            Err(error) => {
+                let conflict = error
+                    .get_ref()
+                    .and_then(|error| error.downcast_ref::<ExportConflict>());
+                let drcs_report = output.with_extension("drcs.json");
+                if requested_drcs_report
+                    && conflict.is_some_and(|conflict| conflict.drcs_report_created)
+                    && drcs_report.exists()
+                {
+                    let count = fs::read(&drcs_report)
+                        .ok()
+                        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+                        .and_then(|report| report["glyphs"].as_array().map(Vec::len))
+                        .unwrap_or_default();
+                    let drcs_directory = output.with_extension("drcs");
+                    emit_json(&serde_json::json!({
+                        "type": "drcs-discovered",
+                        "count": count,
+                        "directory": drcs_directory,
+                        "report": drcs_report,
+                    }));
+                    for (kind, path) in [
+                        ("drcs-directory", drcs_directory),
+                        ("drcs-report", drcs_report),
+                    ] {
+                        emit_json(&serde_json::json!({
+                            "type": "artifact-created",
+                            "kind": kind,
+                            "path": path,
+                            "status": "completed",
+                        }));
+                    }
+                }
+                return Err(error.into());
+            }
         };
+        emit_feature_events(
+            &report.summary,
+            &mut seen_features,
+            true,
+            &assessment_options,
+        );
         if control.cancelled.load(Ordering::Relaxed) {
             emit_json(&serde_json::json!({"type": "cancelled"}));
             return Ok(());
@@ -435,4 +557,97 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
         emit_json(&serde_json::json!({ "type": "completed", "summary": summary }));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod feature_event_tests {
+    use super::*;
+
+    #[test]
+    fn drcs_source_observations_do_not_claim_target_resolution() {
+        let mut summary = B24DecodeSummary {
+            features: CaptionFeatureSummary {
+                drcs: true,
+                observed_counts: [("drcs".into(), 1)].into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let options = ConversionOptions::default();
+        let mut seen = CaptionFeatureSummary::default();
+        let first = feature_events(&summary, &mut seen, false, &options);
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0]["type"], "feature_observed");
+        for count in 2..1000 {
+            summary
+                .features
+                .observed_counts
+                .insert("drcs".into(), count);
+            assert!(feature_events(&summary, &mut seen, false, &options).is_empty());
+        }
+        let final_events = feature_events(&summary, &mut seen, true, &options);
+        assert_eq!(final_events.len(), 6);
+        assert!(
+            final_events
+                .iter()
+                .all(|event| event["type"] == "feature_summary")
+        );
+        let drcs = final_events
+            .iter()
+            .find(|event| event["feature"] == "drcs")
+            .unwrap();
+        assert_eq!(drcs["observedCount"], 999);
+        assert_eq!(drcs["complete"], true);
+        assert_eq!(drcs["state"], "present");
+    }
+
+    #[test]
+    fn feature_events_are_first_observation_and_eof_only() {
+        let summary = B24DecodeSummary {
+            features: CaptionFeatureSummary {
+                ruby: true,
+                observed_counts: [("ruby".into(), 3)].into(),
+                feature_details: [(
+                    "ruby".into(),
+                    serde_json::json!({ "boundAnnotation": true }),
+                )]
+                .into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut seen = CaptionFeatureSummary::default();
+        let options = ConversionOptions::default();
+        let first = feature_events(&summary, &mut seen, false, &options);
+        assert_eq!(first.len(), 2);
+        assert_eq!(first[0]["type"], "feature_observed");
+        assert_eq!(first[0]["feature"], "ruby");
+        assert_eq!(first[0]["observedCount"], 3);
+        assert_eq!(first[0]["details"]["boundAnnotation"], true);
+
+        assert_eq!(first[1]["code"], "format_approximates_feature");
+        assert_eq!(first[1]["parameters"]["format"], "ASS");
+
+        assert!(feature_events(&summary, &mut seen, false, &options).is_empty());
+
+        let final_events = feature_events(&summary, &mut seen, true, &options);
+        assert_eq!(final_events.len(), 6);
+        assert!(
+            final_events
+                .iter()
+                .all(|event| event["type"] == "feature_summary")
+        );
+        assert_eq!(
+            final_events
+                .iter()
+                .filter(|event| event["feature"] == "ruby")
+                .count(),
+            1
+        );
+        let ruby_summary = final_events
+            .iter()
+            .find(|event| event["feature"] == "ruby")
+            .unwrap();
+        assert_eq!(ruby_summary["details"]["boundAnnotation"], true);
+    }
 }

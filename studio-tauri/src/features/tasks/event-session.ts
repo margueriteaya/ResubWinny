@@ -11,6 +11,7 @@ type EventSessionBindings = {
   previewIndexing: () => boolean;
   batchRunning: () => boolean;
   sourceSize: () => number;
+  sourceIdentity: () => string;
   state: () => TaskEventState;
   setState: (state: TaskEventState) => void;
   onEffects: (effects: TaskEventEffects) => void;
@@ -40,6 +41,7 @@ export class TaskEventSession {
       this.bindings.sourceSize(),
       message,
       this.bindings.batchRunning(),
+      this.bindings.sourceIdentity(),
     );
     this.bindings.setState(transition.state);
     this.bindings.onEffects(transition.effects);

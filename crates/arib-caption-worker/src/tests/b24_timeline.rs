@@ -73,6 +73,42 @@ fn native_b24_decoder_initializes() {
 }
 
 #[test]
+fn native_b24_decoder_preserves_original_ku_ten() {
+    // libaribcaption's upstream sample contains two-byte JIS characters and an
+    // ARIB additional symbol. Keep the bytes here so the Rust/C bridge layout
+    // and the decoder provenance are covered by the same test.
+    let data = [
+        0x80, 0xff, 0xf0, 0x04, 0x00, 0x00, 0x00, 0x4e, 0x3f, 0x00, 0x00, 0x4a, 0x1f, 0x20, 0x00,
+        0x00, 0x01, 0x0c, 0x1f, 0x20, 0x00, 0x00, 0x3f, 0x9b, 0x37, 0x20, 0x53, 0x9b, 0x31, 0x37,
+        0x30, 0x3b, 0x33, 0x30, 0x20, 0x5f, 0x9b, 0x36, 0x32, 0x30, 0x3b, 0x34, 0x38, 0x30, 0x20,
+        0x56, 0x1d, 0x61, 0x9b, 0x33, 0x36, 0x3b, 0x33, 0x36, 0x20, 0x57, 0x9b, 0x34, 0x20, 0x58,
+        0x9b, 0x32, 0x34, 0x20, 0x59, 0x8a, 0x87, 0x90, 0x20, 0x44, 0x90, 0x51, 0x9b, 0x31, 0x37,
+        0x30, 0x3b, 0x35, 0x30, 0x39, 0x20, 0x61, 0x7d, 0x7a, 0x21, 0x41, 0x4f, 0xf1,
+    ];
+
+    let mut decoder = native_b24::NativeB24Decoder::new().expect("native decoder");
+    let result = decoder.feed(&data, 0);
+    assert_eq!(result.status, 2);
+    let scene = result.scene.expect("decoded caption scene");
+    let sourced = scene
+        .characters
+        .iter()
+        .filter(|character| character.source_ku != 0)
+        .collect::<Vec<_>>();
+    assert!(!sourced.is_empty(), "two-byte source positions were lost");
+    assert!(sourced.iter().all(|character| {
+        (1..=94).contains(&character.source_ku) && (1..=94).contains(&character.source_ten)
+    }));
+    assert!(
+        sourced.iter().any(|character| character.utf8 == "♬"
+            && character.pua_codepoint == 0
+            && character.source_ku == 93
+            && character.source_ten == 90),
+        "the sample's ♬ lost its ARIB 93-90 source position"
+    );
+}
+
+#[test]
 fn parses_b24_payload_and_pts() {
     let pes = [
         0, 0, 1, 0xbd, 0, 0, 0x80, 0x80, 5, 0x21, 0, 5, 0xbf, 0x21, 0x80,
@@ -105,6 +141,9 @@ fn scene_with_text_regions(pts_ms: i64, regions: &[(i32, i32, &str)]) -> native_
                     kind: 0,
                     codepoint: character as u32,
                     pua_codepoint: 0,
+                    source_graphic_set: 0,
+                    source_ku: 0,
+                    source_ten: 0,
                     drcs_code: 0,
                     x: *x + index as i32 * 20,
                     y: *y,
@@ -151,10 +190,11 @@ fn region_intervals_keep_independent_lifetimes() {
     let second = scene_with_text_regions(1_200, &[(100, 100, "label"), (500, 900, "body")]);
     let third = scene_with_text_regions(1_500, &[(500, 900, "body")]);
     let mut active = HashMap::new();
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
 
-    assert!(apply_scene_intervals(&mut active, &first).is_empty());
-    assert!(apply_scene_intervals(&mut active, &second).is_empty());
-    let closed = apply_scene_intervals(&mut active, &third);
+    assert!(apply_scene_intervals(&mut active, &first, &mut semantic_state).is_empty());
+    assert!(apply_scene_intervals(&mut active, &second, &mut semantic_state).is_empty());
+    let closed = apply_scene_intervals(&mut active, &third, &mut semantic_state);
     assert_eq!(closed.len(), 1);
     assert_eq!((closed[0].begin_ms, closed[0].end_ms), (1_000, 1_500));
     assert_eq!(closed[0].characters[0].utf8, "l");
@@ -174,8 +214,9 @@ fn region_interval_uses_its_wait_duration_before_a_later_scene() {
     clear.regions.clear();
     clear.characters.clear();
     let mut active = HashMap::new();
-    assert!(apply_scene_intervals(&mut active, &first).is_empty());
-    let closed = apply_scene_intervals(&mut active, &clear);
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
+    assert!(apply_scene_intervals(&mut active, &first, &mut semantic_state).is_empty());
+    let closed = apply_scene_intervals(&mut active, &clear, &mut semantic_state);
     assert_eq!(closed.len(), 1);
     assert_eq!((closed[0].begin_ms, closed[0].end_ms), (1_000, 1_300));
 }
@@ -212,6 +253,118 @@ fn ttml_feature_filter_uses_the_complete_b24_text_range() {
         ..ConversionOptions::default()
     };
     assert_eq!(interval_ttml_text(&interval, &options), "説明本文");
+}
+
+#[test]
+fn cross_region_semantic_delimiters_are_filtered_from_b24_exports() {
+    let scene = scene_with_text_regions(
+        1_250,
+        &[(100, 200, "＜たった１錠。"), (100, 240, "わたしオン！＞")],
+    );
+    let mut intervals = scene_intervals(&scene);
+    for interval in &mut intervals {
+        interval.end_ms = 2_500;
+    }
+    assert_eq!(intervals[0].accessibility_ranges, vec![0..1]);
+    assert_eq!(intervals[1].accessibility_ranges, vec![6..7]);
+
+    let options = ConversionOptions {
+        preserve_accessibility: false,
+        ..ConversionOptions::default()
+    };
+    let ttml_text = intervals
+        .iter()
+        .map(|interval| interval_ttml_text(interval, &options))
+        .collect::<String>();
+    assert_eq!(ttml_text, "たった１錠。わたしオン！");
+
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let output = std::env::temp_dir().join(format!("arib-cross-region-cue-{stamp}.ass"));
+    let mut writer = BufWriter::new(File::create(&output).expect("output"));
+    for interval in &intervals {
+        write_ass_interval(&mut writer, interval, &options).expect("write interval");
+    }
+    writer.flush().expect("flush");
+    let ass = fs::read_to_string(&output).expect("read");
+    assert!(ass.contains("たった１錠。"));
+    assert!(ass.contains("わたしオン！"));
+    assert!(!ass.contains('＜'));
+    assert!(!ass.contains('＞'));
+    fs::remove_file(output).expect("cleanup");
+}
+
+#[test]
+fn cross_region_quote_state_preserves_title_parentheses() {
+    let scene = scene_with_text_regions(
+        1_250,
+        &[
+            (100, 200, "曲「スゥ・ル・シエル・ド・パリ"),
+            (100, 240, "（パリの空の下）」。"),
+        ],
+    );
+    let intervals = scene_intervals(&scene);
+    assert!(intervals[1].accessibility_ranges.is_empty());
+    let options = ConversionOptions {
+        preserve_accessibility: false,
+        ..ConversionOptions::default()
+    };
+    assert_eq!(
+        interval_ttml_text(&intervals[1], &options),
+        "（パリの空の下）」。"
+    );
+}
+
+#[test]
+fn continuation_arrow_carries_b24_quote_state_to_the_next_scene() {
+    let first = scene_with_text_regions(1_000, &[(100, 200, "曲「スゥ・ル・シエル・ド・パリ➡")]);
+    let second = scene_with_text_regions(2_000, &[(100, 200, "（パリの空の下）」。")]);
+    let mut active = HashMap::new();
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
+
+    assert!(apply_scene_intervals(&mut active, &first, &mut semantic_state).is_empty());
+    let closed = apply_scene_intervals(&mut active, &second, &mut semantic_state);
+    assert_eq!(closed.len(), 1);
+    assert_eq!(closed[0].accessibility_ranges.last(), Some(&(15..16)));
+    let remaining = finish_scene_intervals(&mut active, 3_000);
+    assert_eq!(remaining.len(), 1);
+    assert!(remaining[0].accessibility_ranges.is_empty());
+
+    let options = ConversionOptions {
+        preserve_accessibility: false,
+        ..ConversionOptions::default()
+    };
+    assert_eq!(
+        interval_ttml_text(&remaining[0], &options),
+        "（パリの空の下）」。"
+    );
+}
+
+#[test]
+fn continuation_arrow_carries_b24_broadcast_delimiters_to_the_next_scene() {
+    let first = scene_with_text_regions(
+        1_000,
+        &[(100, 200, "(加寿彦)｟ダークエネルギーっていうのは➡")],
+    );
+    let second = scene_with_text_regions(2_000, &[(100, 200, "作用する｠")]);
+    let mut active = HashMap::new();
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
+
+    assert!(apply_scene_intervals(&mut active, &first, &mut semantic_state).is_empty());
+    let closed = apply_scene_intervals(&mut active, &second, &mut semantic_state);
+    assert_eq!(closed.len(), 1);
+    assert!(closed[0].accessibility_ranges.contains(&(5..6)));
+    let remaining = finish_scene_intervals(&mut active, 3_000);
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].accessibility_ranges, vec![4..5]);
+
+    let options = ConversionOptions {
+        preserve_accessibility: false,
+        ..ConversionOptions::default()
+    };
+    assert_eq!(interval_ttml_text(&remaining[0], &options), "作用する");
 }
 
 #[test]
@@ -255,6 +408,9 @@ fn writes_a_region_that_contains_only_unresolved_drcs() {
             kind: 1,
             codepoint: 0,
             pua_codepoint: 0,
+            source_graphic_set: 0,
+            source_ku: 0,
+            source_ten: 0,
             drcs_code: 1,
             x: 100,
             y: 100,
@@ -290,6 +446,106 @@ fn writes_a_region_that_contains_only_unresolved_drcs() {
     write_ass_interval(&mut writer, &interval, &ConversionOptions::default()).expect("write scene");
     writer.flush().expect("flush");
     assert!(fs::read_to_string(&output).expect("read").contains("\\p1"));
+    for count in [1, 2] {
+        for preserve_drcs in [true, false] {
+            let options = ConversionOptions {
+                preserve_position: false,
+                preserve_drcs,
+                ..Default::default()
+            };
+            let mut writer = BufWriter::new(File::create(&output).expect("output"));
+            write_ass_interval_group(&mut writer, &vec![interval.clone(); count], &options)
+                .expect("unpositioned glyphs");
+            writer.flush().expect("flush");
+            let ass = fs::read_to_string(&output).expect("read");
+            assert_eq!(
+                ass.matches("\\p1").count(),
+                if preserve_drcs { count } else { 0 }
+            );
+            assert!(!ass.contains("\\pos("));
+            assert!(!ass.contains('\u{fffc}'));
+        }
+    }
+    fs::remove_file(output).expect("cleanup");
+}
+
+#[test]
+fn exports_drcs_alternative_text_for_positioned_and_grouped_text_targets() {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let output = std::env::temp_dir().join(format!("arib-drcs-alternative-{stamp}.ass"));
+    let scene = native_b24::CaptionScene {
+        pts_ms: 0,
+        wait_duration_ms: 1_000,
+        plane_width: 960,
+        plane_height: 540,
+        regions: vec![native_b24::CaptionRegion {
+            x: 100,
+            y: 100,
+            width: 20,
+            height: 20,
+            is_ruby: false,
+            first_character: 0,
+            character_count: 1,
+        }],
+        characters: vec![native_b24::CaptionCharacter {
+            kind: 1,
+            codepoint: 0,
+            pua_codepoint: 0,
+            source_graphic_set: 0,
+            source_ku: 0,
+            source_ten: 0,
+            drcs_code: 1,
+            x: 100,
+            y: 100,
+            width: 20,
+            height: 20,
+            horizontal_spacing: 0,
+            vertical_spacing: 0,
+            horizontal_scale: 1.0,
+            vertical_scale: 1.0,
+            text_color: 0xffffff,
+            back_color: 0,
+            stroke_color: 0,
+            style: 0,
+            enclosure_style: 0,
+            utf8: String::new(),
+        }],
+        drcs_glyphs: vec![native_b24::DrcsGlyph {
+            drcs_code: 1,
+            width: 2,
+            height: 1,
+            depth: 4,
+            depth_bits: 2,
+            alternative_codepoint: 0,
+            md5: "test".into(),
+            alternative_text: "字".into(),
+            pixels: vec![0b1111_0000],
+        }],
+        rendered_image: None,
+    };
+    let mut interval = scene_intervals(&scene).pop().expect("region interval");
+    interval.end_ms = 1_000;
+    for preserve_position in [true, false] {
+        let options = ConversionOptions {
+            preserve_position,
+            ..ConversionOptions::default()
+        };
+        let mut writer = BufWriter::new(File::create(&output).expect("output"));
+        write_ass_interval_group(&mut writer, &[interval.clone(), interval.clone()], &options)
+            .expect("write scene");
+        writer.flush().expect("flush");
+        let ass = fs::read_to_string(&output).expect("read");
+        assert!(ass.contains("字"));
+        assert!(!ass.contains("\\p1"));
+        let srt = write_srt_from_ass(&output, true)
+            .expect("SRT")
+            .expect("path");
+        assert!(fs::read_to_string(&srt).expect("text").contains("字"));
+        fs::remove_file(srt).expect("cleanup SRT");
+    }
     fs::remove_file(output).expect("cleanup");
 }
 
@@ -321,6 +577,9 @@ fn ass_export_groups_editable_ruby_text_and_keeps_inline_styles() {
                 kind: 0,
                 codepoint: 'か' as u32,
                 pua_codepoint: 0,
+                source_graphic_set: 0,
+                source_ku: 0,
+                source_ten: 0,
                 drcs_code: 0,
                 x: 312,
                 y: 401,
@@ -341,6 +600,9 @@ fn ass_export_groups_editable_ruby_text_and_keeps_inline_styles() {
                 kind: 0,
                 codepoint: 'ん' as u32,
                 pua_codepoint: 0,
+                source_graphic_set: 0,
+                source_ku: 0,
+                source_ten: 0,
                 drcs_code: 0,
                 x: 334,
                 y: 401,
@@ -358,6 +620,7 @@ fn ass_export_groups_editable_ruby_text_and_keeps_inline_styles() {
                 utf8: "ん".into(),
             },
         ],
+        accessibility_ranges: Vec::new(),
         drcs_glyphs: Vec::new(),
         ruby_binding: None,
     };
@@ -392,6 +655,9 @@ fn ass_export_splits_discontinuous_b24_positions() {
         kind: 0,
         codepoint: text.chars().next().unwrap() as u32,
         pua_codepoint: 0,
+        source_graphic_set: 0,
+        source_ku: 0,
+        source_ten: 0,
         drcs_code: 0,
         x,
         y: 200,
@@ -429,6 +695,7 @@ fn ass_export_splits_discontinuous_b24_positions() {
             character("本", 140),
             character("語", 300),
         ],
+        accessibility_ranges: Vec::new(),
         drcs_glyphs: Vec::new(),
         ruby_binding: None,
     };
@@ -472,6 +739,9 @@ fn unpositioned_b24_group_orders_fragments_by_source_rows_and_writes_one_cue() {
                 kind: 0,
                 codepoint: character as u32,
                 pua_codepoint: 0,
+                source_graphic_set: 0,
+                source_ku: 0,
+                source_ten: 0,
                 drcs_code: 0,
                 x: x + index as i32 * 40,
                 y,
@@ -489,6 +759,7 @@ fn unpositioned_b24_group_orders_fragments_by_source_rows_and_writes_one_cue() {
                 utf8: character.to_string(),
             })
             .collect(),
+        accessibility_ranges: crate::caption_features::accessibility_ranges(text),
         drcs_glyphs: Vec::new(),
         ruby_binding: None,
     };
@@ -519,25 +790,29 @@ fn unpositioned_b24_group_orders_fragments_by_source_rows_and_writes_one_cue() {
 #[test]
 fn export_feature_filter_removes_the_same_character_ranges_as_the_event_inspector() {
     let filtered =
-        crate::caption_features::filtered_text("(寛太)説明⚟➡♬〜本文<語り>", false, false);
-    assert_eq!(filtered, "説明本文語り");
+        crate::caption_features::filtered_text("(寛太)橋本≫説明⚟➡♬〜本文<語り>", false, false);
+    assert_eq!(filtered, "説明本文<語り>");
 }
 
 #[test]
-fn b24_gaiji_filter_uses_the_arib_symbol_row_instead_of_every_pua_source() {
+fn b24_gaiji_filter_uses_the_original_arib_row_instead_of_pua() {
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
     let output = std::env::temp_dir().join(format!("resubwinny-b24-pua-{stamp}.ass"));
-    let mut ordinary = scene_intervals(&scene_with_text_regions(0, &[(100, 100, "常")]))
+    let mut ordinary = scene_intervals(&scene_with_text_regions(0, &[(100, 100, "➡")]))
         .pop()
         .expect("ordinary interval");
     ordinary.characters[0].pua_codepoint = 0xE000;
+    ordinary.characters[0].source_ku = 85;
+    ordinary.characters[0].source_ten = 1;
     let mut symbol = scene_intervals(&scene_with_text_regions(1_000, &[(100, 100, "X")]))
         .pop()
         .expect("symbol interval");
-    symbol.characters[0].pua_codepoint = 0xE28F;
+    symbol.characters[0].pua_codepoint = 0;
+    symbol.characters[0].source_ku = 90;
+    symbol.characters[0].source_ten = 1;
     let options = ConversionOptions {
         preserve_gaiji: false,
         ..ConversionOptions::default()
@@ -547,7 +822,7 @@ fn b24_gaiji_filter_uses_the_arib_symbol_row_instead_of_every_pua_source() {
     write_ass_interval(&mut writer, &symbol, &options).expect("symbol output");
     writer.flush().expect("flush");
     let ass = fs::read_to_string(&output).expect("read ASS");
-    assert!(ass.contains('常'));
+    assert!(ass.contains('➡'));
     assert!(!ass.contains('X'));
     fs::remove_file(output).expect("cleanup");
 }
@@ -558,6 +833,9 @@ fn b24_ruby_above_and_below_use_the_same_visual_gap() {
         kind: 0,
         codepoint: text.chars().next().unwrap() as u32,
         pua_codepoint: 0,
+        source_graphic_set: 0,
+        source_ku: 0,
+        source_ten: 0,
         drcs_code: 0,
         x,
         y,
@@ -696,6 +974,9 @@ fn b24_multi_character_ruby_centres_on_the_base_layout_axis_without_moving_it() 
         kind: 0,
         codepoint: text.chars().next().unwrap() as u32,
         pua_codepoint: 0,
+        source_graphic_set: 0,
+        source_ku: 0,
+        source_ten: 0,
         drcs_code: 0,
         x,
         y,
@@ -851,6 +1132,9 @@ fn b24_ruby_grid_does_not_claim_the_following_overlapping_cell() {
         kind: 0,
         codepoint: text.chars().next().unwrap() as u32,
         pua_codepoint: 0,
+        source_graphic_set: 0,
+        source_ku: 0,
+        source_ten: 0,
         drcs_code: 0,
         x,
         y,
@@ -944,6 +1228,9 @@ fn b24_ruby_target_recovery_handles_mixed_full_and_half_width_cells() {
         kind: 0,
         codepoint: text.chars().next().unwrap() as u32,
         pua_codepoint: 0,
+        source_graphic_set: 0,
+        source_ku: 0,
+        source_ten: 0,
         drcs_code: 0,
         x,
         y: 449,

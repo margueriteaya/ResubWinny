@@ -36,6 +36,9 @@ typedef struct acb_character {
     uint32_t type;
     uint32_t codepoint;
     uint32_t pua_codepoint;
+    uint32_t source_graphic_set;
+    uint32_t source_ku;
+    uint32_t source_ten;
     uint32_t drcs_code;
     int x;
     int y;

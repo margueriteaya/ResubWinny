@@ -38,6 +38,8 @@ pub(crate) fn inspect_input(path: &Path) -> io::Result<InputInspection> {
                                     .map(|name| format!(" · {name}"))
                                     .unwrap_or_default()
                             ),
+                            kind: None,
+                            track_id: None,
                         })
                         .collect(),
                 ),
@@ -59,6 +61,8 @@ pub(crate) fn inspect_input(path: &Path) -> io::Result<InputInspection> {
                                     detail: format!(
                                         "PID 0x{pid:04X} · {kind} component · candidate ARIB-TTML PES route"
                                     ),
+                                    kind: None,
+                                    track_id: None,
                                 }
                             })
                             .collect(),
@@ -96,6 +100,8 @@ pub(crate) fn inspect_input(path: &Path) -> io::Result<InputInspection> {
                                 detail: format!(
                                     "PID 0x{pid:04X} · {kind} component · candidate ARIB-TTML PES route"
                                 ),
+                                kind: None,
+                                track_id: None,
                             }
                         })
                         .collect();
@@ -193,6 +199,8 @@ pub(crate) fn inspect_input(path: &Path) -> io::Result<InputInspection> {
                     diagnostics.stpp_payload_bytes,
                     diagnostics.stpp_mfu_dropped,
                 ),
+                kind: None,
+                track_id: None,
             }];
             tracks.extend(diagnostics.mpt_assets.iter().map(|(packet_id, asset_type)| {
                 let descriptor_tags = diagnostics
@@ -219,6 +227,8 @@ pub(crate) fn inspect_input(path: &Path) -> io::Result<InputInspection> {
                             .filter(|(id, _)| id == packet_id)
                             .count(),
                     ),
+                    kind: Some(asset_type.clone()),
+                    track_id: Some(*packet_id),
                 }
             }));
             let route = if diagnostics.mmtp_packets == 0 {

@@ -7,18 +7,16 @@ use std::{
 };
 
 mod archive;
-#[path = "../../../shared/arib_symbols.rs"]
-mod arib_symbols;
 mod arib_text;
 mod caption;
-#[path = "../../../shared/caption_features.rs"]
-mod caption_features;
 mod cli;
 mod config;
 mod drcs;
+mod export_assessment;
 mod exporters;
 #[cfg(feature = "fuzzing")]
 pub mod fuzzing;
+mod input;
 mod inspection;
 mod jobs;
 mod models;
@@ -34,10 +32,15 @@ mod time;
 mod timeline;
 mod transport;
 
+// Shared broadcast caption semantics live in their own crate so each item is
+// compiled once; re-export them under the paths the modules already use.
+pub(crate) use caption_semantics::{arib_symbols, caption_features};
+
 pub(crate) use archive::*;
 pub(crate) use caption::*;
 pub(crate) use config::*;
 pub(crate) use drcs::*;
+pub(crate) use export_assessment::*;
 pub(crate) use exporters::*;
 pub(crate) use inspection::*;
 pub(crate) use jobs::*;
@@ -53,7 +56,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     match cli::run() {
         Ok(()) => Ok(()),
         Err(error) => {
-            protocol::emit_failed("worker.operation_failed", &error.to_string());
+            let conflict = error
+                .downcast_ref::<io::Error>()
+                .and_then(|error| error.get_ref())
+                .and_then(|error| error.downcast_ref::<ExportConflict>());
+            if let Some(conflict) = conflict {
+                protocol::emit_export_conflict(conflict);
+            } else {
+                protocol::emit_failed("worker.operation_failed", &error.to_string());
+            }
             Err(error)
         }
     }

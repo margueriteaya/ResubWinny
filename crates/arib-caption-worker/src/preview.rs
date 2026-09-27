@@ -138,6 +138,7 @@ pub(crate) fn preview_caption(path: &Path) -> io::Result<Option<CaptionPreview>>
             let mut preview = None;
             let result = scan_tlv_ttml(
                 path,
+                None,
                 |caption| {
                     preview = Some(ttml_preview(&caption));
                     Err(io::Error::new(io::ErrorKind::Interrupted, "preview ready"))
@@ -184,6 +185,7 @@ pub struct ConversionOptions {
     pub track_id: Option<u16>,
     pub drcs_mode: DrcsMode,
     pub drcs_replacements: HashMap<u32, String>,
+    pub ttml_drcs_replacements: HashMap<String, String>,
     pub overwrite: bool,
     pub webvtt: bool,
     pub srt: bool,

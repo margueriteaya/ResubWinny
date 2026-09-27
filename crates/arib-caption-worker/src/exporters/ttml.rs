@@ -75,7 +75,7 @@ pub(crate) fn ass_letter_spacing_from_ttml(value: &str) -> Option<i32> {
 }
 
 pub(crate) fn write_ttml_header(writer: &mut BufWriter<File>) -> io::Result<()> {
-    writer.write_all(b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<tt xmlns=\"http://www.w3.org/ns/ttml\" xmlns:tts=\"http://www.w3.org/ns/ttml#styling\" xmlns:arib=\"https://resubwinny.dev/ns/arib\" xml:lang=\"ja\">\n  <body>\n    <div>\n")
+    writer.write_all(b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<tt xmlns=\"http://www.w3.org/ns/ttml\" xmlns:tts=\"http://www.w3.org/ns/ttml#styling\" xmlns:ttm=\"http://www.w3.org/ns/ttml#metadata\" xmlns:arib=\"https://resubwinny.dev/ns/arib\" xml:lang=\"ja\">\n  <body>\n    <div>\n")
 }
 
 pub(crate) fn write_ttml_footer(writer: &mut BufWriter<File>) -> io::Result<()> {
@@ -84,6 +84,7 @@ pub(crate) fn write_ttml_footer(writer: &mut BufWriter<File>) -> io::Result<()> 
 
 pub(crate) fn interval_ttml_text(interval: &RegionInterval, options: &ConversionOptions) -> String {
     struct Cell {
+        source_index: usize,
         classifier_text: String,
         markup: Option<String>,
         source_gaiji: bool,
@@ -91,9 +92,11 @@ pub(crate) fn interval_ttml_text(interval: &RegionInterval, options: &Conversion
     let cells = interval
         .characters
         .iter()
-        .filter_map(|character| {
+        .enumerate()
+        .filter_map(|(source_index, character)| {
             if !character.utf8.is_empty() {
                 return Some(Cell {
+                    source_index,
                     classifier_text: character.utf8.clone(),
                     markup: None,
                     source_gaiji: b24_character_is_gaiji_source(character),
@@ -106,6 +109,7 @@ pub(crate) fn interval_ttml_text(interval: &RegionInterval, options: &Conversion
                 && let Some(replacement) = options.drcs_replacements.get(&character.drcs_code)
             {
                 return Some(Cell {
+                    source_index,
                     classifier_text: replacement.clone(),
                     markup: None,
                     source_gaiji: false,
@@ -120,11 +124,13 @@ pub(crate) fn interval_ttml_text(interval: &RegionInterval, options: &Conversion
                 .filter(|value| !value.is_empty());
             Some(match alternative {
                 Some(text) => Cell {
+                    source_index,
                     classifier_text: text.to_owned(),
                     markup: None,
                     source_gaiji: false,
                 },
                 None => Cell {
+                    source_index,
                     classifier_text: "\u{FFFC}".to_owned(),
                     markup: Some(format!(
                         "<span arib:drcs-code=\"0x{:X}\"{}>\u{FFFC}</span>",
@@ -142,11 +148,21 @@ pub(crate) fn interval_ttml_text(interval: &RegionInterval, options: &Conversion
         .iter()
         .map(|cell| cell.classifier_text.as_str())
         .collect::<String>();
-    let mut retained = crate::caption_features::retained_characters(
-        &combined,
-        options.preserve_gaiji,
-        options.preserve_accessibility,
-    );
+    let mut retained = crate::caption_features::retained_characters(&combined, true, true);
+    if !options.preserve_accessibility {
+        let mut source_cursor = 0_usize;
+        for cell in &cells {
+            let end = source_cursor.saturating_add(cell.classifier_text.chars().count());
+            if interval
+                .accessibility_ranges
+                .iter()
+                .any(|range| range.contains(&cell.source_index))
+            {
+                retained[source_cursor..end].fill(false);
+            }
+            source_cursor = end;
+        }
+    }
     if !options.preserve_gaiji {
         let mut source_cursor = 0_usize;
         for cell in &cells {
@@ -226,7 +242,14 @@ pub(crate) fn write_ttml_caption(
     caption: &TtmlCaption,
     options: &ConversionOptions,
 ) -> io::Result<()> {
-    let filtered_text = export_text(&caption.text, options);
+    let filtered_text = export_ttml_text(
+        &caption.text,
+        &caption.style,
+        caption.source.as_ref(),
+        &caption.resolved_accessibility_ranges,
+        caption.broadcast_semantics_resolved,
+        options,
+    );
     if filtered_text.is_empty() {
         return Ok(());
     }
@@ -272,9 +295,31 @@ pub(crate) fn write_ttml_caption(
             xml_escape(writing_mode)
         ));
     }
+    let body = caption
+        .rich_body
+        .as_deref()
+        .and_then(|body| filter_ttml_caption_preserved_body(body, caption, options))
+        .unwrap_or_else(|| xml_escape(&filtered_text));
+    let body = strip_ttml_font_resource_attributes(&body);
+    if ttml_plain_text(&body).is_empty() {
+        return Ok(());
+    }
+    let accessibility_role = if options.preserve_accessibility
+        && !body.contains("ttm:role")
+        && !body.contains(":role")
+    {
+        caption
+            .accessibility_cues
+            .iter()
+            .find(|cue| cue.start == 0 && cue.end >= caption.text.chars().count())
+            .map(|cue| format!(" ttm:role=\"{}\"", xml_escape(&cue.roles.join(" "))))
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
     writeln!(
         writer,
-        "      <p begin=\"{}\" end=\"{}\"{}{}>{}</p>",
+        "      <p begin=\"{}\" end=\"{}\"{}{}{}>{}</p>",
         ttml_clock(caption.start_ms),
         ttml_clock(caption.end_ms),
         if options.preserve_position {
@@ -283,14 +328,7 @@ pub(crate) fn write_ttml_caption(
             Default::default()
         },
         style,
-        if options.preserve_ruby && options.preserve_gaiji && options.preserve_accessibility {
-            caption
-                .rich_body
-                .as_deref()
-                .map(|body| filter_ttml_inline_body(body, options.preserve_color))
-        } else {
-            None
-        }
-        .unwrap_or_else(|| xml_escape(&filtered_text)),
+        accessibility_role,
+        body,
     )
 }

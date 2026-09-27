@@ -1,0 +1,537 @@
+import { BatchTaskSession } from '../studio-tauri/src/features/batch/task-session.ts'
+import { OnboardingSession } from '../studio-tauri/src/features/onboarding/session.ts'
+import { ExportWorkflow } from '../studio-tauri/src/features/tasks/export-workflow.ts'
+import { PreviewNavigationSession } from '../studio-tauri/src/features/tasks/preview-navigation-session.ts'
+import { clampPreviewVolume, toggledPreviewVolume, VolumeCommandQueue } from '../studio-tauri/src/features/tasks/player-volume.ts'
+import { playerShortcut } from '../studio-tauri/src/shell/player-shortcuts.ts'
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { emptyTaskEventState, featureCountSummary, invalidateRuntimeFeatureConflict, reduceTaskEvent } from '../studio-tauri/src/features/tasks/event-state.ts'
+import { assessExports } from '../studio-tauri/src/features/tasks/export-assessment.ts'
+import { hasCaptionTrack, hasSelectedCaptionTrack, selectedCaptionTrack } from '../studio-tauri/src/features/tasks/export-eligibility.ts'
+import { SettingsPersistenceQueue } from '../studio-tauri/src/features/settings/persistence-queue.ts'
+import { featureDetailKeys } from '../studio-tauri/src/features/tasks/feature-details.ts'
+import { togglePreferredFormat } from '../studio-tauri/src/features/home/export-preferences.ts'
+import { capabilitySummary } from '../studio-tauri/src/features/tasks/format-capabilities.ts'
+
+const preservation = { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true }
+
+test('preview mute restores the last audible level and clamps invalid input', () => {
+  assert.equal(clampPreviewVolume(145), 100)
+  assert.equal(clampPreviewVolume(-5), 0)
+  assert.equal(clampPreviewVolume(Number.NaN), 100)
+  assert.equal(toggledPreviewVolume(47, 47), 0)
+  assert.equal(toggledPreviewVolume(0, 47), 47)
+  assert.equal(toggledPreviewVolume(0, 0), 1)
+})
+
+test('preview volume sends only the latest target while a native command is pending', async () => {
+  const sent = []
+  const scheduled = []
+  let finishFirst
+  const first = new Promise((resolve) => { finishFirst = resolve })
+  const queue = new VolumeCommandQueue({
+    send: async (value) => { sent.push(value); if (sent.length === 1) await first },
+    onError: (reason) => { throw reason },
+    schedule: (callback) => { scheduled.push(callback); return scheduled.length },
+    cancel: () => {},
+  })
+  queue.enqueue(20)
+  queue.enqueue(80)
+  assert.equal(scheduled.length, 1)
+  scheduled.shift()()
+  assert.deepEqual(sent, [80])
+  queue.enqueue(30)
+  queue.enqueue(47)
+  finishFirst()
+  await new Promise(setImmediate)
+  assert.deepEqual(sent, [80, 47])
+  queue.dispose()
+})
+
+test('player shortcuts keep five-second seeks and use Shift for frame steps', () => {
+  const key = (code, shiftKey = false, repeat = false) => ({ code, shiftKey, repeat, altKey: false, ctrlKey: false, metaKey: false })
+  assert.equal(playerShortcut(key('Space')), 'toggle-pause')
+  assert.equal(playerShortcut(key('Space', false, true)), null)
+  assert.equal(playerShortcut(key('ArrowLeft')), 'seek-back')
+  assert.equal(playerShortcut(key('ArrowRight')), 'seek-forward')
+  assert.equal(playerShortcut(key('ArrowLeft', true)), 'frame-back')
+  assert.equal(playerShortcut(key('ArrowRight', true)), 'frame-forward')
+  assert.equal(playerShortcut({ ...key('ArrowRight'), metaKey: true }), null)
+})
+
+test('home preferences keep the last explicitly selected format', () => {
+  assert.deepEqual(togglePreferredFormat(['TTML'], 'TTML'), ['TTML'])
+  assert.deepEqual(togglePreferredFormat(['TTML', 'SRT'], 'TTML'), ['SRT'])
+  assert.deepEqual(togglePreferredFormat(['TTML'], 'ASS'), ['TTML', 'ASS'])
+})
+
+test('format capability summaries use presentation-provided labels', () => {
+  const labels = { position: 'Screen position', color: 'Colour', ruby: 'Ruby annotation', drcs: 'DRCS glyphs', gaiji: 'ARIB gaiji', accessibility: 'Accessibility cues' }
+  assert.match(capabilitySummary('ASS', (feature) => labels[feature]), /Screen position/)
+  assert.match(capabilitySummary('ASS', (feature) => `日本語:${feature}`), /日本語:position/)
+})
+
+test('a usable DRCS mapping invalidates stale DRCS conflicts only', () => {
+  const conflicts = {
+    'source::track-a': {
+      drcs: { formats: ['SRT'], issueCode: 'unresolved_drcs_text_target', availableActions: ['open_drcs_mapping'] },
+      ruby: { formats: ['SRT'], issueCode: 'format_cannot_preserve_feature', availableActions: [] },
+    },
+    'source::track-b': {
+      drcs: { formats: ['WebVTT'], issueCode: 'unresolved_drcs_text_target', availableActions: ['open_drcs_mapping'] },
+    },
+  }
+  const updated = invalidateRuntimeFeatureConflict(conflicts, 'drcs')
+  assert.deepEqual(updated, {
+    'source::track-a': { ruby: conflicts['source::track-a'].ruby },
+    'source::track-b': {},
+  })
+  assert.equal(conflicts['source::track-a'].drcs.issueCode, 'unresolved_drcs_text_target')
+  const knowledge = { drcs: { state: 'present', observedCount: 2, complete: true } }
+  const before = assessExports(['SRT'], preservation, knowledge, conflicts['source::track-a'])
+  assert.equal(before.hasConflict, true)
+  const after = assessExports(['SRT'], preservation, knowledge, updated['source::track-a'])
+  assert.equal(after.hasConflict, false)
+  assert.equal(after.formats.SRT.approximated.length, 0)
+  assert.ok(after.formats.SRT.conditional.some((item) => item.feature === 'drcs'))
+  assert.deepEqual(knowledge.drcs, { state: 'present', observedCount: 2, complete: true })
+})
+
+test('source detail variants use a stable allowlist and order', () => {
+  const fact = {
+    state: 'present',
+    complete: false,
+    details: { explicitGeometry: true, verticalWriting: true, pid: 256, unsupportedFutureValue: true },
+  }
+  assert.deepEqual(featureDetailKeys('position', fact), ['explicitGeometry', 'verticalWriting'])
+  assert.deepEqual(featureDetailKeys('accessibility', {
+    state: 'present',
+    complete: false,
+    details: { textCue: true, narrationDelimiter: true, leadingAnnotation: true, musicCue: true, pid: 256 },
+  }), ['leadingAnnotation', 'musicCue', 'narrationDelimiter'])
+})
+
+test('export eligibility requires an explicitly selected caption track', () => {
+  const track = {
+    label: 'Japanese captions',
+    detail: 'service 1',
+    pid: '0x120',
+    logicalTrack: 'service=1:component=48:lang=jpn',
+  }
+  assert.equal(hasSelectedCaptionTrack([], new Set()), false)
+  assert.equal(hasCaptionTrack([]), false)
+  assert.equal(hasCaptionTrack([track]), true)
+  assert.equal(hasSelectedCaptionTrack([track], new Set()), false)
+  assert.equal(hasSelectedCaptionTrack([track], new Set([track.logicalTrack])), true)
+  assert.equal(selectedCaptionTrack([track], new Set([track.logicalTrack])), track)
+})
+
+test('settings persistence serializes rapid changes and commits the latest complete preferences', async () => {
+  let releaseFirst
+  const firstWrite = new Promise((resolve) => { releaseFirst = resolve })
+  const writes = []
+  const queue = new SettingsPersistenceQueue(
+    async (settings) => {
+      writes.push(structuredClone(settings))
+      if (writes.length === 1) await firstWrite
+      return structuredClone(settings)
+    },
+    assert.fail,
+  )
+  const base = {
+    uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', userMode: 'normie',
+    exportPreferences: { formats: ['ASS', 'SRT'], preservation: { ...preservation } },
+    locale: 'system', theme: 'system',
+    workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false },
+    onboardingVersion: 3,
+  }
+  const first = { ...base, userMode: 'nerd' }
+  const latest = {
+    ...first,
+    defaultFormat: 'TTML',
+    exportPreferences: {
+      formats: ['TTML', 'ASS', 'SRT'],
+      preservation: { ...preservation, ruby: false, drcs: false },
+    },
+  }
+
+  const firstResult = queue.persist(first)
+  const latestResult = queue.persist(latest)
+  assert.equal(writes.length, 1)
+  releaseFirst()
+  assert.deepEqual(await firstResult, latest)
+  assert.deepEqual(await latestResult, latest)
+  assert.deepEqual(writes, [first, latest])
+})
+
+test('assessment entries preserve the source-state and user-intent truth table for all formats', () => {
+  const expected = {
+    ASS: ['preserved', 'preserved', 'approximated', 'conditional', 'preserved', 'approximated'],
+    TTML: ['preserved', 'preserved', 'preserved', 'conditional', 'approximated', 'preserved'],
+    SRT: ['unsupported', 'unsupported', 'unsupported', 'conditional', 'approximated', 'approximated'],
+    WebVTT: ['unsupported', 'unsupported', 'unsupported', 'conditional', 'approximated', 'approximated'],
+    JSON: Array(6).fill('preserved'),
+    'Raw Data': Array(6).fill('preserved'),
+  }
+  for (const [format, levels] of Object.entries(expected)) {
+    for (const [index, feature] of Object.keys(preservation).entries()) {
+      for (const state of ['unknown', 'present', 'absent']) {
+        for (const enabled of [true, false]) {
+          const knowledge = Object.fromEntries(Object.keys(preservation).map((name) => [name, { state: name === feature ? state : 'absent', complete: state === 'absent' }]))
+          const result = assessExports([format], { ...preservation, [feature]: enabled }, knowledge)
+          const groups = result.formats[format]
+          const entries = Object.values(groups).flat()
+          const level = levels[index]
+          let bucket
+          if (state === 'present') bucket = !enabled ? 'dropped' : level === 'unsupported' ? 'conflicts' : level
+          if (state === 'unknown' && enabled && ['unsupported', 'conditional'].includes(level)) bucket = 'conditional'
+          if (state === 'unknown' && !enabled) bucket = 'conditional'
+          assert.equal(entries.length, bucket ? 1 : 0, `${format}/${feature}/${state}/${enabled}`)
+          assert.equal(result.hasConflict, bucket === 'conflicts')
+          if (!bucket) continue
+          const item = groups[bucket][0]
+          assert.equal(item.feature, feature)
+          assert.deepEqual(item.parameters, { format, feature })
+          assert.equal(typeof item.code, 'string')
+          assert.ok(Array.isArray(item.actions))
+          if (bucket === 'dropped') assert.equal(item.severity, undefined)
+          if (state === 'unknown' && !enabled) {
+            assert.equal(item.code, 'feature_will_be_dropped_if_present')
+            assert.equal(item.severity, undefined)
+          }
+        }
+      }
+    }
+  }
+})
+
+test('one source feature yields independent results for simultaneous target formats', () => {
+  const result = assessExports(['ASS', 'SRT', 'TTML'], preservation, { ruby: { state: 'present', complete: false } })
+  assert.equal(result.formats.ASS.approximated[0].code, 'format_approximates_feature')
+  assert.equal(result.formats.SRT.conflicts[0].code, 'format_cannot_preserve_feature')
+  assert.equal(result.formats.TTML.preserved[0].code, 'format_preserves_feature')
+  assert.equal(result.hasConflict, true)
+})
+
+test('unsupported feature conflicts offer explicit remedies without changing selections', () => {
+  for (const feature of ['position', 'color', 'ruby']) {
+    const formats = new Set(['ASS', 'SRT'])
+    const preferences = { ...preservation }
+    const knowledge = { [feature]: { state: 'present', complete: false } }
+    const result = assessExports(formats, preferences, knowledge)
+    const conflict = result.formats.SRT.conflicts.find((item) => item.feature === feature)
+    assert.deepEqual(conflict.parameters, { format: 'SRT', feature })
+    assert.deepEqual(conflict.actions, [`disable_preservation:${feature}`, 'remove_format', 'choose_compatible_format'])
+    assert.equal(result.hasConflict, true)
+    assert.deepEqual([...formats], ['ASS', 'SRT'])
+    assert.deepEqual(preferences, preservation)
+    assert.equal(assessExports(['ASS'], preferences, knowledge).hasConflict, false)
+    assert.equal(assessExports(formats, { ...preferences, [feature]: false }, knowledge).hasConflict, false)
+  }
+})
+
+const event = (kind, logicalTrack, feature, parameters = {}) => ({
+  kind,
+  message: kind,
+  parameters: { logicalTrack, feature, ...parameters },
+})
+
+const reduce = (state, taskEvent, source = 'recording.ts') =>
+  reduceTaskEvent(state, taskEvent, 1_000, taskEvent.message, false, source).state
+
+test('feature knowledge is isolated by source and logical track', () => {
+  let state = emptyTaskEventState()
+  state = reduce(state, event('feature_observed', 'service=1:component=48:lang=jpn', 'ruby', { observedCount: 1 }))
+  state = reduce(state, event('feature_summary', 'service=1:component=49:lang=eng', 'ruby', { state: 'absent', complete: true }))
+  state = reduce(state, event('feature_observed', 'service=1:component=48:lang=jpn', 'color', { observedCount: 2 }), 'other.ts')
+
+  assert.equal(state.featureKnowledge['recording.ts::service=1:component=48:lang=jpn'].ruby.state, 'present')
+  assert.equal(state.featureKnowledge['recording.ts::service=1:component=49:lang=eng'].ruby.state, 'absent')
+  assert.equal(state.featureKnowledge['other.ts::service=1:component=48:lang=jpn'].color.state, 'present')
+})
+
+test('PID evidence changes do not split one logical track', () => {
+  let state = emptyTaskEventState()
+  const track = 'service=1:component=48:lang=jpn'
+  state = reduce(state, event('feature_observed', track, 'ruby', { observedCount: 1, details: { pid: 256 } }))
+  state = reduce(state, event('feature_observed', track, 'ruby', { observedCount: 2, details: { pid: 512 } }))
+  assert.deepEqual(Object.keys(state.featureKnowledge), [`recording.ts::${track}`])
+  assert.equal(state.featureKnowledge[`recording.ts::${track}`].ruby.observedCount, 2)
+  assert.deepEqual(state.featureKnowledge[`recording.ts::${track}`].ruby.details, { pid: 512 })
+})
+
+test('feature details merge monotonically from observation through EOF', () => {
+  const track = 'logical-track'
+  let state = reduce(emptyTaskEventState(), event('feature_observed', track, 'position', {
+    observedCount: 1,
+    details: { explicitGeometry: true },
+  }))
+  state = reduce(state, event('feature_summary', track, 'position', {
+    state: 'present',
+    observedCount: 2,
+    complete: true,
+    details: { verticalWriting: true },
+  }))
+  assert.deepEqual(state.featureKnowledge['recording.ts::logical-track'].position, {
+    state: 'present',
+    observedCount: 2,
+    complete: true,
+    details: { explicitGeometry: true, verticalWriting: true },
+  })
+})
+
+test('feature state is monotonic and absent requires a complete summary', () => {
+  let state = emptyTaskEventState()
+  const track = 'logical-track'
+  state = reduce(state, event('feature_summary', track, 'ruby', { state: 'absent', complete: false }))
+  assert.equal(state.featureKnowledge['recording.ts::logical-track'], undefined)
+  state = reduce(state, event('feature_observed', track, 'ruby', { observedCount: 3 }))
+  state = reduce(state, event('feature_summary', track, 'ruby', { state: 'absent', complete: true }))
+  assert.equal(state.featureKnowledge['recording.ts::logical-track'].ruby.state, 'present')
+})
+
+test('count summaries distinguish observations from final totals', () => {
+  assert.deepEqual(featureCountSummary({ state: 'present', observedCount: 3, complete: false }), { count: 3, final: false })
+  assert.deepEqual(featureCountSummary({ state: 'present', observedCount: 7, complete: true }), { count: 7, final: true })
+  assert.equal(featureCountSummary({ state: 'unknown', observedCount: 3, complete: false }), null)
+})
+
+test('runtime export conflicts do not contaminate source feature details', () => {
+  const state = reduce(emptyTaskEventState(), {
+    kind: 'failed',
+    code: 'export_conflict',
+    message: 'fallback text must not drive semantics',
+    parameters: {
+      logicalTrack: 'logical-track',
+      feature: 'drcs',
+      formats: ['SRT'],
+      issueCode: 'unresolved_drcs_text_target',
+      availableActions: ['open_drcs_mapping'],
+    },
+  })
+  const key = 'recording.ts::logical-track'
+  assert.deepEqual(state.featureKnowledge[key].drcs.details, {})
+  assert.deepEqual(state.exportConflicts[key].drcs, {
+    formats: ['SRT'],
+    issueCode: 'unresolved_drcs_text_target',
+    availableActions: ['open_drcs_mapping'],
+  })
+})
+
+test('runtime export conflicts preserve an already complete feature summary', () => {
+  const track = 'logical-track'
+  let state = reduce(emptyTaskEventState(), event('feature_observed', track, 'drcs', { observedCount: 2 }))
+  state = reduce(state, event('feature_summary', track, 'drcs', { state: 'present', observedCount: 5, complete: true }))
+  state = reduce(state, {
+    kind: 'failed',
+    code: 'export_conflict',
+    message: 'fallback text',
+    parameters: { logicalTrack: track, feature: 'drcs', formats: ['SRT'], issueCode: 'unresolved_drcs_text_target' },
+  })
+  assert.deepEqual(state.featureKnowledge['recording.ts::logical-track'].drcs, {
+    state: 'present',
+    observedCount: 5,
+    complete: true,
+    details: {},
+  })
+})
+
+test('DRCS stays conditional until target-specific resolution is known', () => {
+  const knowledge = { drcs: { state: 'present', observedCount: 1, complete: false } }
+  const allowed = assessExports(['ASS', 'SRT'], preservation, knowledge)
+  for (const format of ['ASS', 'SRT']) {
+    assert.equal(allowed.formats[format].approximated.length, 0)
+    assert.ok(allowed.formats[format].conditional.some((item) => item.feature === 'drcs'))
+  }
+  assert.equal(allowed.hasConflict, false)
+
+  const conflict = assessExports(['ASS', 'SRT'], preservation, knowledge, {
+    drcs: {
+      formats: ['SRT'],
+      issueCode: 'unresolved_drcs_text_target',
+      availableActions: ['open_drcs_mapping'],
+    },
+  })
+  assert.equal(conflict.formats.ASS.approximated.length, 0)
+  assert.ok(conflict.formats.ASS.conditional.some((item) => item.feature === 'drcs'))
+  assert.equal(conflict.formats.SRT.conflicts[0].code, 'unresolved_drcs_text_target')
+  assert.equal(conflict.hasConflict, true)
+  const complete = assessExports(['SRT'], preservation, { drcs: { ...knowledge.drcs, complete: true } })
+  assert.ok(complete.formats.SRT.conditional.some((item) => item.feature === 'drcs'))
+  assert.equal(complete.formats.SRT.approximated.length, 0)
+  const dropped = assessExports(['SRT'], { ...preservation, drcs: false }, knowledge)
+  assert.deepEqual(dropped.formats.SRT.dropped.map((item) => item.feature), ['drcs'])
+  assert.equal(dropped.hasConflict, false)
+})
+
+function previewNavigationFixture() {
+  let release
+  const stopped = new Promise((resolve) => { release = resolve })
+  const state = { current: true, tab: 'events', starts: 0, seeks: 0, cleared: 0 }
+  const preview = {
+    beginPageTransition: () => 1,
+    isCurrentPageTransition: () => state.current,
+    whenStopped: () => stopped,
+    resumeTime: () => 1200,
+    clearResumeTime: () => state.cleared++,
+    seekMedia: async () => { state.seeks++ },
+    seekProject: async () => { state.seeks++ },
+    currentIntent: () => 1,
+    isCurrentIntent: () => state.current,
+  }
+  const bindings = {
+    desktopRuntime: () => true,
+    tab: () => state.tab,
+    setTab: (tab) => { state.tab = tab },
+    tasksVisible: () => state.current,
+    hasSource: () => true,
+    running: () => true,
+    layoutReady: async () => {},
+    start: async () => { state.starts++ },
+    stop: async () => {},
+    onError: (reason) => { throw reason },
+  }
+  return { state, release, bindings, session: new PreviewNavigationSession(preview, bindings) }
+}
+
+test('preview navigation does not restart a host abandoned while its previous player stops', async () => {
+  const f = previewNavigationFixture()
+  const pending = f.session.seek(5000)
+  await Promise.resolve()
+  f.state.current = false
+  f.release()
+  await pending
+  assert.equal(f.state.starts, 0)
+  assert.equal(f.state.seeks, 0)
+})
+
+test('preview activation restores the saved media position after host layout', async () => {
+  const f = previewNavigationFixture()
+  f.state.tab = 'preview'
+  f.release()
+  await f.session.activate(() => f.state.current)
+  assert.equal(f.state.starts, 1)
+  assert.equal(f.state.seeks, 1)
+  assert.equal(f.state.cleared, 1)
+})
+
+test('preview activation leaves resume state intact if navigation changes during startup', async () => {
+  const f = previewNavigationFixture()
+  f.state.tab = 'preview'
+  f.bindings.start = async () => { f.state.current = false }
+  f.release()
+  await f.session.activate(() => f.state.current)
+  assert.equal(f.state.seeks, 0)
+  assert.equal(f.state.cleared, 0)
+})
+
+function exportWorkflowFixture() {
+  const state = { source: { path: 'a.ts' }, generation: 0, pending: false, indexing: true, starts: 0, notices: 0, errors: [] }
+  let release
+  const stopped = new Promise((resolve) => { release = resolve })
+  const session = {
+    cancel: (operation) => operation(),
+    runExport: (operation) => operation(() => {}),
+    runPreviewIndex: async () => {},
+  }
+  const bindings = {
+    desktopRuntime: () => true, inspection: () => state.source,
+    sourceGeneration: () => state.generation,
+    exporting: () => false, pending: () => state.pending, indexing: () => state.indexing,
+    outputDirectory: () => 'output', plan: () => ({ formats: ['ASS'] }),
+    setPending: (value) => { state.pending = value },
+    setIndexing: (value) => { state.indexing = value },
+    error: (code) => state.errors.push(code), clearError: () => {},
+    started: () => { state.notices++ }, fail: (error) => state.errors.push(error),
+    cancelIndex: () => stopped,
+    start: async () => { state.starts++; return 'job' },
+    index: async () => ({ archivePath: 'archive' }),
+  }
+  return { state, release, bindings, workflow: new ExportWorkflow(session, bindings) }
+}
+
+test('export workflow drops an old source request after index cancellation', async () => {
+  const f = exportWorkflowFixture()
+  const pending = f.workflow.start()
+  f.state.source = { path: 'b.ts' }
+  f.release()
+  await pending
+  assert.equal(f.state.starts, 0)
+  assert.equal(f.state.notices, 0)
+  assert.equal(f.state.pending, false)
+})
+
+test('export workflow prevents duplicate exports while stopping the index', async () => {
+  const f = exportWorkflowFixture()
+  const pending = f.workflow.start()
+  await f.workflow.start()
+  assert.equal(f.state.starts, 0)
+  f.release()
+  await pending
+  assert.equal(f.state.starts, 1)
+  assert.equal(f.state.notices, 1)
+})
+
+test('invalid export selection emits no started notice', async () => {
+  const f = exportWorkflowFixture()
+  f.bindings.plan = () => null
+  await f.workflow.start()
+  assert.deepEqual(f.state.errors, ['tracks.selectionRequired'])
+  assert.equal(f.state.notices, 0)
+  assert.equal(f.state.starts, 0)
+})
+
+test('reopening the same source invalidates an export waiting for cancellation', async () => {
+  const f = exportWorkflowFixture()
+  const pending = f.workflow.start()
+  f.state.generation++
+  f.release()
+  await pending
+  assert.equal(f.state.starts, 0)
+  assert.equal(f.state.pending, false)
+})
+
+test('batch task artifact lookup cannot overwrite a newly selected task', async () => {
+  let generation = 0
+  let release
+  const archive = new Promise((resolve) => { release = resolve })
+  const writes = []
+  const session = new BatchTaskSession({ begin: () => ++generation, isCurrent: (value) => value === generation }, {
+    stopPreview: async () => {}, apply: () => {}, archive: () => archive,
+    setArchive: (path) => writes.push(path), layoutReady: async () => {},
+    startPreview: async () => writes.push('preview'), needsIndex: () => true,
+    startIndex: async () => writes.push('index'),
+  })
+  const pending = session.open({ jobId: 'old', inspection: { path: 'old.ts' } })
+  await Promise.resolve()
+  generation++
+  release('old.archive.jsonl')
+  await pending
+  assert.deepEqual(writes, [])
+})
+
+test('failed onboarding save leaves completion uncommitted and allows retry', async () => {
+  const session = new OnboardingSession(true)
+  let saved = null
+  let complete = 0
+  const busy = []
+  const errors = []
+  const bindings = {
+    required: () => true, settings: () => ({ onboardingVersion: 0 }),
+    persist: async () => { throw new Error('disk full') },
+    setSettings: (next) => { saved = next }, setSaving: (value) => busy.push(value),
+    clearError: () => {}, fail: (error) => errors.push(error.message), close: () => {},
+    completed: () => complete++,
+  }
+  await session.finish('normie', bindings)
+  assert.equal(saved, null)
+  assert.equal(complete, 0)
+  assert.deepEqual(busy, [true, false])
+  assert.deepEqual(errors, ['disk full'])
+  bindings.persist = async (next) => next
+  await session.finish('normie', bindings)
+  assert.equal(saved.onboardingVersion, 3)
+  assert.equal(saved.userMode, 'normie')
+  assert.equal(complete, 1)
+})

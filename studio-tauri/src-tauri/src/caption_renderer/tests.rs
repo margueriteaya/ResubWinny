@@ -66,7 +66,10 @@ fn source_layout_is_transformed_to_the_intermediate_plane() {
         "style": { "font_size": "72px", "color": "#FFFFFFFF" }
     })])
     .expect("logical frame");
-    assert_eq!(visible_alpha_bounds(&source), visible_alpha_bounds(&logical));
+    assert_eq!(
+        visible_alpha_bounds(&source),
+        visible_alpha_bounds(&logical)
+    );
 }
 
 const ONBOARDING_ASSET_NAMES: [&str; 5] = [

@@ -6,7 +6,7 @@ import { previewApi } from './backend/preview'
 import { settingsApi } from './backend/settings'
 import { timelineApi } from './backend/timeline'
 
-export type Track = { label: string; detail: string; pid?: string; kind?: string; ordinal?: number; serviceId?: number; language?: string; serviceName?: string }
+export type Track = { label: string; detail: string; pid?: string; kind?: string; ordinal?: number; serviceId?: number; language?: string; serviceName?: string; logicalTrack: string }
 export type BroadcastMetadata = { networkName?: string | null; programmeName?: string | null; programmeDescription?: string | null; broadcastTimeUtc?: string | null }
 export type PreviewPlaybackState = { timeSeconds: number | null; durationSeconds: number | null; paused: boolean | null }
 export type Inspection = { path: string; name: string; size: number; container: string; packetSize?: number; routeCode?: string; route?: string; service: string; tracks: Track[]; broadcast: BroadcastMetadata }
@@ -15,7 +15,8 @@ export type DrcsMapping = { id: string; text: string; action: 'image' | 'charact
 export type ExportFormat = 'ASS' | 'TTML' | 'SRT' | 'WebVTT' | 'JSON' | 'Raw Data'
 export type ExportPreservation = { position: boolean; color: boolean; ruby: boolean; drcs: boolean; gaiji: boolean; accessibility: boolean }
 export type WorkspaceLayoutSettings = { sourceWidth: number; outputWidth: number; sourceCollapsed: boolean; outputCollapsed: boolean }
-export type AppSettings = { uiFont: 'system' | 'cjk' | 'arib'; captionFont: 'arib' | 'system'; defaultFormat: 'ASS' | 'TTML' | 'JSON' | 'Raw Data'; locale: string; theme: 'system' | 'light' | 'dark'; workspaceLayout: WorkspaceLayoutSettings; onboardingVersion: number }
+export type UserMode = 'normie' | 'nerd'
+export type AppSettings = { uiFont: 'system' | 'cjk' | 'arib'; captionFont: 'arib' | 'system'; defaultFormat: ExportFormat; userMode: UserMode; exportPreferences: { formats: ExportFormat[]; preservation: ExportPreservation }; locale: string; theme: 'system' | 'light' | 'dark'; workspaceLayout: WorkspaceLayoutSettings; onboardingVersion: number }
 export type LanguagePack = { locale: string; name: string; messages: Record<string, string> }
 export type AboutInfo = { productName: string; description: string; version: string; channel: string; platform: string; architecture: string; releaseTier: string; buildTag: string | null; buildCommit: string | null; signingDeclaration: 'development' | 'unsigned-alpha' | 'declared-signed' }
 export type LegalDocumentId = 'project-license' | 'unsigned-alpha-notice' | 'third-party-notices' | 'dependency-licenses' | 'libaribcaption-license' | 'libmpv-license' | 'libmpv-copyright' | 'arib-font-license'
@@ -23,14 +24,16 @@ export type LegalDocumentSummary = { id: LegalDocumentId; title: string; categor
 export type LegalDocumentContent = { id: LegalDocumentId; title: string; content: string }
 export type TaskHistoryRecord = { name: string; path: string; size: number; container: string; status: string; time: string; warnings: number; captions: number; jobId?: string }
 export type PreviewCommand = 'toggle-pause' | 'seek-back' | 'seek-forward' | 'frame-back' | 'frame-forward'
-export type PreviewRect = { x: number; y: number; width: number; height: number }
+export type PreviewSurfaceSize = { width: number; height: number }
 export type PreviewSurfaceCapability = { id: string; available: boolean; experimental: boolean; unavailableReasonCode: string | null }
 export type PreviewCapabilities = { videoBackend: string; captionOverlayModes: PreviewSurfaceCapability[]; selectedCaptionOverlay: string; captionPlaneModes: string[]; availableCaptionPlaneModes: string[] }
 export type PreviewRuntime = { backend: string; platform: string; libraryPath: string | null; available: boolean; renderApiAvailable: boolean; detail: string }
 export type PreviewRenderDiagnostics = {
   route: string
   active: boolean
+  framesRendered: number
   framesPresented: number
+  framesDropped: number
   presentsPerSecond: number
   captionTextureUploads: number
   captionTextureClears: number
@@ -38,11 +41,10 @@ export type PreviewRenderDiagnostics = {
   surfaceWidth: number | null
   surfaceHeight: number | null
   decoderMode: string | null
-  fallbackReason: string | null
   lastError: string | null
 }
 export type JobState = 'Created' | 'Inspecting' | 'Ready' | 'Queued' | 'Starting' | 'Running' | 'Pausing' | 'Paused' | 'Resuming' | 'Cancelling' | 'Cancelled' | 'Completed' | 'Failed' | 'Interrupted'
-export type JobRecord = { jobId: string; source: string; output: string; archive: boolean; raw: boolean; trackId?: number; drcsReport: boolean; drcsMappings: DrcsMapping[]; exportSelection: { formats: ExportFormat[]; preservation: ExportPreservation }; state: JobState; createdAt: number; updatedAt: number }
+export type JobRecord = { jobId: string; source: string; output: string; archive: boolean; raw: boolean; trackId?: number; logicalTrack?: string; drcsReport: boolean; drcsMappings: DrcsMapping[]; exportSelection: { formats: ExportFormat[]; preservation: ExportPreservation }; state: JobState; createdAt: number; updatedAt: number }
 export type DiagnosticRecord = { timestamp: number; severity: string; code: string; parameters: Record<string, unknown>; message: string }
 export type ArtifactRecord = { kind: string; path: string; temporaryPath: string; status: string; existedBeforeStart: boolean }
 export type CheckpointRecord = { jobId: string; source: string; output: string; bytesRead: number; captions: number; warnings: number; strategy: string; updatedAt: number }

@@ -24,6 +24,26 @@ use std::{
 };
 use tauri::{AppHandle, Manager, State};
 
+fn worker_failure_details(
+    event: &serde_json::Value,
+) -> (String, String, BTreeMap<String, serde_json::Value>) {
+    let message = event
+        .get("message")
+        .and_then(|value| value.as_str())
+        .unwrap_or("Worker operation failed.")
+        .to_owned();
+    let code = event
+        .get("code")
+        .and_then(|value| value.as_str())
+        .unwrap_or("worker.operation_failed")
+        .to_owned();
+    let parameters = event
+        .get("parameters")
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+        .unwrap_or_default();
+    (message, code, parameters)
+}
+
 #[allow(
     clippy::too_many_arguments,
     reason = "compatibility entry point mirrors the versioned export IPC contract"
@@ -38,6 +58,7 @@ pub fn start_export_impl(
     drcs_report: bool,
     drcs_mappings: Option<Vec<DrcsMappingInput>>,
     track_id: Option<u16>,
+    logical_track: Option<String>,
     job_id: Option<String>,
     export_selection: Option<ExportSelection>,
 ) -> Result<(), String> {
@@ -70,6 +91,9 @@ pub fn start_export_impl(
         .stderr(Stdio::piped());
     if let Some(track_id) = track_id {
         command.arg("--track-id").arg(format!("0x{track_id:04X}"));
+    }
+    if let Some(logical_track) = logical_track.as_deref() {
+        command.env("RESUBWINNY_LOGICAL_TRACK", logical_track);
     }
     if let Some(job_id) = job_id.as_deref().filter(|value| !value.is_empty()) {
         command.env("RESUBWINNY_JOB_ID", job_id);
@@ -128,10 +152,8 @@ pub fn start_export_impl(
         let replacements: serde_json::Map<String, serde_json::Value> = mappings
             .into_iter()
             .filter(|m| m.action == "character" && !m.text.trim().is_empty())
-            .filter_map(|m| {
-                m.id.split_once('-')
-                    .map(|(code, _)| (code.to_owned(), serde_json::Value::String(m.text)))
-            })
+            .filter_map(|m| character_mapping_key(&m.id).map(|key| (key, m.text)))
+            .map(|(key, text)| (key, serde_json::Value::String(text)))
             .collect();
         if !replacements.is_empty() {
             let map_path = PathBuf::from(&output).with_extension("drcs-map.json");
@@ -376,11 +398,16 @@ pub fn start_export_impl(
                                 .get("parameters")
                                 .and_then(|value| serde_json::from_value(value.clone()).ok())
                                 .unwrap_or_default();
+                            let level = event
+                                .get("level")
+                                .and_then(|value| value.as_str())
+                                .filter(|level| matches!(*level, "info" | "warning"))
+                                .unwrap_or("warning");
                             record_diagnostic_with_parameters(
                                 &app,
                                 &shared_state,
                                 job_id.as_deref(),
-                                "warning",
+                                level,
                                 code,
                                 parameters.clone(),
                                 message,
@@ -427,6 +454,35 @@ pub fn start_export_impl(
                             event.get("count").and_then(|value| value.as_u64()),
                             None,
                         ),
+                        Some("feature_observed") | Some("feature_summary") => {
+                            let kind = event
+                                .get("type")
+                                .and_then(|value| value.as_str())
+                                .unwrap_or("feature_summary");
+                            let parameters = [
+                                "logicalTrack",
+                                "feature",
+                                "state",
+                                "observedCount",
+                                "complete",
+                                "details",
+                            ]
+                            .into_iter()
+                            .filter_map(|key| {
+                                event.get(key).cloned().map(|value| (key.to_owned(), value))
+                            })
+                            .collect();
+                            events.emit_with_details(
+                                kind,
+                                format!("task.{kind}"),
+                                parameters,
+                                "Caption source feature updated.",
+                                None,
+                                None,
+                                None,
+                                None,
+                            )
+                        }
                         Some("checkpoint-written") => events.emit(
                             "checkpoint-written",
                             "Worker checkpoint updated.",
@@ -483,37 +539,24 @@ pub fn start_export_impl(
                         }
                         Some("failed") => {
                             failed_flag.store(true, Ordering::Relaxed);
-                            let message = event
-                                .get("message")
-                                .and_then(|value| value.as_str())
-                                .unwrap_or("Worker operation failed.");
-                            let code = event
-                                .get("code")
-                                .and_then(|value| value.as_str())
-                                .unwrap_or("worker.operation_failed");
+                            let (message, code, parameters) = worker_failure_details(&event);
                             mark_job_state(
                                 &app,
                                 &shared_state,
                                 job_id.as_deref(),
                                 JobState::Failed,
                             );
-                            record_diagnostic(
+                            record_diagnostic_with_parameters(
                                 &app,
                                 &shared_state,
                                 job_id.as_deref(),
                                 "error",
-                                code,
-                                message,
+                                &code,
+                                parameters.clone(),
+                                &message,
                             );
                             events.emit_with_details(
-                                "failed",
-                                code,
-                                BTreeMap::new(),
-                                message,
-                                None,
-                                None,
-                                None,
-                                None,
+                                "failed", &code, parameters, &message, None, None, None, None,
                             );
                         }
                         _ => events.emit("log", event.to_string(), None, None, None, None),
@@ -579,6 +622,56 @@ pub fn start_export_impl(
     Ok(())
 }
 
+fn character_mapping_key(id: &str) -> Option<String> {
+    if id.starts_with("b62:sha256:") {
+        return Some(id.to_owned());
+    }
+    id.split_once('-').map(|(code, _)| code.to_owned())
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::{character_mapping_key, worker_failure_details};
+
+    #[test]
+    fn character_mapping_keys_preserve_scoped_b62_ids_and_legacy_b24_codes() {
+        let b62 = format!("b62:sha256:{}:u+E000", "a".repeat(64));
+        assert_eq!(character_mapping_key(&b62), Some(b62));
+        assert_eq!(character_mapping_key("0x2A7F-3"), Some("0x2A7F".to_owned()));
+        assert_eq!(
+            character_mapping_key("not-a-report-id"),
+            Some("not".to_owned())
+        );
+    }
+
+    #[test]
+    fn export_conflict_keeps_its_structured_parameters() {
+        let event = serde_json::json!({
+            "type": "failed",
+            "code": "export_conflict",
+            "message": "fallback text",
+            "parameters": {
+                "formats": ["ASS", "SRT"],
+                "feature": "ruby",
+                "logicalTrack": "service=1:component=48:lang=jpn",
+                "availableActions": ["disable_preservation:ruby", "remove_format"]
+            }
+        });
+
+        let (message, code, parameters) = worker_failure_details(&event);
+
+        assert_eq!(message, "fallback text");
+        assert_eq!(code, "export_conflict");
+        assert_eq!(parameters["formats"], serde_json::json!(["ASS", "SRT"]));
+        assert_eq!(parameters["feature"], "ruby");
+        assert_eq!(
+            parameters["logicalTrack"],
+            "service=1:component=48:lang=jpn"
+        );
+        assert_eq!(parameters["availableActions"].as_array().unwrap().len(), 2);
+    }
+}
+
 #[tauri::command]
 #[allow(
     clippy::too_many_arguments,
@@ -608,6 +701,7 @@ pub fn start_export(
         drcs_report,
         drcs_mappings,
         track_id,
+        None,
         job_id,
         formats.map(|formats| ExportSelection {
             formats,
@@ -657,6 +751,7 @@ pub fn start_preview_index(
         false,
         None,
         track_id,
+        None,
         None,
         Some(ExportSelection {
             formats: vec!["JSON".into()],

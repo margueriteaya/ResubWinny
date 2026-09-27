@@ -2,7 +2,7 @@ import type { Track } from "../backend";
 import { t } from "../i18n";
 
 export const trackKey = (track: Track) =>
-  `${track.kind ?? "unknown"}:${track.pid ?? `${track.label}:${track.detail}`}`;
+  track.logicalTrack;
 
 export function trackDisplayLabel(track: Track) {
   const ordinal = String(track.ordinal ?? 1);
@@ -18,6 +18,8 @@ export function trackDisplayLabel(track: Track) {
     case "mpeg_ts_ttml_superimpose":
     case "m2ts_ttml_superimpose":
       return t("tracks.superimpose").replace("{0}", ordinal);
+    case "tlv_mmtp_stpp":
+      return t("tracks.tlvMmtpStpp").replace("{0}", ordinal);
     default:
       return track.label;
   }
@@ -40,6 +42,9 @@ export function trackDisplayDetail(track: Track) {
   }
   if (track.kind === "mpeg_ts_ttml_superimpose" || track.kind === "m2ts_ttml_superimpose") {
     return t("tracks.superimposeDetail");
+  }
+  if (track.kind === "tlv_mmtp_stpp") {
+    return t("tracks.tlvMmtpStppDetail");
   }
   return track.detail;
 }

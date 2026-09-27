@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 use serde::Serialize;
 
-use crate::{RubyBinding, native_b24, scene_ruby_bindings};
+use crate::{RubyBinding, caption_features::CaptionSequenceState, native_b24, scene_ruby_bindings};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct RegionKey {
@@ -23,6 +23,8 @@ pub(crate) struct RegionInterval {
     pub(crate) source_pid: Option<u16>,
     pub(crate) region: native_b24::CaptionRegion,
     pub(crate) characters: Vec<native_b24::CaptionCharacter>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) accessibility_ranges: Vec<Range<usize>>,
     pub(crate) drcs_glyphs: Vec<native_b24::DrcsGlyph>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ruby_binding: Option<RubyBinding>,
@@ -44,12 +46,47 @@ impl RegionInterval {
             && self.plane_height == other.plane_height
             && self.key() == other.key()
             && self.characters == other.characters
+            && self.accessibility_ranges == other.accessibility_ranges
             && self.drcs_glyphs == other.drcs_glyphs
     }
 }
 
+#[allow(
+    dead_code,
+    reason = "isolated scenes use a fresh sequence state in tests"
+)]
 pub(crate) fn scene_intervals(scene: &native_b24::CaptionScene) -> Vec<RegionInterval> {
+    scene_intervals_with_state(scene, &mut CaptionSequenceState::default())
+}
+
+fn scene_intervals_with_state(
+    scene: &native_b24::CaptionScene,
+    semantic_state: &mut CaptionSequenceState,
+) -> Vec<RegionInterval> {
     let ruby_bindings = scene_ruby_bindings(scene);
+    let region_texts = scene
+        .regions
+        .iter()
+        .map(|region| {
+            let start = region.first_character as usize;
+            let end = start
+                .saturating_add(region.character_count as usize)
+                .min(scene.characters.len());
+            scene
+                .characters
+                .get(start..end)
+                .unwrap_or_default()
+                .iter()
+                .map(|character| character.utf8.as_str())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>();
+    let references = region_texts.iter().map(String::as_str).collect::<Vec<_>>();
+    let semantics = crate::caption_features::caption_group_semantics_with_state(
+        &references,
+        &[],
+        semantic_state,
+    );
     scene
         .regions
         .iter()
@@ -81,6 +118,11 @@ pub(crate) fn scene_intervals(scene: &native_b24::CaptionScene) -> Vec<RegionInt
                     source_pid: None,
                     region: region.clone(),
                     characters,
+                    accessibility_ranges: semantics
+                        .fragments
+                        .get(region_index)
+                        .map(|fragment| fragment.removable_accessibility_ranges.clone())
+                        .unwrap_or_default(),
                     drcs_glyphs,
                     ruby_binding: ruby_bindings.get(&region_index).cloned(),
                 }
@@ -109,10 +151,11 @@ fn close_region_interval(interval: &mut RegionInterval, fallback_end_ms: i64) {
 pub(crate) fn apply_scene_intervals(
     active: &mut HashMap<RegionKey, RegionInterval>,
     scene: &native_b24::CaptionScene,
+    semantic_state: &mut CaptionSequenceState,
 ) -> Vec<RegionInterval> {
     let mut closed = Vec::new();
     let mut previous_active = std::mem::take(active);
-    for interval in scene_intervals(scene) {
+    for interval in scene_intervals_with_state(scene, semantic_state) {
         let key = interval.key();
         match previous_active.remove(&key) {
             Some(previous) if previous.same_visual(&interval) => {

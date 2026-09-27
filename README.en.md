@@ -13,7 +13,7 @@ It can process ARIB subtitles in terrestrial digital television, BS/CS 2K, and s
 
 The current convergence period focuses on subtitles from Japanese broadcast recordings. BD/DVD graphical-subtitle OCR, the plugin system, AI translation, and native preview on macOS/Linux have all been explicitly deferred and are outside the current roadmap and acceptance scope. For DRCS, work is limited to continuing improvements to the local hash → Unicode mapping; a general-purpose OCR system will not be expanded.
 
-The project's current version is `v0.2.2-α` (source version `0.2.2-alpha.1`). It is still under development.
+The project's current version is `v0.2.3-α` (source version `0.2.3-alpha.1`). It is still under development.
 
 ## Features
 
@@ -232,14 +232,15 @@ Add `-Dependencies` to delete `node_modules`; add `-DownloadedRuntimes` to delet
 ```text
 ResubWinny/
 ├── crates/
-│   └── arib-caption-worker/       # Streaming detection, parsing, subtitle model, CLI, and exporters
-│       ├── src/caption/           # B24, TTML/B62, and Ruby semantics
-│       ├── src/transport/         # MPEG-TS, M2TS, and experimental TLV/MMTP
-│       ├── src/exporters/         # ASS, TTML, SRT, WebVTT, archive, and other outputs
-│       └── src/tests/             # Modular Worker regression tests
+│   ├── arib-caption-worker/       # Streaming detection, parsing, subtitle model, CLI, and exporters
+│   │   ├── src/caption/           # B24, TTML/B62, and Ruby semantics
+│   │   ├── src/transport/         # MPEG-TS, M2TS, and experimental TLV/MMTP
+│   │   ├── src/exporters/         # ASS, TTML, SRT, WebVTT, archive, and other outputs
+│   │   └── src/tests/             # Modular Worker regression tests
+│   └── caption-semantics/         # Broadcast caption semantics shared by the Worker and desktop backend
 ├── native/
 │   └── aribcaption-bridge/        # Narrow C ABI bridge for libaribcaption
-├── shared/                        # Recognition rules shared by the Worker and desktop backend
+├── shared/                        # Format capability data shared by the Worker and frontend
 ├── studio-tauri/
 │   ├── src/                       # Svelte frontend
 │   │   ├── backend/               # typed Tauri API and event entry points

@@ -8,7 +8,6 @@ use crate::*;
 use std::{
     collections::{BTreeMap, VecDeque},
     ffi::{CStr, c_char, c_void},
-    fs::File,
     io::{self, Read},
     marker::PhantomData,
     path::Path,
@@ -317,6 +316,7 @@ fn strict_ttml_document(bytes: &[u8]) -> Option<DecodedTtmlDocument> {
 fn process_native_event<F, R>(
     event: NativeTlvEvent,
     tracks: &mut BTreeMap<u64, NativeTlvSubtitleTrack>,
+    selected_packet_id: Option<u16>,
     timeline_origin: &mut Option<RationalTimestamp>,
     summary: &mut B24DecodeSummary,
     on_caption: &mut F,
@@ -350,6 +350,11 @@ where
         summary.decoder_errors += 1;
         return Ok(());
     };
+    // The user-facing TLV track selector is the MPT asset packet id.  Native
+    // decoder track ids are transport callback identities and may differ.
+    if selected_packet_id.is_some_and(|packet_id| track.packet_id != packet_id) {
+        return Ok(());
+    }
     let mpu_sequence_number = unit.mpu_sequence_number;
     let resources: Vec<TlvSubtitleResource> = unit
         .resources
@@ -435,6 +440,7 @@ where
                         index: resource.index,
                         data_type: resource.data_type,
                         byte_length: resource.bytes.len(),
+                        content_sha256: resource_sha256(&resource.bytes),
                         format_hint: format.format_hint,
                         format_validation: format.format_validation,
                         width: format.width,
@@ -452,6 +458,7 @@ where
 
 pub(crate) fn scan_tlv_ttml_native<F, P, C, R, A>(
     path: &Path,
+    selected_packet_id: Option<u16>,
     mut on_caption: F,
     mut on_progress: P,
     mut cancelled: C,
@@ -471,7 +478,7 @@ where
             "TLV TTML conversion requires an ISDB-S3 TLV input",
         ));
     }
-    let mut input = File::open(path)?;
+    let mut input = crate::input::open_input(path)?;
     let mut demuxer = NativeTlvDemuxer::new()?;
     let mut tracks = BTreeMap::new();
     let mut timeline_origin = None;
@@ -494,6 +501,7 @@ where
             process_native_event(
                 event,
                 &mut tracks,
+                selected_packet_id,
                 &mut timeline_origin,
                 &mut summary,
                 &mut on_caption,
@@ -507,6 +515,7 @@ where
         process_native_event(
             event,
             &mut tracks,
+            selected_packet_id,
             &mut timeline_origin,
             &mut summary,
             &mut on_caption,
@@ -644,6 +653,183 @@ mod tests {
     }
 
     #[test]
+    fn synthetic_b62_stream_reaches_the_native_track_and_caption_callbacks() {
+        let document = b"<?xml version=\"1.0\"?><tt xmlns=\"http://www.w3.org/ns/ttml\"><body><div><p begin=\"0s\" end=\"1s\">caption</p></div></body></tt>";
+        let stream = crate::synthetic::make_b62_tlv_stream(document);
+        let mut demuxer = NativeTlvDemuxer::new().expect("libaribtlv demuxer");
+
+        demuxer.push(&stream).expect("synthetic native TLV input");
+        demuxer.flush().expect("flush synthetic TLV input");
+
+        let events = demuxer.drain().collect::<Vec<_>>();
+        let track = events.iter().find_map(|event| match event {
+            NativeTlvEvent::Track(track) => Some(track),
+            _ => None,
+        });
+        let caption = events.iter().find_map(|event| match event {
+            NativeTlvEvent::Caption(caption) => Some(caption),
+            _ => None,
+        });
+        assert_eq!(track.expect("subtitle track").packet_id, 0xf330);
+        assert_eq!(track.expect("subtitle track").component_tag, 0x1230);
+        assert_eq!(
+            caption
+                .unwrap_or_else(|| panic!("caption access unit; events: {events:?}"))
+                .bytes,
+            document
+        );
+    }
+
+    #[test]
+    fn native_b62_conversion_reads_a_large_source_once() {
+        let document = b"<?xml version=\"1.0\"?><tt xmlns=\"http://www.w3.org/ns/ttml\"><body><div><p begin=\"0s\" end=\"1s\">caption</p></div></body></tt>";
+        let mut source = crate::synthetic::make_b62_tlv_stream(document);
+        source.extend([0x7f, 0xff, 0, 0].repeat(3));
+        let mut padding = vec![0x7f, 0xff, 0xff, 0xff];
+        padding.resize(4 + u16::MAX as usize, 0);
+        while source.len() < 64 * 1024 * 1024 {
+            source.extend(&padding);
+        }
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("arib-native-b62-read-{stamp}"));
+        fs::create_dir_all(&directory).expect("temporary directory");
+        let input = directory.join("source.tlv");
+        let output = directory.join("output.ass");
+        fs::write(&input, &source).expect("large native fixture");
+        let length = source.len() as u64;
+        drop(source);
+
+        let (result, reads) = crate::input::measure_reads(&input, || {
+            convert_with_options_and_cancel(
+                &input,
+                &output,
+                ConversionOptions::default(),
+                |_| {},
+                || false,
+            )
+        });
+
+        let report = result.expect("native B62 conversion");
+        assert_eq!(report.summary.captions, 1);
+        assert!(reads.bytes >= length, "conversion missed input: {reads:?}");
+        assert!(
+            reads.bytes < length + 2 * 1024 * 1024,
+            "native conversion made an extra source pass: {reads:?}"
+        );
+        fs::remove_dir_all(directory).expect("cleanup native fixture");
+    }
+
+    #[test]
+    fn native_b62_drcs_conflict_prevents_publication_until_dropped() {
+        let document = br#"<?xml version="1.0"?><tt xmlns="http://www.w3.org/ns/ttml" xmlns:arib-tt="http://www.arib.or.jp/ns/arib-ttml/v1_0"><body><div><p begin="0s" end="1s" arib-tt:font-face="subt://1">&#xE000;</p></div></body></tt>"#;
+        let mut source = crate::synthetic::make_b62_tlv_stream(document);
+        source.extend([0x7f, 0xff, 0, 0].repeat(2));
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("arib-native-b62-drcs-{stamp}"));
+        fs::create_dir_all(&directory).expect("temporary directory");
+        let input = directory.join("source.tlv");
+        let output = directory.join("output.ass");
+        fs::write(&input, source).expect("native DRCS fixture");
+
+        let error = match convert_with_options_and_cancel(
+            &input,
+            &output,
+            ConversionOptions::default(),
+            |_| {},
+            || false,
+        ) {
+            Ok(_) => panic!("unmapped B62 DRCS was published"),
+            Err(error) => error,
+        };
+        let conflict = error
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<crate::ExportConflict>())
+            .expect("structured DRCS conflict");
+        assert_eq!(conflict.issue_code, "unresolved_drcs_text_target");
+        assert_eq!(conflict.formats, ["ASS"]);
+        assert!(!output.exists());
+        assert!(!output.with_extension("ass.part").exists());
+
+        let options = ConversionOptions {
+            preserve_drcs: false,
+            ..Default::default()
+        };
+        let report = convert_with_options_and_cancel(&input, &output, options, |_| {}, || false)
+            .expect("native B62 conversion with DRCS dropped");
+        assert_eq!(report.summary.captions, 1);
+        let ass = fs::read_to_string(&output).expect("DRCS-dropped ASS");
+        assert!(!ass.contains('\u{e000}'));
+        fs::remove_dir_all(directory).expect("cleanup native DRCS fixture");
+    }
+
+    #[test]
+    fn native_b62_report_exposes_scoped_mapping_and_retry_publishes_it() {
+        let document = br#"<?xml version="1.0"?><tt xmlns="http://www.w3.org/ns/ttml" xmlns:arib-tt="http://www.arib.or.jp/ns/arib-ttml/v1_0"><body><div><p begin="0s" end="1s" arib-tt:font-face="subt://1">&#xE080;</p></div></body></tt>"#;
+        let resource = include_bytes!("../testdata/golden/b62-drcs-e080.ttf");
+        let font = ttf_parser::Face::parse(resource, 0).expect("valid subset font resource");
+        assert!(font.glyph_index('\u{e080}').is_some());
+        let mut source =
+            crate::synthetic::make_b62_tlv_stream_with_resource(document, Some(resource));
+        source.extend([0x7f, 0xff, 0, 0].repeat(2));
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("arib-native-b62-map-{stamp}"));
+        fs::create_dir_all(&directory).expect("temporary directory");
+        let input = directory.join("source.tlv");
+        let output = directory.join("output.ass");
+        fs::write(&input, source).expect("native DRCS mapping fixture");
+        let options = ConversionOptions {
+            drcs_report: true,
+            ..Default::default()
+        };
+
+        let error =
+            match convert_with_options_and_cancel(&input, &output, options, |_| {}, || false) {
+                Ok(_) => panic!("unmapped B62 DRCS was published"),
+                Err(error) => error,
+            };
+        let conflict = error
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<crate::ExportConflict>())
+            .expect("structured B62 conflict");
+        assert_eq!(conflict.available_actions[0], "open_drcs_mapping");
+        assert!(conflict.drcs_report_created);
+        assert!(!output.exists());
+        assert!(!output.with_extension("ass.part").exists());
+
+        let report_path = output.with_extension("drcs.json");
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(&report_path).expect("B62 report")).unwrap();
+        assert_eq!(report["glyphs"][0]["resource_format"], "truetype");
+        let mapping_id = crate::b62_drcs_mapping_key(&crate::resource_sha256(resource), 0xe080);
+        assert_eq!(report["glyphs"][0]["mapping_id"], mapping_id);
+
+        let mut options = ConversionOptions {
+            drcs_report: true,
+            drcs_mode: DrcsMode::UseUserMapping,
+            ..Default::default()
+        };
+        options
+            .ttml_drcs_replacements
+            .insert(mapping_id, "映".into());
+        let result = convert_with_options_and_cancel(&input, &output, options, |_| {}, || false)
+            .expect("mapped B62 retry");
+        assert_eq!(result.summary.captions, 1);
+        let ass = fs::read_to_string(&output).expect("mapped ASS");
+        assert!(ass.contains('映'));
+        assert!(!ass.contains('\u{e080}'));
+        fs::remove_dir_all(directory).expect("cleanup native mapping fixture");
+    }
+
+    #[test]
     fn caption_callback_copies_document_and_resources_before_returning() {
         let mut state = CallbackState::default();
         let mut document = b"<tt/>".to_vec();
@@ -775,6 +961,7 @@ mod tests {
         process_native_event(
             NativeTlvEvent::Caption(unit),
             &mut tracks,
+            None,
             &mut origin,
             &mut summary,
             &mut |caption| {
@@ -795,6 +982,72 @@ mod tests {
         assert_eq!(payloads[0].1.mpu_sequence_number, None);
         assert!(!payloads[0].1.resources_complete);
         assert_eq!(payloads[0].1.bytes, [0xde, 0xad, 0xbe, 0xef]);
+    }
+
+    #[test]
+    fn native_track_selection_filters_by_mpt_packet_id() {
+        let mut tracks = BTreeMap::from([(
+            12,
+            NativeTlvSubtitleTrack {
+                track_id: 12,
+                context_id: 1,
+                packet_id: 0x345,
+                component_tag: 2,
+                language: Some("jpn".to_owned()),
+                tag: 0,
+                info_version: 1,
+                subtitle_type: 0,
+                format: 0,
+                operation_mode: 0,
+                timing_mode: 0,
+                display_mode: 0,
+                resolution: 0,
+                compression_type: 0,
+                start_mpu_sequence_number: None,
+                reference_start_ntp: None,
+                reference_start_time_leap_indicator: 0,
+            },
+        )]);
+        let unit = NativeTlvCaptionUnit {
+            track_id: 12,
+            component_tag: 2,
+            bytes: b"<tt><body/></tt>".to_vec(),
+            pts: (1, 1),
+            input_offset: 99,
+            random_access: false,
+            discontinuity: false,
+            discontinuity_reasons: 0,
+            timing_mode: None,
+            operation_mode: None,
+            display_mode: None,
+            compression_type: Some(0),
+            mpu_sequence_number: Some(1),
+            reference_start_pts: None,
+            resources: Vec::new(),
+        };
+        let mut origin = None;
+        let mut summary = B24DecodeSummary::default();
+        let callback_count = std::cell::Cell::new(0);
+        process_native_event(
+            NativeTlvEvent::Caption(unit),
+            &mut tracks,
+            Some(0x346),
+            &mut origin,
+            &mut summary,
+            &mut |_| {
+                callback_count.set(callback_count.get() + 1);
+                Ok(())
+            },
+            &mut |_, _| {
+                callback_count.set(callback_count.get() + 1);
+                Ok(())
+            },
+        )
+        .expect("filter a different MPT asset");
+
+        assert_eq!(callback_count.get(), 0);
+        assert_eq!(summary.captions, 0);
+        assert_eq!(summary.decoder_errors, 0);
     }
 
     #[test]

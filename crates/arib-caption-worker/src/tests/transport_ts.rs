@@ -244,8 +244,129 @@ fn m2ts_untimed_ttml_uses_arrival_clock_and_closes_on_the_next_document() {
 }
 
 #[test]
+fn actual_conflicts_stop_source_reads_and_preserve_existing_finals() {
+    for m2ts in [false, true] {
+        let directory =
+            std::env::temp_dir().join(format!("arib-conflict-read-{}-{m2ts}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let input = directory.join(if m2ts { "source.m2ts" } else { "source.ts" });
+        let output = directory.join("output.ass");
+        let mut fixture = private_pes_ttml_ts_fixture();
+        let following_ttml =
+            b"<?xml version=\"1.0\"?><tt><body><p begin=\"1s\" end=\"2s\">Next</p></body></tt>";
+        // A private-PES TTML document is emitted once the following document's
+        // boundary is known. Two additional starts make the coloured first
+        // document observable near the front of this otherwise large source.
+        fixture.extend(ts_packet(0x0120, true, following_ttml));
+        fixture.extend(ts_packet(0x0120, true, following_ttml));
+        let mut source = if m2ts {
+            m2ts_from_ts_packets(&fixture)
+        } else {
+            fixture
+        };
+        let null = ts_packet(0x1fff, false, &[]);
+        while source.len() < 64 * 1024 * 1024 {
+            if m2ts {
+                source.extend([0; 4]);
+            }
+            source.extend(null);
+        }
+        fs::write(&input, &source).unwrap();
+        drop(source);
+        fs::write(&output, "existing final").unwrap();
+        let (result, reads) = crate::input::measure_reads(&input, || {
+            convert_with_options_and_cancel(
+                &input,
+                &output,
+                ConversionOptions {
+                    srt: true,
+                    overwrite: true,
+                    preserve_position: false,
+                    ..Default::default()
+                },
+                |_| {},
+                || false,
+            )
+        });
+        let error = result.err().expect("material colour must conflict");
+        let conflict = error
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<ExportConflict>()
+            .unwrap();
+        assert_eq!(conflict.feature, "color");
+        assert_eq!(conflict.formats, ["SRT"]);
+        assert_eq!(fs::read_to_string(&output).unwrap(), "existing final");
+        assert!(!output.with_extension("srt").exists());
+        assert!(!output.with_extension("ass.part").exists());
+        assert!(
+            reads.bytes < 32 * 1024 * 1024,
+            "conflict read too far: {reads:?}"
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[test]
+fn inspection_is_bounded_and_multiformat_conversion_reads_source_once() {
+    for m2ts in [false, true] {
+        let directory =
+            std::env::temp_dir().join(format!("arib-read-budget-{}-{m2ts}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let input = directory.join(if m2ts { "source.m2ts" } else { "source.ts" });
+        let output = directory.join("output.ass");
+        let fixture = private_pes_ttml_ts_fixture();
+        let mut source = if m2ts {
+            m2ts_from_ts_packets(&fixture)
+        } else {
+            fixture
+        };
+        let null = ts_packet(0x1fff, false, &[]);
+        while source.len() < 128 * 1024 * 1024 {
+            if m2ts {
+                source.extend([0; 4]);
+            }
+            source.extend(null);
+        }
+        fs::write(&input, &source).unwrap();
+        let length = source.len() as u64;
+        drop(source);
+        let (inspection, reads) = crate::input::measure_reads(&input, || inspect_input(&input));
+        assert_eq!(inspection.unwrap().tracks.len(), 1);
+        assert!(reads.opens > 0);
+        assert!(reads.bytes < 96 * 1024 * 1024, "inspection: {reads:?}");
+        let (result, reads) = crate::input::measure_reads(&input, || {
+            convert_with_options_and_cancel(
+                &input,
+                &output,
+                ConversionOptions {
+                    ttml: true,
+                    ..Default::default()
+                },
+                |_| {},
+                || false,
+            )
+        });
+        let report = result.unwrap();
+        assert_eq!(report.summary.captions, 1);
+        assert!(output.exists());
+        assert!(output.with_extension("ttml").exists());
+        assert!(reads.bytes >= length, "conversion missed input: {reads:?}");
+        assert!(
+            reads.bytes < length + 32 * 1024 * 1024,
+            "extra source pass: {reads:?}"
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[test]
 fn converts_private_pes_ttml_in_a_188_byte_mpeg_ts_container() {
-    let stem = format!("arib-caption-ts-ttml-{}", std::process::id());
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let stem = format!("arib-caption-ts-ttml-{stamp}");
     let input_path = std::env::temp_dir().join(format!("{stem}.ts"));
     let output_path = std::env::temp_dir().join(format!("{stem}.ass"));
     fs::write(&input_path, private_pes_ttml_ts_fixture()).expect("fixture");
@@ -303,6 +424,7 @@ fn converts_private_pes_ttml_in_a_188_byte_mpeg_ts_container() {
     fs::remove_file(report.ttml.expect("TTML output")).expect("cleanup TTML");
     fs::remove_file(report.archive.expect("archive output")).expect("cleanup archive");
     fs::remove_file(report.raw.expect("raw output")).expect("cleanup raw");
+    fs::remove_dir_all(report.font_directory.expect("font sidecar")).expect("cleanup font sidecar");
 }
 
 #[test]

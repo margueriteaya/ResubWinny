@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const frontendRoot = join(root, 'studio-tauri', 'src')
 const handlerSource = await readFile(join(root, 'studio-tauri', 'src-tauri', 'src', 'main.rs'), 'utf8')
+const formatCapabilities = JSON.parse(await readFile(join(root, 'shared', 'format_capabilities.json'), 'utf8'))
 
 async function filesIn(directory) {
   const entries = await readdir(directory, { withFileTypes: true })
@@ -21,7 +22,27 @@ const allowedTauriImports = new Set([
   'backend/events.ts',
   'shell/desktop.ts',
 ])
+const localizedModeSurfaces = new Set([
+  'features/onboarding/OnboardingPage.svelte',
+  'features/settings/SettingsPage.svelte',
+])
 const violations = []
+const exportFormats = ['ASS', 'TTML', 'SRT', 'WebVTT', 'JSON', 'Raw Data']
+const preservationFeatures = ['position', 'color', 'ruby', 'drcs', 'gaiji', 'accessibility']
+const capabilityLevels = new Set(['preserved', 'approximated', 'unsupported', 'conditional'])
+for (const format of exportFormats) {
+  if (!formatCapabilities[format]) {
+    violations.push(`format capability contract is missing ${format}`)
+    continue
+  }
+  for (const feature of preservationFeatures) {
+    const level = formatCapabilities[format][feature]
+    if (!capabilityLevels.has(level)) violations.push(`${format}.${feature} has invalid capability level ${String(level)}`)
+  }
+}
+for (const format of Object.keys(formatCapabilities)) {
+  if (!exportFormats.includes(format)) violations.push(`format capability contract has unknown format ${format}`)
+}
 const localeDirectory = join(frontendRoot, 'locales')
 const localeFiles = (await readdir(localeDirectory)).filter((name) => name.endsWith('.json'))
 const localeDocuments = await Promise.all(localeFiles.map(async (name) => ({
@@ -51,6 +72,9 @@ for (const path of sourceFiles) {
   if (/\b(?:invoke|listen)\s*\(/.test(text) && !allowedTauriImports.has(localPath)) {
     violations.push(`${localPath} calls invoke/listen outside the backend boundary`)
   }
+  if (localizedModeSurfaces.has(localPath) && /(?:工作模式|狂热模式|使用模式)/.test(text)) {
+    violations.push(`${localPath} hard-codes public mode copy instead of using locale keys`)
+  }
   for (const match of text.matchAll(/\bt\(\s*['"]([^'"]+)['"]/g)) {
     if (!referenceKeys.has(match[1])) violations.push(`${localPath} uses unknown locale key ${match[1]}`)
   }
@@ -64,6 +88,38 @@ for (const path of backendFiles) {
 }
 for (const command of commands) {
   if (!new RegExp(`::${command}\\b`).test(handlerSource)) violations.push(`Tauri command ${command} is exposed by the frontend but not registered in main.rs`)
+}
+
+// A parent's `bind:prop` only flows back when the child declares that prop
+// with $bindable(). Svelte 5 compiles a missing $bindable without complaint
+// in some forwarding shapes, and the binding then silently stays at its
+// default: the native preview host once stayed null this way, so starting
+// preview did nothing. Check every bind against the child's $props().
+const componentProps = new Map()
+for (const path of sourceFiles.filter((file) => file.endsWith('.svelte'))) {
+  const text = await readFile(path, 'utf8')
+  const declaration = text.match(/let \{([\s\S]*?)\}\s*:\s*\{[\s\S]*?\}\s*=\s*\$props\(\)/)
+  if (!declaration) continue
+  const props = new Map()
+  for (const line of declaration[1].split('\n')) {
+    const prop = line.trim().match(/^(\w+)\s*(?:=\s*(.*?))?,?$/)
+    if (prop) props.set(prop[1], /\$bindable\(/.test(prop[2] ?? ''))
+  }
+  componentProps.set(path.split(/[\\/]/).pop().replace(/\.svelte$/, ''), props)
+}
+// The shell lazy-loads page components into `<Name>Component` variables.
+for (const [name, props] of [...componentProps]) componentProps.set(`${name}Component`, props)
+for (const path of sourceFiles.filter((file) => file.endsWith('.svelte'))) {
+  const text = await readFile(path, 'utf8')
+  for (const tag of text.matchAll(/<([A-Z]\w*)\b([^>]*?)\/?>/gs)) {
+    const props = componentProps.get(tag[1])
+    if (!props) continue
+    for (const bind of tag[2].matchAll(/\bbind:(\w+)/g)) {
+      if (bind[1] === 'this') continue
+      if (props.get(bind[1]) !== true)
+        violations.push(`${relative(frontendRoot, path)} binds ${tag[1]}.${bind[1]}, but that prop is not declared with $bindable()`)
+    }
+  }
 }
 
 if (violations.length) {

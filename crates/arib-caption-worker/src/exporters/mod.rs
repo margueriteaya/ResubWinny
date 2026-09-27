@@ -16,16 +16,74 @@ pub(crate) use evidence::*;
 pub(crate) use text::*;
 pub(crate) use ttml::*;
 
-pub(crate) fn keep_text(value: &str, options: &ConversionOptions) -> bool {
-    !export_text(value, options).is_empty()
-}
-
 pub(crate) fn export_text(value: &str, options: &ConversionOptions) -> String {
     crate::caption_features::filtered_text(
         value,
         options.preserve_gaiji,
         options.preserve_accessibility,
     )
+}
+
+pub(crate) fn export_ttml_text(
+    value: &str,
+    style: &TtmlCaptionStyle,
+    source: Option<&TtmlCaptionSource>,
+    additional_accessibility_ranges: &[std::ops::Range<usize>],
+    accessibility_resolved: bool,
+    options: &ConversionOptions,
+) -> String {
+    let resource_backed = style
+        .font_resource
+        .as_deref()
+        .and_then(subt_resource_index)
+        .is_some();
+    let retained = if accessibility_resolved {
+        let mut retained = vec![true; value.chars().count()];
+        if !options.preserve_accessibility {
+            let length = retained.len();
+            for range in additional_accessibility_ranges {
+                retained[range.start.min(length)..range.end.min(length)].fill(false);
+            }
+        }
+        retained
+    } else {
+        crate::caption_features::retained_characters_with_accessibility_ranges(
+            value,
+            true,
+            options.preserve_accessibility,
+            additional_accessibility_ranges,
+        )
+    };
+    let text = value
+        .chars()
+        .enumerate()
+        .filter_map(|(index, character)| {
+            if !retained.get(index).copied().unwrap_or(false) {
+                return None;
+            }
+            if !resource_backed || ttml_drcs_kind(character).is_none() {
+                return Some(character.to_string());
+            }
+            if !options.preserve_drcs {
+                return None;
+            }
+            let key = ttml_drcs_mapping_key(
+                source,
+                subt_resource_index(style.font_resource.as_deref()?)?,
+                character as u32,
+            );
+            if options.drcs_mode == DrcsMode::UseUserMapping
+                && let Some(replacement) = key
+                    .as_ref()
+                    .and_then(|key| options.ttml_drcs_replacements.get(key))
+                    .filter(|replacement| !replacement.is_empty())
+            {
+                return Some(replacement.clone());
+            }
+            Some(character.to_string())
+        })
+        .collect::<String>();
+    export_text(&text, options)
 }
 
 pub(crate) fn publish_file(temporary: &Path, output: &Path, overwrite: bool) -> io::Result<()> {

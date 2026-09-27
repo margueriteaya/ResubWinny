@@ -8,6 +8,10 @@ pub struct AppSettings {
     pub ui_font: String,
     pub caption_font: String,
     pub default_format: String,
+    #[serde(default = "default_user_mode")]
+    pub user_mode: String,
+    #[serde(default)]
+    pub export_preferences: ExportSelection,
     #[serde(default = "default_locale")]
     pub locale: String,
     #[serde(default = "default_theme")]
@@ -44,6 +48,9 @@ fn default_locale() -> String {
 fn default_theme() -> String {
     "system".into()
 }
+fn default_user_mode() -> String {
+    "normie".into()
+}
 
 impl Default for AppSettings {
     fn default() -> Self {
@@ -51,6 +58,8 @@ impl Default for AppSettings {
             ui_font: "system".into(),
             caption_font: "arib".into(),
             default_format: "ASS".into(),
+            user_mode: default_user_mode(),
+            export_preferences: ExportSelection::default(),
             locale: default_locale(),
             theme: default_theme(),
             workspace_layout: WorkspaceLayoutSettings::default(),
@@ -69,9 +78,7 @@ pub struct LanguagePack {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PreviewRect {
-    pub x: i32,
-    pub y: i32,
+pub struct PreviewSurfaceSize {
     pub width: i32,
     pub height: i32,
 }
@@ -86,8 +93,8 @@ pub struct PreviewCapabilities {
     pub available_caption_plane_modes: Vec<String>,
 }
 
-/// A platform-owned preview route. The WebView receives this only to present
-/// an honest capability state; it never owns the video or caption pixels.
+/// An in-process preview route. libmpv and Rust produce the composited frame;
+/// WebView2 presents that frame inside the player component's Canvas.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewSurfaceCapability {
@@ -113,7 +120,9 @@ pub struct PreviewRuntime {
 pub struct PreviewRenderDiagnostics {
     pub route: String,
     pub active: bool,
+    pub frames_rendered: u64,
     pub frames_presented: u64,
+    pub frames_dropped: u64,
     pub presents_per_second: f64,
     pub caption_texture_uploads: u64,
     pub caption_texture_clears: u64,
@@ -121,7 +130,6 @@ pub struct PreviewRenderDiagnostics {
     pub surface_width: Option<i32>,
     pub surface_height: Option<i32>,
     pub decoder_mode: Option<String>,
-    pub fallback_reason: Option<String>,
     pub last_error: Option<String>,
 }
 
@@ -172,6 +180,7 @@ pub struct Track {
     pub service_id: Option<u16>,
     pub language: Option<String>,
     pub service_name: Option<String>,
+    pub logical_track: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -564,6 +573,15 @@ pub struct WorkerInspection {
     pub service: String,
     #[serde(default)]
     pub broadcast: BroadcastMetadata,
+    #[serde(default)]
+    pub tracks: Vec<WorkerInspectionTrack>,
+}
+#[derive(Deserialize)]
+pub struct WorkerInspectionTrack {
+    #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub track_id: Option<u16>,
 }
 #[derive(Deserialize)]
 pub struct WorkerB24Track {
@@ -574,9 +592,11 @@ pub struct WorkerB24Track {
     pub language: Option<String>,
     #[serde(default)]
     pub service_name: Option<String>,
+    pub component_tag: u8,
 }
 #[derive(Deserialize)]
 pub struct WorkerDataTracks {
+    pub pmt_pid: u16,
     pub pids: Vec<u16>,
     #[serde(default)]
     pub caption_pids: Vec<u16>,
@@ -591,10 +611,20 @@ pub struct DrcsReport {
 #[derive(Deserialize)]
 pub struct DrcsReportGlyph {
     pub asset: String,
-    pub width: u32,
-    pub height: u32,
-    pub depth_bits: u8,
-    pub drcs_code: u32,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+    #[serde(default)]
+    pub depth_bits: Option<u8>,
+    #[serde(default)]
+    pub drcs_code: Option<u32>,
+    #[serde(default)]
+    pub mapping_id: Option<String>,
+    #[serde(default)]
+    pub source_codepoint: Option<u32>,
+    #[serde(default)]
+    pub resource_format: Option<String>,
     #[serde(default)]
     pub alternative_text: String,
 }

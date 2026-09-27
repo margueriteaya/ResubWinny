@@ -1,7 +1,7 @@
 {
   "name": "resubwinny-studio",
   "private": true,
-  "version": "0.2.2-alpha.1",
+  "version": "0.2.3-alpha.1",
   "license": "MPL-2.0",
   "engines": {
     "node": ">=22 <23",
@@ -10,14 +10,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run verify:contract && svelte-check --tsconfig ./tsconfig.json && vite build",
+    "build": "npm run verify:contract && npm run test:domain && svelte-check --tsconfig ./tsconfig.json && vite build",
+    "test:domain": "node --experimental-strip-types --experimental-specifier-resolution=node --test ../scripts/feature-knowledge.test.mjs",
     "build:worker": "cargo build --manifest-path ../Cargo.toml -p arib-caption-worker --release --features libaribtlv",
     "build:bundle": "npm run build:worker && npm run build",
-    "verify:contract": "node ../scripts/verify-frontend-contract.mjs",
+    "verify:contract": "node ../scripts/verify-frontend-contract.mjs && node ../scripts/verify-mode-boundary.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
     "@lucide/svelte": "^1.0.1",
+    "@tabler/icons-svelte": "^3.48.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.4.0",
     "macos-traffic-lights": "^1.1.0",

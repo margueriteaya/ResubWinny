@@ -150,9 +150,7 @@ pub(super) fn parse_text_outline(value: Option<&str>, opacity: f32) -> Option<Te
     if thickness <= 0.0 {
         return None;
     }
-    let radius = thickness
-        .round()
-        .clamp(1.0, 4.0) as i32;
+    let radius = thickness.round().clamp(1.0, 4.0) as i32;
     let color = value
         .split_whitespace()
         .find_map(parse_ttml_outline_color)?;

@@ -4,6 +4,7 @@ use std::cell::RefCell;
 fn queue_ass_ttml_caption(
     writer: &mut BufWriter<File>,
     pending: &mut Vec<TtmlCaption>,
+    semantic_state: &mut crate::caption_features::CaptionSequenceState,
     archive_writer: &mut Option<BufWriter<File>>,
     ttml_writer: &mut Option<BufWriter<File>>,
     options: &ConversionOptions,
@@ -13,7 +14,14 @@ fn queue_ass_ttml_caption(
         .first()
         .is_none_or(|first| first.start_ms == caption.start_ms && first.end_ms == caption.end_ms);
     if !same_group {
-        flush_ass_ttml_group(writer, pending, archive_writer, ttml_writer, options)?;
+        flush_ass_ttml_group(
+            writer,
+            pending,
+            semantic_state,
+            archive_writer,
+            ttml_writer,
+            options,
+        )?;
     }
     pending.push(caption);
     Ok(())
@@ -22,10 +30,12 @@ fn queue_ass_ttml_caption(
 fn flush_ass_ttml_group(
     writer: &mut BufWriter<File>,
     pending: &mut Vec<TtmlCaption>,
+    semantic_state: &mut crate::caption_features::CaptionSequenceState,
     archive_writer: &mut Option<BufWriter<File>>,
     ttml_writer: &mut Option<BufWriter<File>>,
     options: &ConversionOptions,
 ) -> io::Result<()> {
+    annotate_ttml_group_semantics_with_state(pending, semantic_state);
     associate_standalone_ttml_ruby(pending);
     for caption in pending.iter() {
         if let Some(archive_writer) = archive_writer.as_mut() {
@@ -38,6 +48,47 @@ fn flush_ass_ttml_group(
     write_ass_ttml_group(writer, pending, options)?;
     pending.clear();
     Ok(())
+}
+
+#[allow(
+    dead_code,
+    reason = "isolated caption groups use a fresh sequence state in tests"
+)]
+pub(crate) fn annotate_ttml_group_semantics(captions: &mut [TtmlCaption]) {
+    annotate_ttml_group_semantics_with_state(
+        captions,
+        &mut crate::caption_features::CaptionSequenceState::default(),
+    );
+}
+
+pub(crate) fn annotate_ttml_group_semantics_with_state(
+    captions: &mut [TtmlCaption],
+    semantic_state: &mut crate::caption_features::CaptionSequenceState,
+) {
+    let texts = captions
+        .iter()
+        .map(|caption| caption.text.as_str())
+        .collect::<Vec<_>>();
+    let declared = captions
+        .iter()
+        .map(|caption| {
+            caption
+                .accessibility_cues
+                .iter()
+                .map(|cue| cue.start..cue.end)
+                .chain(caption.resolved_accessibility_ranges.iter().cloned())
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let semantics = crate::caption_features::caption_group_semantics_with_state(
+        &texts,
+        &declared,
+        semantic_state,
+    );
+    for (caption, fragment) in captions.iter_mut().zip(semantics.fragments) {
+        caption.resolved_accessibility_ranges = fragment.removable_accessibility_ranges;
+        caption.broadcast_semantics_resolved = true;
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -161,14 +212,17 @@ where
     };
     write_ass_header(&mut writer)?;
     let mut pending_ass = Vec::new();
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
     let scan = match packetisation {
         TtmlPesPacketisation::MpegTs188 => scan_mpeg_ts_ttml(
             path,
             &tracks,
             |caption| {
+                assess_ttml_caption(&options, &caption)?;
                 queue_ass_ttml_caption(
                     &mut writer,
                     &mut pending_ass,
+                    &mut semantic_state,
                     &mut archive_writer,
                     &mut ttml_writer,
                     &options,
@@ -189,9 +243,11 @@ where
             path,
             &tracks,
             |caption| {
+                assess_ttml_caption(&options, &caption)?;
                 queue_ass_ttml_caption(
                     &mut writer,
                     &mut pending_ass,
+                    &mut semantic_state,
                     &mut archive_writer,
                     &mut ttml_writer,
                     &options,
@@ -210,7 +266,10 @@ where
         ),
     };
     let summary = match scan {
-        Ok(summary) => summary,
+        Ok(mut summary) => {
+            summary.features.complete = true;
+            summary
+        }
         Err(error) => {
             let _ = fs::remove_file(&temporary);
             if let Some(path) = &archive_temporary {
@@ -228,6 +287,7 @@ where
     flush_ass_ttml_group(
         &mut writer,
         &mut pending_ass,
+        &mut semantic_state,
         &mut archive_writer,
         &mut ttml_writer,
         &options,
@@ -337,11 +397,98 @@ where
     let mut archived_resource_references = BTreeSet::new();
     let mut archived_resource_evidence = BTreeSet::new();
     let mut archived_assets = Vec::new();
+    let current_b62_resources = RefCell::new(
+        None::<(
+            u16,
+            Option<u32>,
+            HashMap<u8, std::sync::Arc<TlvSubtitleResource>>,
+        )>,
+    );
+    let report_b62 = RefCell::new(BTreeMap::<String, B62DrcsReportGlyph>::new());
+    let report_b62_bytes = RefCell::new(0_usize);
     write_ass_header(&mut writer)?;
     let mut pending_ass = Vec::new();
+    let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
+    let mut feature_summary = CaptionFeatureSummary::default();
     let summary = match scan_tlv_ttml(
         path,
+        options.track_id,
         |caption| {
+            if options.drcs_report {
+                let current = current_b62_resources.borrow();
+                let mut report = report_b62.borrow_mut();
+                let mut report_bytes = report_b62_bytes.borrow_mut();
+                if let Some(source) = caption.source.as_ref()
+                    && let Some((packet_id, mpu_sequence_number, resources)) = current.as_ref()
+                    && *packet_id == source.mmpt_packet_id
+                    && *mpu_sequence_number == source.mpu_sequence_number
+                {
+                    for drcs_use in &caption.drcs_uses {
+                        let Some(mapping_id) = ttml_drcs_mapping_key(
+                            Some(source),
+                            drcs_use.resource_index,
+                            drcs_use.source_codepoint,
+                        ) else {
+                            continue;
+                        };
+                        let resolved = options.drcs_mode == crate::DrcsMode::UseUserMapping
+                            && options
+                                .ttml_drcs_replacements
+                                .get(&mapping_id)
+                                .is_some_and(|replacement| !replacement.is_empty());
+                        if resolved || report.contains_key(&mapping_id) || report.len() >= 64 {
+                            continue;
+                        }
+                        let Some(index) = u8::try_from(drcs_use.resource_index).ok() else {
+                            continue;
+                        };
+                        let Some(resource) = resources.get(&index) else {
+                            continue;
+                        };
+                        if report_bytes.saturating_add(resource.bytes.len()) > 32 * 1024 * 1024 {
+                            continue;
+                        }
+                        *report_bytes = report_bytes.saturating_add(resource.bytes.len());
+                        report.insert(
+                            mapping_id.clone(),
+                            B62DrcsReportGlyph {
+                                mapping_id,
+                                source_codepoint: drcs_use.source_codepoint,
+                                resource: std::sync::Arc::clone(resource),
+                            },
+                        );
+                    }
+                }
+            }
+            let mapping_report_covers_conflict = options.drcs_report
+                && caption.drcs_uses.iter().all(|drcs_use| {
+                    let Some(mapping_id) = ttml_drcs_mapping_key(
+                        caption.source.as_ref(),
+                        drcs_use.resource_index,
+                        drcs_use.source_codepoint,
+                    ) else {
+                        return false;
+                    };
+                    let resolved = options.drcs_mode == crate::DrcsMode::UseUserMapping
+                        && options
+                            .ttml_drcs_replacements
+                            .get(&mapping_id)
+                            .is_some_and(|replacement| !replacement.is_empty());
+                    resolved || report_b62.borrow().contains_key(&mapping_id)
+                });
+            if let Err(error) = assess_ttml_caption_with_mapping_offer(
+                &options,
+                &caption,
+                mapping_report_covers_conflict,
+            ) {
+                if options.drcs_report
+                    && write_b62_drcs_report(output, path, &report_b62.borrow(), true)?.is_some()
+                {
+                    return Err(crate::export_assessment::with_drcs_report_created(error));
+                }
+                return Err(error);
+            }
+            feature_summary.observe_ttml(&caption);
             let mut archive = archive_writer.borrow_mut();
             if let Some(archive_writer) = &mut *archive {
                 for resource in ttml_resource_references(&caption) {
@@ -366,6 +513,7 @@ where
             queue_ass_ttml_caption(
                 &mut writer,
                 &mut pending_ass,
+                &mut semantic_state,
                 &mut archive,
                 &mut ttml_writer,
                 &options,
@@ -376,6 +524,18 @@ where
         |summary| progress(summary),
         cancelled,
         |packet_offset, payload| {
+            if options.drcs_report {
+                *current_b62_resources.borrow_mut() = Some((
+                    payload.packet_id,
+                    payload.mpu_sequence_number,
+                    payload
+                        .resources
+                        .iter()
+                        .cloned()
+                        .map(|resource| (resource.index, std::sync::Arc::new(resource)))
+                        .collect(),
+                ));
+            }
             if let Some(archive_writer) = &mut *archive_writer.borrow_mut()
                 && let Some(mpu_sequence_number) = payload.mpu_sequence_number
             {
@@ -397,7 +557,11 @@ where
             Ok(())
         },
     ) {
-        Ok(summary) => summary,
+        Ok(mut summary) => {
+            summary.features = feature_summary;
+            summary.features.complete = true;
+            summary
+        }
         Err(error) => {
             let _ = fs::remove_file(&temporary);
             if let Some(path) = &archive_temporary {
@@ -417,6 +581,7 @@ where
         flush_ass_ttml_group(
             &mut writer,
             &mut pending_ass,
+            &mut semantic_state,
             &mut archive,
             &mut ttml_writer,
             &options,
@@ -427,6 +592,11 @@ where
             write_archive_record(archive_writer, "asset_evidence", &asset)?;
         }
     }
+    let drcs_report = if options.drcs_report {
+        write_b62_drcs_report(output, path, &report_b62.borrow(), true)?
+    } else {
+        None
+    };
     writer.flush()?;
     publish_file(&temporary, output, options.overwrite)?;
     if let (Some(mut ttml_writer), Some(ttml), Some(ttml_temporary)) =
@@ -465,8 +635,8 @@ where
         output: primary,
         ass,
         font_directory,
-        drcs_directory: None,
-        drcs_report: None,
+        drcs_directory: drcs_report.as_ref().map(|_| output.with_extension("drcs")),
+        drcs_report,
         ttml,
         archive,
         raw,

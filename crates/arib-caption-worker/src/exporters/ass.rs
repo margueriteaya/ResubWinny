@@ -110,9 +110,24 @@ fn write_ass_standalone_ruby(
             .saturating_sub(ASS_RUBY_GAP),
         RubyPlacement::Below => base_box.bottom().saturating_add(ASS_RUBY_GAP),
     };
+    let text = caption
+        .rich_body
+        .as_deref()
+        .and_then(|body| filter_ttml_caption_preserved_body(body, caption, options))
+        .map(|body| ttml_plain_text(&body))
+        .unwrap_or_else(|| {
+            export_ttml_text(
+                &caption.text,
+                &caption.style,
+                caption.source.as_ref(),
+                &caption.resolved_accessibility_ranges,
+                caption.broadcast_semantics_resolved,
+                options,
+            )
+        });
     let Some(plan) = layout_ruby(
         &RubyLayoutRequest {
-            text: &caption.text,
+            text: &text,
             container: RubyLayoutBox {
                 x: target_left.floor() as i32,
                 y: ruby_y,
@@ -242,7 +257,14 @@ fn write_ass_ttml_caption_at(
     anchor: Option<(i32, i32)>,
     options: &ConversionOptions,
 ) -> io::Result<()> {
-    let filtered_text = export_text(&caption.text, options);
+    let filtered_text = export_ttml_text(
+        &caption.text,
+        &caption.style,
+        caption.source.as_ref(),
+        &caption.resolved_accessibility_ranges,
+        caption.broadcast_semantics_resolved,
+        options,
+    );
     if filtered_text.is_empty() {
         return Ok(());
     }
@@ -252,18 +274,27 @@ fn write_ass_ttml_caption_at(
         .as_deref()
         .and_then(ass_font_size_from_ttml)
         .unwrap_or(42);
-    let mut runs =
-        if options.preserve_ruby && options.preserve_gaiji && options.preserve_accessibility {
-            caption
-                .rich_body
-                .as_deref()
-                .map(|body| filter_ttml_inline_body(body, options.preserve_color))
-                .map(|body| parse_ass_inline_runs(&body, &caption.style))
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+    let mut runs = caption
+        .rich_body
+        .as_deref()
+        .and_then(|body| filter_ttml_caption_preserved_body(body, caption, options))
+        .map(|body| parse_ass_inline_runs(&body, &caption.style))
+        .unwrap_or_default();
+    for run in &mut runs {
+        run.text = export_ttml_text(
+            &run.text,
+            &run.style,
+            caption.source.as_ref(),
+            &[],
+            caption.broadcast_semantics_resolved,
+            options,
+        );
+    }
+    runs.retain(|run| !run.text.is_empty());
     if runs.is_empty() {
+        if caption.rich_body.is_some() {
+            return Ok(());
+        }
         runs.push(AssInlineRun {
             text: filtered_text,
             style: caption.style.clone(),
@@ -431,8 +462,12 @@ fn write_ass_ttml_caption_at(
 /// for a structural export without colour.  The rich body remains intact for
 /// Ruby and other inline semantics; only the explicitly disabled attributes
 /// are removed before either TTML or ASS consumes it.
-pub(crate) fn filter_ttml_inline_body(body: &str, preserve_color: bool) -> String {
-    if preserve_color {
+pub(crate) fn filter_ttml_inline_body(
+    body: &str,
+    preserve_color: bool,
+    preserve_accessibility: bool,
+) -> String {
+    if preserve_color && preserve_accessibility {
         return body.to_owned();
     }
     let mut output = String::with_capacity(body.len());
@@ -447,7 +482,13 @@ pub(crate) fn filter_ttml_inline_body(body: &str, preserve_color: bool) -> Strin
         let tag = &remaining[start..end];
         if tag.starts_with("<span") {
             let mut filtered = tag.to_owned();
-            for name in ["tts:color", "tts:backgroundColor", "tts:textOutline"] {
+            let attributes = [
+                (!preserve_color).then_some("tts:color"),
+                (!preserve_color).then_some("tts:backgroundColor"),
+                (!preserve_color).then_some("tts:textOutline"),
+                (!preserve_accessibility).then_some("ttm:role"),
+            ];
+            for name in attributes.into_iter().flatten() {
                 loop {
                     let next = remove_xml_attribute(&filtered, name);
                     if next == filtered {
@@ -464,6 +505,258 @@ pub(crate) fn filter_ttml_inline_body(body: &str, preserve_color: bool) -> Strin
     }
     output.push_str(remaining);
     output
+}
+
+pub(crate) fn strip_ttml_font_resource_attributes(body: &str) -> String {
+    let mut output = String::new();
+    let mut remaining = body;
+    while let Some(start) = remaining.find('<') {
+        output.push_str(&remaining[..start]);
+        let Some(relative_end) = remaining[start..].find('>') else {
+            output.push_str(&remaining[start..]);
+            return output;
+        };
+        let end = start + relative_end + 1;
+        output.push_str(&remove_xml_attribute(
+            &remaining[start..end],
+            "arib-tt:font-face",
+        ));
+        remaining = &remaining[end..];
+    }
+    output.push_str(remaining);
+    output
+}
+
+/// Filter source text while keeping its surrounding inline structure. The
+/// shared material-feature mask spans text nodes, including styled fragments.
+#[cfg(test)]
+pub(crate) fn filter_ttml_preserved_body(
+    body: &str,
+    base_style: &TtmlCaptionStyle,
+    options: &ConversionOptions,
+) -> Option<String> {
+    filter_ttml_preserved_body_with_source(body, base_style, None, options)
+}
+
+pub(crate) fn filter_ttml_caption_preserved_body(
+    body: &str,
+    caption: &TtmlCaption,
+    options: &ConversionOptions,
+) -> Option<String> {
+    let accessibility_filtered = !options.preserve_accessibility
+        && (caption.broadcast_semantics_resolved
+            || !caption.accessibility_cues.is_empty()
+            || !caption.resolved_accessibility_ranges.is_empty());
+    let body = if accessibility_filtered {
+        filter_ttml_caption_accessibility(body, caption)?
+    } else {
+        body.to_owned()
+    };
+    let body = if accessibility_filtered {
+        filter_ttml_inline_body(&body, true, false)
+    } else {
+        body
+    };
+    let mut filtered_options = options.clone();
+    if accessibility_filtered {
+        filtered_options.preserve_accessibility = true;
+    }
+    filter_ttml_preserved_body_with_source(
+        &body,
+        &caption.style,
+        caption.source.as_ref(),
+        &filtered_options,
+    )
+}
+
+fn filter_ttml_caption_accessibility(body: &str, caption: &TtmlCaption) -> Option<String> {
+    let prefix = format!(
+        "<body xmlns:tts='http://www.w3.org/ns/ttml#styling' xmlns:ttm='http://www.w3.org/ns/ttml#metadata' xmlns:arib='https://resubwinny.dev/ns/arib' xmlns:arib-tt='{ARIB_TTML_NAMESPACE}'>"
+    );
+    let wrapped = format!("{prefix}{body}</body>");
+    let document = roxmltree::Document::parse(&wrapped).ok()?;
+    let mut text = String::new();
+    let mut cursor = 0_usize;
+    let mut nodes = Vec::new();
+    for node in document.descendants() {
+        if node.is_text() {
+            let value = node.text().unwrap_or_default();
+            nodes.push((node, cursor));
+            text.push_str(value);
+            cursor = cursor.saturating_add(value.chars().count());
+        } else if node.is_element() && node.tag_name().name() == "br" {
+            text.push('\n');
+            cursor = cursor.saturating_add(1);
+        }
+    }
+    let leading = text
+        .chars()
+        .take_while(|character| character.is_whitespace())
+        .count();
+    let offset = if text.trim() == caption.text {
+        leading
+    } else {
+        0
+    };
+    let semantic_ranges = if caption.broadcast_semantics_resolved {
+        caption
+            .resolved_accessibility_ranges
+            .iter()
+            .map(|range| offset.saturating_add(range.start)..offset.saturating_add(range.end))
+            .collect::<Vec<_>>()
+    } else {
+        caption
+            .accessibility_cues
+            .iter()
+            .map(|cue| offset.saturating_add(cue.start)..offset.saturating_add(cue.end))
+            .collect::<Vec<_>>()
+    };
+    let retained = if caption.broadcast_semantics_resolved {
+        let mut retained = vec![true; text.chars().count()];
+        let length = retained.len();
+        for range in &semantic_ranges {
+            retained[range.start.min(length)..range.end.min(length)].fill(false);
+        }
+        retained
+    } else {
+        crate::caption_features::retained_characters_with_accessibility_ranges(
+            &text,
+            true,
+            false,
+            &semantic_ranges,
+        )
+    };
+    let mut edits = Vec::new();
+    for (node, start) in nodes {
+        let mut node_cursor = start;
+        let filtered = node
+            .text()
+            .unwrap_or_default()
+            .chars()
+            .filter(|_| {
+                let keep = retained.get(node_cursor).copied().unwrap_or(false);
+                node_cursor = node_cursor.saturating_add(1);
+                keep
+            })
+            .collect::<String>();
+        let range = node.range();
+        edits.push((
+            range.start - prefix.len()..range.end - prefix.len(),
+            xml_escape(&filtered),
+        ));
+    }
+    let mut result = body.to_owned();
+    for (range, replacement) in edits.into_iter().rev() {
+        result.replace_range(range, &replacement);
+    }
+    Some(result)
+}
+
+fn filter_ttml_preserved_body_with_source(
+    body: &str,
+    base_style: &TtmlCaptionStyle,
+    source: Option<&TtmlCaptionSource>,
+    options: &ConversionOptions,
+) -> Option<String> {
+    let mut body =
+        filter_ttml_inline_body(body, options.preserve_color, options.preserve_accessibility);
+    if !options.preserve_ruby {
+        let prefix = "<body xmlns:tts='http://www.w3.org/ns/ttml#styling'>";
+        let wrapped = format!("{prefix}{body}</body>");
+        let document = roxmltree::Document::parse(&wrapped).ok()?;
+        let annotation = |node: roxmltree::Node<'_, '_>| {
+            node.is_element()
+                && (node.tag_name().name() == "rt"
+                    || node.attributes().any(|attr| {
+                        attr.name() == "ruby"
+                            && matches!(attr.value(), "text" | "textContainer" | "delimiter")
+                    }))
+        };
+        let ranges = document
+            .descendants()
+            .filter(|node| annotation(*node) && !node.ancestors().skip(1).any(annotation))
+            .map(|node| node.range())
+            .collect::<Vec<_>>();
+        for range in ranges.into_iter().rev() {
+            body.replace_range(range.start - prefix.len()..range.end - prefix.len(), "");
+        }
+        body = body
+            .replace("<ruby>", "<span>")
+            .replace("</ruby>", "</span>");
+        let mut remaining = body.as_str();
+        let mut cleaned = String::new();
+        while let Some(start) = remaining.find('<') {
+            cleaned.push_str(&remaining[..start]);
+            let end = start + remaining[start..].find('>')? + 1;
+            let mut tag = remaining[start..end].to_owned();
+            for name in ["tts:ruby", "tts:rubyPosition", "tts:rubyAlign"] {
+                tag = remove_xml_attribute(&tag, name);
+            }
+            cleaned.push_str(&tag);
+            remaining = &remaining[end..];
+        }
+        cleaned.push_str(remaining);
+        body = cleaned;
+    }
+    let has_drcs_transform = !options.preserve_drcs
+        || (options.drcs_mode == DrcsMode::UseUserMapping
+            && !options.ttml_drcs_replacements.is_empty());
+    if options.preserve_gaiji && options.preserve_accessibility && !has_drcs_transform {
+        return Some(body);
+    }
+    let prefix = format!(
+        "<body xmlns:tts='http://www.w3.org/ns/ttml#styling' xmlns:ttm='http://www.w3.org/ns/ttml#metadata' xmlns:arib='https://resubwinny.dev/ns/arib' xmlns:arib-tt='{ARIB_TTML_NAMESPACE}'>"
+    );
+    let wrapped = format!("{prefix}{body}</body>");
+    let document = roxmltree::Document::parse(&wrapped).ok()?;
+    let nodes = document
+        .descendants()
+        .filter(|node| node.is_text())
+        .collect::<Vec<_>>();
+    let text = nodes
+        .iter()
+        .filter_map(|node| node.text())
+        .collect::<String>();
+    let retained = crate::caption_features::retained_characters(
+        &text,
+        options.preserve_gaiji,
+        options.preserve_accessibility,
+    );
+    let mut cursor = 0;
+    let mut edits = Vec::new();
+    for node in nodes {
+        let mut style = base_style.clone();
+        if let Some(font_resource) = node.ancestors().find_map(|ancestor| {
+            ancestor.attributes().find_map(|attribute| {
+                (attribute.name() == "font-face"
+                    && attribute.namespace() == Some(ARIB_TTML_NAMESPACE))
+                .then(|| attribute.value().to_owned())
+            })
+        }) {
+            style.font_resource = Some(font_resource);
+        }
+        let retained_text = node
+            .text()
+            .unwrap_or_default()
+            .chars()
+            .filter(|_| {
+                let keep = retained[cursor];
+                cursor += 1;
+                keep
+            })
+            .collect::<String>();
+        let filtered = export_ttml_text(&retained_text, &style, source, &[], true, options);
+        let range = node.range();
+        edits.push((
+            range.start - prefix.len()..range.end - prefix.len(),
+            xml_escape(&filtered),
+        ));
+    }
+    let mut result = body;
+    for (range, replacement) in edits.into_iter().rev() {
+        result.replace_range(range, &replacement);
+    }
+    Some(result)
 }
 
 fn is_horizontal_ttml(caption: &TtmlCaption) -> bool {
@@ -544,11 +837,39 @@ fn ass_font_family(source: &str) -> &str {
     }
 }
 
+fn b24_export_character_text<'a>(
+    character: &'a native_b24::CaptionCharacter,
+    interval: &'a RegionInterval,
+    options: &'a ConversionOptions,
+) -> Option<&'a str> {
+    if !character.utf8.is_empty() {
+        return Some(&character.utf8);
+    }
+    if character.kind != 1 || !options.preserve_drcs {
+        return None;
+    }
+    let mapped = (options.drcs_mode == DrcsMode::UseUserMapping)
+        .then(|| options.drcs_replacements.get(&character.drcs_code))
+        .flatten()
+        .filter(|text| !text.is_empty());
+    mapped.map(String::as_str).or_else(|| {
+        interval
+            .drcs_glyphs
+            .iter()
+            .find(|glyph| glyph.drcs_code == character.drcs_code)
+            .map(|glyph| glyph.alternative_text.as_str())
+            .filter(|text| !text.is_empty())
+    })
+}
+
 pub(crate) fn write_ass_interval(
     writer: &mut BufWriter<File>,
     interval: &RegionInterval,
     options: &ConversionOptions,
 ) -> io::Result<()> {
+    if !options.preserve_position {
+        return write_ass_interval_group(writer, std::slice::from_ref(interval), options);
+    }
     if interval.region.is_ruby && !options.preserve_ruby {
         return Ok(());
     }
@@ -559,7 +880,25 @@ pub(crate) fn write_ass_interval(
     let scale_y = ASS_PLAY_RES_Y as f32 / interval.plane_height.max(1) as f32;
     let scale_uniform = scale_x.min(scale_y);
     let mut line = Vec::new();
-    for character in &interval.characters {
+    for (source_index, character) in interval.characters.iter().enumerate() {
+        if !options.preserve_accessibility
+            && interval
+                .accessibility_ranges
+                .iter()
+                .any(|range| range.contains(&source_index))
+        {
+            write_filtered_ass_character_line(
+                writer,
+                interval,
+                &line,
+                scale_x,
+                scale_y,
+                scale_uniform,
+                options,
+            )?;
+            line.clear();
+            continue;
+        }
         if !options.preserve_gaiji && b24_character_is_gaiji_source(character) {
             write_filtered_ass_character_line(
                 writer,
@@ -573,20 +912,8 @@ pub(crate) fn write_ass_interval(
             line.clear();
             continue;
         }
-        let text = if !character.utf8.is_empty() {
-            Some(character.utf8.as_str())
-        } else if options.preserve_drcs
-            && character.kind == 1
-            && options.drcs_mode == DrcsMode::UseUserMapping
-        {
-            options
-                .drcs_replacements
-                .get(&character.drcs_code)
-                .map(String::as_str)
-        } else {
-            None
-        };
-        let Some(text) = text.filter(|text| keep_text(text, options)) else {
+        let text = b24_export_character_text(character, interval, options);
+        let Some(text) = text else {
             write_filtered_ass_character_line(
                 writer,
                 interval,
@@ -629,9 +956,8 @@ pub(crate) fn write_ass_interval(
         return Ok(());
     }
     for character in &interval.characters {
-        let has_mapping = options.drcs_mode == DrcsMode::UseUserMapping
-            && options.drcs_replacements.contains_key(&character.drcs_code);
-        if has_mapping || character.kind != 1 || !character.utf8.is_empty() {
+        if character.kind != 1 || b24_export_character_text(character, interval, options).is_some()
+        {
             continue;
         }
         let Some(glyph) = interval
@@ -672,12 +998,13 @@ pub(crate) fn write_ass_interval_group(
     intervals: &[RegionInterval],
     options: &ConversionOptions,
 ) -> io::Result<()> {
-    if options.preserve_position || intervals.len() <= 1 {
+    if options.preserve_position {
         for interval in intervals {
             write_ass_interval(writer, interval, options)?;
         }
         return Ok(());
     }
+    let mut drawings = std::collections::HashMap::new();
     let mut rows: Vec<(i32, Vec<(&native_b24::CaptionCharacter, String)>)> = Vec::new();
     let mut ordered_intervals = intervals
         .iter()
@@ -685,21 +1012,45 @@ pub(crate) fn write_ass_interval_group(
         .collect::<Vec<_>>();
     ordered_intervals.sort_by_key(|interval| (interval.region.y, interval.region.x));
     for interval in ordered_intervals {
-        for character in &interval.characters {
-            let text = if !character.utf8.is_empty() {
-                export_text(&character.utf8, options)
-            } else if options.preserve_drcs
-                && character.kind == 1
-                && options.drcs_mode == DrcsMode::UseUserMapping
+        for (source_index, character) in interval.characters.iter().enumerate() {
+            if !options.preserve_accessibility
+                && interval
+                    .accessibility_ranges
+                    .iter()
+                    .any(|range| range.contains(&source_index))
             {
-                options
-                    .drcs_replacements
-                    .get(&character.drcs_code)
-                    .map(|text| export_text(text, options))
-                    .unwrap_or_default()
-            } else {
-                String::new()
-            };
+                continue;
+            }
+            let mut text = b24_export_character_text(character, interval, options)
+                .map(str::to_owned)
+                .unwrap_or_default();
+            if b24_export_character_text(character, interval, options).is_none()
+                && character.kind == 1
+                && options.preserve_drcs
+                && let Some(glyph) = interval
+                    .drcs_glyphs
+                    .iter()
+                    .find(|glyph| glyph.drcs_code == character.drcs_code)
+            {
+                let drawing = drcs_drawing(glyph);
+                if !drawing.is_empty() {
+                    let sx = character.width as f32 * ASS_PLAY_RES_X as f32
+                        / interval.plane_width.max(1) as f32
+                        * 100.0
+                        / glyph.width.max(1) as f32;
+                    let sy = character.height as f32 * ASS_PLAY_RES_Y as f32
+                        / interval.plane_height.max(1) as f32
+                        * 100.0
+                        / glyph.height.max(1) as f32;
+                    drawings.insert(
+                        character as *const _,
+                        format!(
+                            "{{\\fscx{sx:.2}\\fscy{sy:.2}\\p1}}{drawing}{{\\p0\\fscx100\\fscy100}}"
+                        ),
+                    );
+                    text.push('\u{fffc}');
+                }
+            }
             if text.is_empty() {
                 continue;
             }
@@ -728,11 +1079,7 @@ pub(crate) fn write_ass_interval_group(
             .iter()
             .map(|(_, text)| text.as_str())
             .collect::<String>();
-        let retained = crate::caption_features::retained_characters(
-            &combined,
-            options.preserve_gaiji,
-            options.preserve_accessibility,
-        );
+        let retained = crate::caption_features::retained_characters(&combined, true, true);
         let mut cursor = 0_usize;
         let filtered_cells = cells
             .iter()
@@ -763,8 +1110,8 @@ pub(crate) fn write_ass_interval_group(
             &mut body,
             &refs,
             options,
-            scale_x,
-            scale_y,
+            (scale_x, scale_y),
+            &drawings,
             &mut active_style,
             &mut active_spacing,
         );
@@ -785,11 +1132,12 @@ fn append_unpositioned_b24_body(
     body: &mut String,
     line: &[(&native_b24::CaptionCharacter, &str)],
     options: &ConversionOptions,
-    scale_x: f32,
-    scale_y: f32,
+    scale: (f32, f32),
+    drawings: &std::collections::HashMap<*const native_b24::CaptionCharacter, String>,
     active_style: &mut Option<String>,
     active_spacing: &mut f32,
 ) {
+    let (scale_x, scale_y) = scale;
     for (index, (character, text)) in line.iter().enumerate() {
         let font_size = scale_ass_coordinate(character.height.max(1), scale_y).max(1);
         let next_spacing = (line.get(index + 1).is_some() || text.chars().count() > 1)
@@ -827,7 +1175,11 @@ fn append_unpositioned_b24_body(
             body.push_str(&format!("{{{style}\\fsp{active_spacing:.2}}}"));
             *active_style = Some(style);
         }
-        body.push_str(&ass_escape(text));
+        if let Some(drawing) = drawings.get(&(*character as *const _)) {
+            body.push_str(drawing);
+        } else {
+            body.push_str(&ass_escape(text));
+        }
     }
 }
 
@@ -862,7 +1214,7 @@ fn write_filtered_ass_character_line(
     scale_uniform: f32,
     options: &ConversionOptions,
 ) -> io::Result<()> {
-    if options.preserve_gaiji && options.preserve_accessibility {
+    if options.preserve_gaiji {
         return write_ass_character_line(
             writer,
             interval,
@@ -874,11 +1226,7 @@ fn write_filtered_ass_character_line(
         );
     }
     let combined = line.iter().map(|(_, text)| *text).collect::<String>();
-    let retained = crate::caption_features::retained_characters(
-        &combined,
-        options.preserve_gaiji,
-        options.preserve_accessibility,
-    );
+    let retained = crate::caption_features::retained_characters(&combined, true, true);
     let mut cursor = 0_usize;
     let owned = line
         .iter()
@@ -1144,7 +1492,12 @@ fn b24_character_has_ass_text(
         return false;
     }
     if !character.utf8.is_empty() {
-        return keep_text(&character.utf8, options);
+        return !crate::caption_features::filtered_text(
+            &character.utf8,
+            true,
+            options.preserve_accessibility,
+        )
+        .is_empty();
     }
     options.preserve_drcs
         && character.kind == 1
@@ -1152,12 +1505,10 @@ fn b24_character_has_ass_text(
         && options
             .drcs_replacements
             .get(&character.drcs_code)
-            .is_some_and(|text| keep_text(text, options))
-}
-
-pub(crate) fn b24_character_is_gaiji_source(character: &native_b24::CaptionCharacter) -> bool {
-    character.pua_codepoint != 0
-        && crate::arib_symbols::is_arib_additional_symbol_codepoint(character.pua_codepoint)
+            .is_some_and(|text| {
+                !crate::caption_features::filtered_text(text, true, options.preserve_accessibility)
+                    .is_empty()
+            })
 }
 
 fn scale_ass_coordinate(value: i32, scale: f32) -> i32 {

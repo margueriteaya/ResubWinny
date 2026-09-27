@@ -19,6 +19,7 @@ pub(crate) fn ntp_delta_ms(value: u64, origin: u64) -> i64 {
 #[cfg(not(feature = "libaribtlv"))]
 pub(crate) fn scan_tlv_ttml<F, P, C, R, A>(
     path: &Path,
+    selected_packet_id: Option<u16>,
     mut on_caption: F,
     mut on_progress: P,
     mut cancelled: C,
@@ -38,7 +39,7 @@ where
             "TLV TTML conversion requires an ISDB-S3 TLV input",
         ));
     }
-    let mut reader = BufReader::with_capacity(1024 * 1024, File::open(path)?);
+    let mut reader = BufReader::with_capacity(1024 * 1024, crate::input::open_input(path)?);
     let mut offset = probe.sync_offset.unwrap_or_default() as u64;
     reader.seek(SeekFrom::Start(offset))?;
     let mut diagnostics = TlvDiagnostics::default();
@@ -81,6 +82,9 @@ where
             None,
         );
         for payload in captured_payloads {
+            if selected_packet_id.is_some_and(|packet_id| payload.packet_id != packet_id) {
+                continue;
+            }
             on_payload(packet_offset, &payload)?;
             let Some(presentation_ntp) = payload.presentation_ntp else {
                 summary.decoder_errors += 1;
@@ -129,6 +133,7 @@ where
                                     index: resource.index,
                                     data_type: resource.data_type,
                                     byte_length: resource.bytes.len(),
+                                    content_sha256: resource_sha256(&resource.bytes),
                                     format_hint: format.format_hint,
                                     format_validation: format.format_validation,
                                     width: format.width,

@@ -1,4 +1,10 @@
 import type { TaskEvent } from "../../backend";
+import type { FeatureFact, FeatureKnowledge, FeatureKnowledgeState, RuntimeExportConflicts } from "./export-assessment";
+
+export function featureCountSummary(fact: FeatureFact | undefined): { count: number; final: boolean } | null {
+  if (fact?.state !== "present" || !fact.observedCount) return null;
+  return { count: fact.observedCount, final: fact.complete };
+}
 
 export type TaskEventState = {
   archivePath: string;
@@ -11,6 +17,8 @@ export type TaskEventState = {
   previewIndexing: boolean;
   progress: number;
   warnings: number;
+  featureKnowledge: Record<string, FeatureKnowledge>;
+  exportConflicts: Record<string, RuntimeExportConflicts>;
 };
 
 export function emptyTaskEventState(): TaskEventState {
@@ -25,6 +33,8 @@ export function emptyTaskEventState(): TaskEventState {
     previewIndexing: false,
     progress: 0,
     warnings: 0,
+    featureKnowledge: {},
+    exportConflicts: {},
   };
 }
 
@@ -39,12 +49,32 @@ export type TaskEventEffects = {
   refreshResume: boolean;
 };
 
+export function invalidateRuntimeFeatureConflict(
+  conflictsByTrack: Record<string, RuntimeExportConflicts>,
+  feature: keyof import("../../backend").ExportPreservation,
+): Record<string, RuntimeExportConflicts> {
+  let changed = false;
+  const next: Record<string, RuntimeExportConflicts> = {};
+  for (const [track, conflicts] of Object.entries(conflictsByTrack)) {
+    if (!conflicts[feature]) {
+      next[track] = conflicts;
+      continue;
+    }
+    changed = true;
+    const updated = { ...conflicts };
+    delete updated[feature];
+    next[track] = updated;
+  }
+  return changed ? next : conflictsByTrack;
+}
+
 export function reduceTaskEvent(
   current: TaskEventState,
   event: TaskEvent,
   sourceSize: number,
   message: string,
   batchRunning: boolean,
+  sourceIdentity = "",
 ): { state: TaskEventState; effects: TaskEventEffects } {
   const state = { ...current, logs: current.logs };
   const wasPreviewIndexing = current.previewIndexing;
@@ -56,6 +86,39 @@ export function reduceTaskEvent(
     state.warnings = Math.max(0, event.warnings);
   if (sourceSize > 0 && state.bytesRead > 0)
     state.progress = Math.min(100, (state.bytesRead / sourceSize) * 100);
+
+  if (event.kind === "feature_observed" || event.kind === "feature_summary" || event.code === "export_conflict") {
+    const logicalTrack = String(event.parameters?.logicalTrack ?? "");
+    const feature = String(event.parameters?.feature ?? "") as keyof import("../../backend").ExportPreservation;
+    if (logicalTrack && ["position", "color", "ruby", "drcs", "gaiji", "accessibility"].includes(feature)) {
+      const key = `${sourceIdentity}::${logicalTrack}`;
+      const track = { ...(state.featureKnowledge[key] ?? {}) };
+      const previous = track[feature];
+      const incoming = (event.kind === "feature_observed" || event.code === "export_conflict" ? "present" : event.parameters?.state) as FeatureKnowledgeState;
+      const nextState = previous?.state === "present" ? "present" : incoming;
+      if (nextState === "present" || (nextState === "absent" && event.parameters?.complete === true)) {
+        track[feature] = {
+          state: nextState,
+          observedCount: Number(event.parameters?.observedCount ?? previous?.observedCount ?? 0),
+          complete: event.parameters?.complete === true || previous?.complete === true,
+          details: {
+            ...previous?.details,
+            ...(event.parameters?.details as Record<string, unknown> | undefined),
+          },
+        };
+        state.featureKnowledge = { ...state.featureKnowledge, [key]: track };
+        if (event.code === "export_conflict") {
+          const conflicts = { ...(state.exportConflicts[key] ?? {}) };
+          conflicts[feature] = {
+            formats: Array.isArray(event.parameters?.formats) ? event.parameters.formats.map(String) as import("../../backend").ExportFormat[] : [],
+            issueCode: String(event.parameters?.issueCode ?? "format_cannot_preserve_feature"),
+            availableActions: Array.isArray(event.parameters?.availableActions) ? event.parameters.availableActions.map(String) : [],
+          };
+          state.exportConflicts = { ...state.exportConflicts, [key]: conflicts };
+        }
+      }
+    }
+  }
 
   const progressBucket = Math.floor(state.progress / 5);
   if (event.kind !== "progress" || progressBucket > state.lastLoggedProgressBucket) {

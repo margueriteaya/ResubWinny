@@ -1,6 +1,9 @@
 use serde::Serialize;
+use std::ops::Range;
 
+use crate::ARIB_TTML_NAMESPACE;
 use crate::caption::ruby::TtmlRubyBinding;
+use crate::native_b24;
 
 use crate::resource::TtmlResourceMetadata;
 
@@ -62,6 +65,10 @@ impl DataTracks {
 pub(crate) struct CaptionTrackInspection {
     pub(crate) label: String,
     pub(crate) detail: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) track_id: Option<u16>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -92,6 +99,961 @@ pub struct B24DecodeSummary {
     pub characters: u64,
     pub drcs_glyphs: u64,
     pub decoder_errors: u64,
+    #[serde(default)]
+    pub features: CaptionFeatureSummary,
+}
+
+#[derive(Debug, Default, Serialize, Clone)]
+pub struct CaptionFeatureSummary {
+    pub ruby: bool,
+    pub drcs: bool,
+    pub position: bool,
+    pub color: bool,
+    pub gaiji: bool,
+    pub accessibility: bool,
+    #[serde(default)]
+    pub observed_counts: std::collections::BTreeMap<String, u64>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub feature_details: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default)]
+    pub complete: bool,
+    #[serde(skip)]
+    pub(crate) semantic_state: crate::caption_features::CaptionSequenceState,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeatureState {
+    #[default]
+    Unknown,
+    Present,
+    Absent,
+}
+
+impl CaptionFeatureSummary {
+    pub fn state(&self, feature: &str) -> FeatureState {
+        let present = match feature {
+            "ruby" => self.ruby,
+            "drcs" => self.drcs,
+            "position" => self.position,
+            "color" => self.color,
+            "gaiji" => self.gaiji,
+            "accessibility" => self.accessibility,
+            _ => false,
+        };
+        if present {
+            FeatureState::Present
+        } else if self.complete {
+            FeatureState::Absent
+        } else {
+            FeatureState::Unknown
+        }
+    }
+
+    fn mark(&mut self, feature: &str, present: bool) {
+        if present {
+            *self.observed_counts.entry(feature.to_string()).or_default() += 1;
+        }
+    }
+
+    fn mark_count(&mut self, feature: &str, count: usize) {
+        if count > 0 {
+            *self.observed_counts.entry(feature.to_string()).or_default() += count as u64;
+        }
+    }
+
+    fn mark_detail_flag(&mut self, feature: &str, detail: &str, present: bool) {
+        if !present {
+            return;
+        }
+        let details = self
+            .feature_details
+            .entry(feature.to_owned())
+            .or_insert_with(|| serde_json::json!({}));
+        details
+            .as_object_mut()
+            .expect("feature details are always JSON objects")
+            .insert(detail.to_owned(), serde_json::Value::Bool(true));
+    }
+
+    pub(crate) fn details(&self, feature: &str) -> Option<&serde_json::Value> {
+        self.feature_details.get(feature)
+    }
+}
+
+impl CaptionFeatureSummary {
+    fn observe_semantics(&mut self, semantics: &crate::caption_features::CaptionSemantics) {
+        if !semantics.declared_accessibility_ranges.is_empty() {
+            self.accessibility = true;
+            self.mark_count(
+                "accessibility",
+                semantics.declared_accessibility_ranges.len(),
+            );
+            self.mark_detail_flag("accessibility", "semanticRole", true);
+        }
+        self.observe_accessibility_excluding(
+            &semantics.text_accessibility,
+            &semantics.declared_accessibility_ranges,
+        );
+    }
+
+    fn observe_accessibility_excluding(
+        &mut self,
+        evidence: &crate::caption_features::AccessibilityEvidence,
+        excluded_ranges: &[std::ops::Range<usize>],
+    ) {
+        if evidence.ranges.is_empty() {
+            return;
+        }
+        self.accessibility = true;
+        let count = evidence
+            .cue_ranges
+            .iter()
+            .filter(|ranges| {
+                !ranges.iter().any(|range| {
+                    excluded_ranges
+                        .iter()
+                        .any(|excluded| range.start < excluded.end && excluded.start < range.end)
+                })
+            })
+            .count();
+        self.mark_count("accessibility", count);
+        self.mark_detail_flag("accessibility", "textCue", true);
+        self.mark_detail_flag(
+            "accessibility",
+            "leadingAnnotation",
+            evidence.leading_annotation,
+        );
+        self.mark_detail_flag("accessibility", "musicCue", evidence.music_cue);
+        self.mark_detail_flag("accessibility", "speakerCue", evidence.speaker_cue);
+        self.mark_detail_flag(
+            "accessibility",
+            "continuationCue",
+            evidence.continuation_cue,
+        );
+        self.mark_detail_flag("accessibility", "phoneCue", evidence.phone_cue);
+        self.mark_detail_flag("accessibility", "offscreenCue", evidence.offscreen_cue);
+        self.mark_detail_flag(
+            "accessibility",
+            "narrationDelimiter",
+            evidence.narration_delimiter,
+        );
+    }
+
+    pub(crate) fn observe_b24_scene(&mut self, scene: &native_b24::CaptionScene) {
+        let multiple_regions = scene.regions.len() > 1;
+        let explicit_geometry = scene.regions.iter().any(|region| {
+            region.x != 0
+                || region.y != 0
+                || region.width != scene.plane_width
+                || region.height != scene.plane_height
+        });
+        if multiple_regions || explicit_geometry {
+            self.position = true;
+            self.mark("position", true);
+            self.mark_detail_flag("position", "multipleRegions", multiple_regions);
+            self.mark_detail_flag("position", "explicitGeometry", explicit_geometry);
+        }
+        let foreground = scene
+            .characters
+            .iter()
+            .any(|character| character.text_color & 0x00ff_ffff != 0x00ff_ffff);
+        let background = scene
+            .characters
+            .iter()
+            .any(|character| character.back_color & 0x00ff_ffff != 0);
+        let stroke = scene
+            .characters
+            .iter()
+            .any(|character| character.stroke_color & 0x00ff_ffff != 0);
+        if foreground || background || stroke {
+            self.color = true;
+            self.mark("color", true);
+            self.mark_detail_flag("color", "foreground", foreground);
+            self.mark_detail_flag("color", "background", background);
+            self.mark_detail_flag("color", "stroke", stroke);
+        }
+        if scene.regions.iter().any(|region| region.is_ruby) {
+            self.ruby = true;
+            self.mark("ruby", true);
+            self.mark_detail_flag("ruby", "boundAnnotation", true);
+        }
+        let referenced_drcs_codes = scene
+            .regions
+            .iter()
+            .filter_map(|region| {
+                let start = region.first_character as usize;
+                let end = start.saturating_add(region.character_count as usize);
+                scene.characters.get(start..end)
+            })
+            .flatten()
+            .filter_map(|character| (character.drcs_code != 0).then_some(character.drcs_code))
+            .collect::<std::collections::BTreeSet<_>>();
+        if !referenced_drcs_codes.is_empty() {
+            self.drcs = true;
+            self.mark("drcs", true);
+            self.mark_detail_flag("drcs", "referenced", true);
+            self.mark_detail_flag(
+                "drcs",
+                "resourceBacked",
+                scene
+                    .drcs_glyphs
+                    .iter()
+                    .any(|glyph| referenced_drcs_codes.contains(&glyph.drcs_code)),
+            );
+        }
+        let gaiji_count = scene
+            .characters
+            .iter()
+            .filter(|character| b24_character_is_gaiji_source(character))
+            .count();
+        if gaiji_count > 0 {
+            self.gaiji = true;
+            self.mark_count("gaiji", gaiji_count);
+            self.mark_detail_flag("gaiji", "aribAdditionalSymbol", true);
+        }
+        let texts = scene
+            .regions
+            .iter()
+            .filter_map(|region| {
+                let start = region.first_character as usize;
+                let end = start.saturating_add(region.character_count as usize);
+                scene.characters.get(start..end)
+            })
+            .map(|characters| {
+                characters
+                    .iter()
+                    .map(|character| character.utf8.as_str())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>();
+        let references = texts.iter().map(String::as_str).collect::<Vec<_>>();
+        let semantics = crate::caption_features::caption_group_semantics_with_state(
+            &references,
+            &[],
+            &mut self.semantic_state,
+        );
+        for fragment in &semantics.fragments {
+            self.observe_semantics(fragment);
+        }
+        if semantics.cross_fragment_delimiter_count > 0 {
+            self.accessibility = true;
+            self.mark_count("accessibility", semantics.cross_fragment_delimiter_count);
+            self.mark_detail_flag("accessibility", "narrationDelimiter", true);
+        }
+    }
+
+    pub(crate) fn observe_ttml(&mut self, caption: &TtmlCaption) {
+        if !caption.ruby_bindings.is_empty() {
+            self.ruby = true;
+            self.mark("ruby", true);
+            self.mark_detail_flag("ruby", "boundAnnotation", true);
+        }
+        let explicit_geometry = caption
+            .source_layout
+            .as_ref()
+            .is_some_and(|layout| layout.explicit_origin || layout.explicit_extent);
+        let vertical_writing = caption
+            .style
+            .writing_mode
+            .as_deref()
+            .is_some_and(|mode| matches!(mode, "vertical-rl" | "vertical-lr"));
+        let explicit_direction = caption.style.direction.is_some();
+        let explicit_alignment =
+            caption.style.text_align.is_some() || caption.style.display_align.is_some();
+        if explicit_geometry
+            || caption.style.writing_mode.is_some()
+            || explicit_direction
+            || explicit_alignment
+        {
+            self.position = true;
+            self.mark("position", true);
+            self.mark_detail_flag("position", "explicitGeometry", explicit_geometry);
+            self.mark_detail_flag("position", "verticalWriting", vertical_writing);
+            self.mark_detail_flag("position", "explicitDirection", explicit_direction);
+            self.mark_detail_flag("position", "explicitAlignment", explicit_alignment);
+        }
+        let inline_runs = caption
+            .rich_body
+            .as_deref()
+            .map(|body| crate::parse_ttml_inline_runs(body, &caption.style))
+            .unwrap_or_default();
+        let styles = std::iter::once(&caption.style)
+            .chain(inline_runs.iter().map(|run| &run.style))
+            .chain(inline_runs.iter().filter_map(|run| run.ruby_style.as_ref()));
+        let mut foreground = false;
+        let mut background = false;
+        let mut stroke = false;
+        for style in styles {
+            foreground |= style
+                .color
+                .as_deref()
+                .is_some_and(ttml_foreground_is_material);
+            background |= style
+                .background_color
+                .as_deref()
+                .is_some_and(ttml_background_is_material);
+            stroke |= style
+                .text_outline
+                .as_deref()
+                .is_some_and(ttml_outline_is_material);
+        }
+        if foreground || background || stroke {
+            self.color = true;
+            self.mark("color", true);
+            self.mark_detail_flag("color", "foreground", foreground);
+            self.mark_detail_flag("color", "background", background);
+            self.mark_detail_flag("color", "stroke", stroke);
+        }
+        let drcs_count = ttml_font_resource_character_count(
+            &caption.text,
+            &caption.style,
+            caption.rich_body.as_deref(),
+        );
+        if drcs_count > 0 {
+            self.drcs = true;
+            self.mark_count("drcs", drcs_count);
+            self.mark_detail_flag("drcs", "referenced", true);
+            self.mark_detail_flag("drcs", "resourceBacked", true);
+        }
+        let gaiji_count = crate::caption_features::gaiji_ranges(&caption.text).len();
+        if gaiji_count > 0 {
+            self.gaiji = true;
+            self.mark_count("gaiji", gaiji_count);
+            self.mark_detail_flag("gaiji", "aribAdditionalSymbol", true);
+        }
+        let semantic_ranges = caption
+            .accessibility_cues
+            .iter()
+            .map(|cue| cue.start..cue.end)
+            .chain(caption.resolved_accessibility_ranges.iter().cloned())
+            .collect::<Vec<_>>();
+        self.observe_semantics(&crate::caption_features::caption_semantics(
+            &caption.text,
+            &semantic_ranges,
+        ));
+    }
+}
+
+fn compact_ttml_color(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| !character.is_ascii_whitespace())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn ttml_foreground_is_material(value: &str) -> bool {
+    !matches!(
+        compact_ttml_color(value).as_str(),
+        "white"
+            | "#fff"
+            | "#ffff"
+            | "#ffffff"
+            | "#ffffffff"
+            | "rgb(255,255,255)"
+            | "rgba(255,255,255,1)"
+            | "rgba(255,255,255,1.0)"
+    )
+}
+
+fn ttml_background_is_material(value: &str) -> bool {
+    let compact = compact_ttml_color(value);
+    let transparent_hex = compact
+        .strip_prefix('#')
+        .is_some_and(|hex| match hex.len() {
+            4 => hex.ends_with('0'),
+            8 => hex.ends_with("00"),
+            _ => false,
+        });
+    let transparent_rgba =
+        compact.starts_with("rgba(") && (compact.ends_with(",0)") || compact.ends_with(",0.0)"));
+    compact != "transparent" && !transparent_hex && !transparent_rgba
+}
+
+fn ttml_outline_is_material(value: &str) -> bool {
+    if value.trim().eq_ignore_ascii_case("none") {
+        return false;
+    }
+    let widths = value.split_whitespace().filter_map(|token| {
+        ["px", "em", "c", "%"]
+            .into_iter()
+            .find_map(|unit| token.strip_suffix(unit))
+            .and_then(|number| number.parse::<f64>().ok())
+    });
+    let mut found_width = false;
+    for width in widths {
+        found_width = true;
+        if width > 0.0 {
+            return true;
+        }
+    }
+    !found_width
+        && value
+            .trim()
+            .parse::<f64>()
+            .map_or(true, |width| width > 0.0)
+}
+
+pub(crate) fn b24_character_is_gaiji_source(character: &native_b24::CaptionCharacter) -> bool {
+    crate::arib_symbols::is_arib_additional_symbol_ku(character.source_ku)
+}
+
+#[cfg(test)]
+mod feature_tests {
+    use super::*;
+
+    fn b24_character() -> native_b24::CaptionCharacter {
+        native_b24::CaptionCharacter {
+            kind: 0,
+            codepoint: '字' as u32,
+            pua_codepoint: 0,
+            source_graphic_set: 0,
+            source_ku: 0,
+            source_ten: 0,
+            drcs_code: 0,
+            x: 0,
+            y: 0,
+            width: 36,
+            height: 36,
+            horizontal_spacing: 0,
+            vertical_spacing: 0,
+            horizontal_scale: 1.0,
+            vertical_scale: 1.0,
+            text_color: 0xffff_ffff,
+            back_color: 0,
+            stroke_color: 0,
+            style: 0,
+            enclosure_style: 0,
+            utf8: "字".into(),
+        }
+    }
+
+    #[test]
+    fn b24_material_features_are_observed_from_used_caption_content() {
+        let mut character = b24_character();
+        character.drcs_code = 7;
+        character.text_color = 0xff00_ff00;
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![native_b24::CaptionRegion {
+                x: 100,
+                y: 200,
+                width: 36,
+                height: 36,
+                is_ruby: true,
+                first_character: 0,
+                character_count: 1,
+            }],
+            characters: vec![character],
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert!(features.ruby);
+        assert!(features.drcs);
+        assert!(features.position);
+        assert!(features.color);
+        assert_eq!(features.details("ruby").unwrap()["boundAnnotation"], true);
+        assert_eq!(features.details("drcs").unwrap()["referenced"], true);
+        assert_eq!(
+            features.details("position").unwrap()["explicitGeometry"],
+            true
+        );
+        assert_eq!(features.details("color").unwrap()["foreground"], true);
+    }
+
+    #[test]
+    fn default_b24_presentation_is_not_a_material_feature() {
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![native_b24::CaptionRegion {
+                x: 0,
+                y: 0,
+                width: 960,
+                height: 540,
+                is_ruby: false,
+                first_character: 0,
+                character_count: 1,
+            }],
+            characters: vec![b24_character()],
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert!(!features.ruby);
+        assert!(!features.drcs);
+        assert!(!features.position);
+        assert!(!features.color);
+        assert!(features.feature_details.is_empty());
+        assert_eq!(features.state("ruby"), FeatureState::Unknown);
+        features.complete = true;
+        assert_eq!(features.state("ruby"), FeatureState::Absent);
+    }
+
+    #[test]
+    fn present_feature_does_not_regress_when_stream_completes() {
+        let mut features = CaptionFeatureSummary {
+            ruby: true,
+            ..Default::default()
+        };
+        features.observed_counts.insert("ruby".into(), 3);
+
+        features.complete = true;
+
+        assert_eq!(features.state("ruby"), FeatureState::Present);
+        assert_eq!(features.observed_counts["ruby"], 3);
+    }
+
+    #[test]
+    fn b24_gaiji_and_accessibility_use_shared_material_classifiers() {
+        let mut character = b24_character();
+        character.source_graphic_set = 16;
+        character.source_ku = 90;
+        character.source_ten = 1;
+        character.utf8 = "♪".into();
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![native_b24::CaptionRegion {
+                x: 0,
+                y: 0,
+                width: 960,
+                height: 540,
+                is_ruby: false,
+                first_character: 0,
+                character_count: 1,
+            }],
+            characters: vec![character],
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert!(features.gaiji);
+        assert!(features.accessibility);
+        assert_eq!(features.observed_counts["gaiji"], 1);
+        assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(
+            features.details("gaiji").unwrap()["aribAdditionalSymbol"],
+            true
+        );
+        assert_eq!(features.details("accessibility").unwrap()["textCue"], true);
+        assert_eq!(features.details("accessibility").unwrap()["musicCue"], true);
+    }
+
+    #[test]
+    fn b24_accessibility_respects_independent_region_text_boundaries() {
+        let characters = ["本", "文", "（", "シ", "ン", "ジ", "）", "台", "詞"]
+            .into_iter()
+            .map(|text| {
+                let mut character = b24_character();
+                character.utf8 = text.into();
+                character
+            })
+            .collect();
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![
+                native_b24::CaptionRegion {
+                    x: 0,
+                    y: 0,
+                    width: 960,
+                    height: 270,
+                    is_ruby: false,
+                    first_character: 0,
+                    character_count: 2,
+                },
+                native_b24::CaptionRegion {
+                    x: 0,
+                    y: 270,
+                    width: 960,
+                    height: 270,
+                    is_ruby: false,
+                    first_character: 2,
+                    character_count: 7,
+                },
+            ],
+            characters,
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert!(features.accessibility);
+        assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(
+            features.details("accessibility").unwrap()["leadingAnnotation"],
+            true
+        );
+    }
+
+    #[test]
+    fn paired_narration_delimiters_count_as_one_accessibility_cue() {
+        let characters = ["＜", "語", "り", "＞"]
+            .into_iter()
+            .map(|text| {
+                let mut character = b24_character();
+                character.utf8 = text.into();
+                character
+            })
+            .collect();
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![native_b24::CaptionRegion {
+                x: 0,
+                y: 0,
+                width: 960,
+                height: 540,
+                is_ruby: false,
+                first_character: 0,
+                character_count: 4,
+            }],
+            characters,
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(
+            features.details("accessibility").unwrap()["narrationDelimiter"],
+            true
+        );
+    }
+
+    #[test]
+    fn narration_delimiters_can_pair_across_b24_regions() {
+        let characters = "＜たった１錠。わたしオン！＞"
+            .chars()
+            .map(|text| {
+                let mut character = b24_character();
+                character.utf8 = text.to_string();
+                character
+            })
+            .collect::<Vec<_>>();
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![
+                native_b24::CaptionRegion {
+                    x: 0,
+                    y: 0,
+                    width: 960,
+                    height: 270,
+                    is_ruby: false,
+                    first_character: 0,
+                    character_count: 7,
+                },
+                native_b24::CaptionRegion {
+                    x: 0,
+                    y: 270,
+                    width: 960,
+                    height: 270,
+                    is_ruby: false,
+                    first_character: 7,
+                    character_count: (characters.len() - 7) as u32,
+                },
+            ],
+            characters,
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_b24_scene(&scene);
+
+        assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(
+            features.details("accessibility").unwrap()["narrationDelimiter"],
+            true
+        );
+    }
+
+    #[test]
+    fn ttml_gaiji_and_accessibility_are_source_text_facts() {
+        let caption = crate::parse_ttml_captions(
+            "<tt><body><p begin='0s' end='1s'>➡♪〜本文</p></body></tt>",
+            0,
+        )
+        .remove(0);
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_ttml(&caption);
+
+        assert!(features.gaiji);
+        assert!(features.accessibility);
+        assert_eq!(features.observed_counts["gaiji"], 1);
+        assert_eq!(features.observed_counts["accessibility"], 2);
+        assert_eq!(
+            features.details("gaiji").unwrap()["aribAdditionalSymbol"],
+            true
+        );
+        assert_eq!(features.details("accessibility").unwrap()["textCue"], true);
+        assert_eq!(features.details("accessibility").unwrap()["musicCue"], true);
+        assert_eq!(
+            features.details("accessibility").unwrap()["continuationCue"],
+            true
+        );
+    }
+
+    #[test]
+    fn b24_and_b62_text_use_the_same_broadcast_semantic_model() {
+        let text = "（拍手）本文➡";
+        let characters = text
+            .chars()
+            .map(|text| {
+                let mut character = b24_character();
+                character.utf8 = text.to_string();
+                character
+            })
+            .collect::<Vec<_>>();
+        let scene = native_b24::CaptionScene {
+            pts_ms: 0,
+            wait_duration_ms: 1_000,
+            plane_width: 960,
+            plane_height: 540,
+            regions: vec![native_b24::CaptionRegion {
+                x: 0,
+                y: 0,
+                width: 960,
+                height: 540,
+                is_ruby: false,
+                first_character: 0,
+                character_count: characters.len() as u32,
+            }],
+            characters,
+            drcs_glyphs: Vec::new(),
+            rendered_image: None,
+        };
+        let caption = crate::parse_ttml_captions(
+            &format!("<tt><body><p begin='0s' end='1s'>{text}</p></body></tt>"),
+            0,
+        )
+        .remove(0);
+        let mut b24 = CaptionFeatureSummary::default();
+        let mut b62 = CaptionFeatureSummary::default();
+
+        b24.observe_b24_scene(&scene);
+        b62.observe_ttml(&caption);
+
+        assert_eq!(
+            b24.observed_counts["accessibility"],
+            b62.observed_counts["accessibility"]
+        );
+        assert_eq!(b24.details("accessibility"), b62.details("accessibility"));
+    }
+
+    #[test]
+    fn ttml_semantic_accessibility_roles_are_source_facts() {
+        let caption = crate::parse_ttml_captions(
+            "<tt xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><p begin='0s' end='1s'><span ttm:role='sound'>ドア音</span></p></body></tt>",
+            0,
+        )
+        .remove(0);
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_ttml(&caption);
+
+        assert!(features.accessibility);
+        assert_eq!(features.observed_counts["accessibility"], 1);
+        assert_eq!(
+            features.details("accessibility").unwrap()["semanticRole"],
+            true
+        );
+    }
+
+    #[test]
+    fn semantic_role_and_text_cue_overlap_count_once() {
+        let caption = crate::parse_ttml_captions(
+            "<tt xmlns:ttm='http://www.w3.org/ns/ttml#metadata'><body><p begin='0s' end='1s'><span ttm:role='music'>♪〜</span>音楽</p></body></tt>",
+            0,
+        )
+        .remove(0);
+        let mut features = CaptionFeatureSummary::default();
+
+        features.observe_ttml(&caption);
+
+        assert_eq!(features.observed_counts["accessibility"], 1);
+        let details = features.details("accessibility").unwrap();
+        assert_eq!(details["semanticRole"], true);
+        assert_eq!(details["musicCue"], true);
+    }
+
+    #[test]
+    fn ttml_default_colors_and_transparent_background_are_not_material() {
+        for color in ["white", "#FFF", "#FFFFFF", "#FFFFFFFF"] {
+            for background in ["transparent", "#00000000", "#FFFFFF00"] {
+                let xml = format!(
+                    "<tt><body><p begin='0s' end='1s' tts:color='{color}' tts:backgroundColor='{background}' tts:textOutline='none'>本文</p></body></tt>"
+                );
+                let caption = crate::parse_ttml_captions(&xml, 0).remove(0);
+                let mut features = CaptionFeatureSummary::default();
+
+                features.observe_ttml(&caption);
+
+                assert!(
+                    !features.color,
+                    "{color} with {background} should be default presentation"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn ttml_fallback_coordinates_are_not_material_but_explicit_geometry_is() {
+        let ordinary =
+            crate::parse_ttml_captions("<tt><body><p begin='0s' end='1s'>本文</p></body></tt>", 0)
+                .remove(0);
+        assert_eq!((ordinary.x, ordinary.y), (960, 920));
+        let mut ordinary_features = CaptionFeatureSummary::default();
+        ordinary_features.observe_ttml(&ordinary);
+        assert!(!ordinary_features.position);
+
+        let explicit = crate::parse_ttml_captions(
+            "<tt><head><layout><region xml:id='r' tts:origin='960px 920px'/></layout></head><body><p region='r' begin='0s' end='1s'>本文</p></body></tt>",
+            0,
+        )
+        .remove(0);
+        assert_eq!((explicit.x, explicit.y), (960, 920));
+        let mut explicit_features = CaptionFeatureSummary::default();
+        explicit_features.observe_ttml(&explicit);
+        assert!(explicit_features.position);
+        assert_eq!(
+            explicit_features.details("position").unwrap()["explicitGeometry"],
+            true
+        );
+    }
+
+    #[test]
+    fn ttml_alignment_outline_and_inline_color_are_material_features() {
+        for attribute in ["tts:textAlign='center'", "tts:displayAlign='after'"] {
+            let xml = format!("<tt><body><p begin='0s' end='1s' {attribute}>本文</p></body></tt>");
+            let caption = crate::parse_ttml_captions(&xml, 0).remove(0);
+            let mut features = CaptionFeatureSummary::default();
+            features.observe_ttml(&caption);
+            assert!(features.position, "{attribute} should be material layout");
+            assert_eq!(
+                features.details("position").unwrap()["explicitAlignment"],
+                true
+            );
+        }
+
+        let vertical = crate::parse_ttml_captions(
+            "<tt><body><p begin='0s' end='1s' tts:writingMode='tbrl'>本文</p></body></tt>",
+            0,
+        )
+        .remove(0);
+        let mut vertical_features = CaptionFeatureSummary::default();
+        vertical_features.observe_ttml(&vertical);
+        assert_eq!(
+            vertical_features.details("position").unwrap()["verticalWriting"],
+            true
+        );
+
+        for body in [
+            "<p begin='0s' end='1s' tts:textOutline='2px #000000'>本文</p>",
+            "<p begin='0s' end='1s'><span tts:color='#00FFFF'>本文</span></p>",
+        ] {
+            let xml = format!("<tt><body>{body}</body></tt>");
+            let caption = crate::parse_ttml_captions(&xml, 0).remove(0);
+            let mut features = CaptionFeatureSummary::default();
+            features.observe_ttml(&caption);
+            assert!(features.color, "{body} should be material color");
+            let detail = if body.contains("textOutline") {
+                "stroke"
+            } else {
+                "foreground"
+            };
+            assert_eq!(features.details("color").unwrap()[detail], true);
+        }
+    }
+
+    #[test]
+    fn ttml_drcs_feature_includes_used_resource_fonts() {
+        let ordinary = crate::parse_ttml_captions(
+            r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><p begin='0s' end='1s' arib-tt:font-face='subt://9'>字</p></body></tt>"#,
+            0,
+        )
+        .remove(0);
+        let mut ordinary_features = CaptionFeatureSummary::default();
+        ordinary_features.observe_ttml(&ordinary);
+        assert!(ordinary_features.drcs);
+        assert_eq!(
+            ordinary_features.details("drcs").unwrap()["referenced"],
+            true
+        );
+        assert_eq!(
+            ordinary_features.details("drcs").unwrap()["resourceBacked"],
+            true
+        );
+        assert!(ordinary.drcs_uses.is_empty());
+
+        let referenced = crate::parse_ttml_captions(
+            r#"<tt xmlns:arib-tt='http://www.arib.or.jp/ns/arib-ttml/v1_0'><body><p begin='0s' end='1s' arib-tt:font-face='subt://9'>&#xE000;</p></body></tt>"#,
+            0,
+        )
+        .remove(0);
+        assert_eq!(referenced.text, "\u{e000}");
+        assert_eq!(referenced.style.font_resource.as_deref(), Some("subt://9"));
+        let mut features = CaptionFeatureSummary::default();
+        features.observe_ttml(&referenced);
+        assert!(features.drcs);
+        assert_eq!(features.observed_counts["drcs"], 1);
+        assert_eq!(features.details("drcs").unwrap()["referenced"], true);
+        assert_eq!(features.details("drcs").unwrap()["resourceBacked"], true);
+        assert_eq!(referenced.drcs_uses[0].source_codepoint, 0xe000);
+        assert_eq!(referenced.drcs_uses[0].resource_index, 9);
+
+        let unreferenced = crate::parse_ttml_captions(
+            "<tt><body><p begin='0s' end='1s'>&#xE000;</p></body></tt>",
+            0,
+        )
+        .remove(0);
+        let mut without_reference = CaptionFeatureSummary::default();
+        without_reference.observe_ttml(&unreferenced);
+        assert!(!without_reference.drcs);
+    }
+
+    #[test]
+    fn ttml_drcs_mapping_classifies_private_and_replacement_characters() {
+        assert_eq!(ttml_drcs_kind('\u{e000}'), Some(TtmlDrcsKind::PrivateUse));
+        assert_eq!(ttml_drcs_kind('\u{f0000}'), Some(TtmlDrcsKind::PrivateUse));
+        assert_eq!(
+            ttml_drcs_kind('\u{fffc}'),
+            Some(TtmlDrcsKind::ObjectReplacement)
+        );
+        assert_eq!(ttml_drcs_kind('\u{fffd}'), Some(TtmlDrcsKind::Replacement));
+        assert_eq!(ttml_drcs_kind('字'), None);
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -106,10 +1068,166 @@ pub(crate) struct TtmlCaption {
     pub(crate) style: TtmlCaptionStyle,
     pub(crate) rich_body: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) drcs_uses: Vec<TtmlDrcsUse>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) ruby_bindings: Vec<TtmlRubyBinding>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) accessibility_cues: Vec<TtmlAccessibilityCue>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) resolved_accessibility_ranges: Vec<Range<usize>>,
+    #[serde(default)]
+    pub(crate) broadcast_semantics_resolved: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) source_layout: Option<TtmlSourceLayout>,
     pub(crate) source: Option<TtmlCaptionSource>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TtmlAccessibilityCue {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) roles: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum TtmlDrcsKind {
+    PrivateUse,
+    ObjectReplacement,
+    Replacement,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TtmlDrcsUse {
+    pub(crate) run_index: usize,
+    pub(crate) character_index: usize,
+    pub(crate) source_codepoint: u32,
+    pub(crate) resource_index: u32,
+    pub(crate) kind: TtmlDrcsKind,
+}
+
+pub(crate) fn ttml_drcs_mapping_key(
+    source: Option<&TtmlCaptionSource>,
+    resource_index: u32,
+    source_codepoint: u32,
+) -> Option<String> {
+    let index = u8::try_from(resource_index).ok()?;
+    let resource = source?
+        .resources
+        .iter()
+        .find(|resource| resource.index == index)?;
+    (!resource.content_sha256.is_empty())
+        .then(|| crate::resource::b62_drcs_mapping_key(&resource.content_sha256, source_codepoint))
+}
+
+pub(crate) fn ttml_drcs_kind(character: char) -> Option<TtmlDrcsKind> {
+    match character as u32 {
+        0xe000..=0xf8ff | 0xf0000..=0xffffd | 0x100000..=0x10fffd => Some(TtmlDrcsKind::PrivateUse),
+        0xfffc => Some(TtmlDrcsKind::ObjectReplacement),
+        0xfffd => Some(TtmlDrcsKind::Replacement),
+        _ => None,
+    }
+}
+
+pub(crate) fn ttml_drcs_uses(
+    text: &str,
+    style: &TtmlCaptionStyle,
+    rich_body: Option<&str>,
+) -> Vec<TtmlDrcsUse> {
+    ttml_resolved_runs(text, style, rich_body)
+        .iter()
+        .enumerate()
+        .flat_map(|(run_index, run)| {
+            let resource_index = run
+                .style
+                .font_resource
+                .as_deref()
+                .and_then(subt_resource_index);
+            run.text
+                .chars()
+                .enumerate()
+                .filter_map(move |(character_index, character)| {
+                    Some(TtmlDrcsUse {
+                        run_index,
+                        character_index,
+                        source_codepoint: character as u32,
+                        resource_index: resource_index?,
+                        kind: ttml_drcs_kind(character)?,
+                    })
+                })
+        })
+        .collect()
+}
+
+fn ttml_resolved_runs(
+    text: &str,
+    style: &TtmlCaptionStyle,
+    rich_body: Option<&str>,
+) -> Vec<crate::TtmlInlineRun> {
+    let mut runs = rich_body
+        .and_then(|body| {
+            let prefix = format!(
+                "<body xmlns:tts='http://www.w3.org/ns/ttml#styling' xmlns:ttm='http://www.w3.org/ns/ttml#metadata' xmlns:arib='https://resubwinny.dev/ns/arib' xmlns:arib-tt='{ARIB_TTML_NAMESPACE}'>"
+            );
+            let wrapped = format!("{prefix}{body}</body>");
+            let document = roxmltree::Document::parse(&wrapped).ok()?;
+            Some(
+                document
+                    .descendants()
+                    .filter(|node| node.is_text())
+                    .filter_map(|node| {
+                        let text = node.text()?.to_owned();
+                        if text.is_empty() {
+                            return None;
+                        }
+                        let mut run_style = style.clone();
+                        if let Some(font_resource) = node.ancestors().find_map(|ancestor| {
+                            ancestor.attributes().find_map(|attribute| {
+                                (attribute.name() == "font-face"
+                                    && attribute.namespace() == Some(ARIB_TTML_NAMESPACE))
+                                .then(|| attribute.value().to_owned())
+                            })
+                        }) {
+                            run_style.font_resource = Some(font_resource);
+                        }
+                        Some(crate::TtmlInlineRun {
+                            text,
+                            style: run_style,
+                            ..Default::default()
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .unwrap_or_default();
+    if runs.is_empty() {
+        runs.push(crate::TtmlInlineRun {
+            text: text.to_owned(),
+            style: style.clone(),
+            ..Default::default()
+        });
+    }
+    runs
+}
+
+pub(crate) fn ttml_font_resource_character_count(
+    text: &str,
+    style: &TtmlCaptionStyle,
+    rich_body: Option<&str>,
+) -> usize {
+    ttml_resolved_runs(text, style, rich_body)
+        .iter()
+        .filter(|run| {
+            run.style
+                .font_resource
+                .as_deref()
+                .and_then(subt_resource_index)
+                .is_some()
+        })
+        .map(|run| run.text.chars().count())
+        .sum()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -129,6 +1247,10 @@ pub(crate) struct TtmlSourceLayout {
     pub(crate) y: i32,
     pub(crate) width: Option<i32>,
     pub(crate) height: Option<i32>,
+    #[serde(skip)]
+    pub(crate) explicit_origin: bool,
+    #[serde(skip)]
+    pub(crate) explicit_extent: bool,
     pub(crate) style: TtmlCaptionStyle,
     pub(crate) rich_body: Option<String>,
 }

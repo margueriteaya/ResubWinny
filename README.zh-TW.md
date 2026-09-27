@@ -13,7 +13,7 @@ ResubWinny 是一款在 Windows 上執行、針對泛日本內容影片檔源檔
 
 目前收斂期專注日本廣播錄製字幕；BD/DVD 圖形字幕 OCR、外掛系統、AI 翻譯以及 macOS/Linux 原生預覽均已明確延後，不屬於目前路線或驗收範圍。DRCS 僅繼續完善本機 hash → Unicode 對應，不擴建通用 OCR 系統。
 
-專案目前版本為 `v0.2.2-α`（原始碼版本 `0.2.2-alpha.1`）。目前仍處於開發階段。
+專案目前版本為 `v0.2.3-α`（原始碼版本 `0.2.3-alpha.1`）。目前仍處於開發階段。
 
 ## 功能特色
 
@@ -232,14 +232,15 @@ build/cargo/release/bundle/
 ```text
 ResubWinny/
 ├── crates/
-│   └── arib-caption-worker/       # 串流偵測、解析、字幕模型、CLI 與匯出器
-│       ├── src/caption/           # B24、TTML/B62 與 Ruby 語意
-│       ├── src/transport/         # MPEG-TS、M2TS 與實驗性 TLV/MMTP
-│       ├── src/exporters/         # ASS、TTML、SRT、WebVTT、archive 等輸出
-│       └── src/tests/             # Worker 分模組迴歸測試
+│   ├── arib-caption-worker/       # 串流偵測、解析、字幕模型、CLI 與匯出器
+│   │   ├── src/caption/           # B24、TTML/B62 與 Ruby 語意
+│   │   ├── src/transport/         # MPEG-TS、M2TS 與實驗性 TLV/MMTP
+│   │   ├── src/exporters/         # ASS、TTML、SRT、WebVTT、archive 等輸出
+│   │   └── src/tests/             # Worker 分模組迴歸測試
+│   └── caption-semantics/         # Worker 與桌面後端共用的廣播字幕語意
 ├── native/
 │   └── aribcaption-bridge/        # libaribcaption 的窄幅 C ABI 橋接
-├── shared/                        # Worker 與桌面後端共用的辨識規則
+├── shared/                        # Worker 與前端共用的格式能力資料
 ├── studio-tauri/
 │   ├── src/                       # Svelte 前端
 │   │   ├── backend/               # typed Tauri API 與事件進入點

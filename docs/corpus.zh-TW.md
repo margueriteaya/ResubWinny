@@ -9,12 +9,12 @@
 ```powershell
 $env:ARIB_FIXTURE_DIR = 'C:\tvrecords_testfile'
 $env:ARIB_LONG_FIXTURE = '1'
-cargo test -p arib-caption-worker decodes_ -- --nocapture
+cargo test -p arib-caption-worker --features libaribtlv decodes_ -- --nocapture
 ```
 
 這些選擇加入式檢查會流式處理完整輸入，並斷言以下當前基線。它們不釋出源位元組、字幕或螢幕截圖。
 
-該語料庫有意優先採用使用者實際可以獲得且內容已經驗證的錄影：地面 MPEG-TS 樣本和 192 位元組 MPEG-TS/TTML 樣本是釋出門禁。後者是分組化的 MPEG-TS 錄影，不得用作已捕獲原生 BS4K TLV 的證據。目前 TLV/MMTP 沒有同等的本地釋出樣本；在取得合法真實捕獲之前，其解析器、信令限制和原始證據契約由有界構造測試覆蓋。
+該語料庫有意優先採用使用者實際可以獲得且內容已經驗證的錄影：地面 MPEG-TS 樣本和 192 位元組 MPEG-TS/TTML 樣本是釋出門禁。後者是分組化的 MPEG-TS 錄影，不得用作原生 BS4K TLV 的證據。本地 `8k1.mmts` 提供一段合法的原生 TLV/MMTP 捕獲，用於選擇加入式路由迴歸；由於片段較短，且不含 DRCS、同 MPU 字型資源或複雜 Ruby，它尚不構成完整的原生 B62 釋出門禁。缺少的語意繼續由有界構造測試覆蓋。
 
 公開協議樣本可從 worker 的 `synthetic` 模組獲得：`make_ts_packet`、`make_pat`、`make_pmt`、`make_pes`、`make_b24_data_group` 和 `make_mmtp_packet` 為解析器測試構造確定性的分組和段邊界，而不嵌入廣播錄影，也不聲稱具有廣播機構特定語義。
 
@@ -32,6 +32,7 @@ $env:ARIB_FIXTURE_DIR = 'C:\tvrecords_testfile'
 | `chijo_digital_test.ts` | ISDB-T MPEG-TS / ARIB STD-B24 | **釋出門禁。** 18,579,078,944 個輸入位元組；13,653 個 PES；2,230 個場景；2,736 個區域；29,892 個字元；61 個 DRCS 字形；0 個解碼器錯誤。NIT 網路名稱、當前 EIT 節目後設資料和 TDT/TOT 廣播時間必須全部存在。 |
 | `bs4k_test.m2ts` | 192 位元組錄影機 M2TS / 私有 PES / ARIB-TTML | **釋出門禁。** 11,517,020,160 個輸入位元組；330 個 PES；422 條 TTML 字幕；5,051 個字元；0 個解析器錯誤。同時間區域關聯目前會在歸檔/ASS 輸出前記錄 31 個結構化 Ruby 繫結，其中包括從 `ささ` 到單個基礎字素 `捧` 的繫結。 |
 | `bs4k_test_2.ts` | 188 位元組錄影機 MPEG-TS / ARIB STD-B24 | **釋出門禁。** 3,089,047,552 個輸入位元組；服務 101 從 ARIB SI 解碼為 `NHK　BSP4K`；NIT 網路名稱、當前 EIT 節目後設資料和 TDT/TOT 廣播時間必須全部存在；PID 0x0130 有 2,038 個 PES、118 條字幕、157 個區域、1,661 個字元及 0 個解碼器錯誤；單獨公佈的 PID 0x0138 沒有字幕事件，必須保持為空結果，不得偽造第二條軌道。 |
+| `8k1.mmts` | 原生 ISDB-S3 TLV/MMTP / ARIB STD-B62 | **選擇加入式路由迴歸。** 364,994,560 個輸入位元組；MPT 公布兩個 `stpp` 資產；packet ID `0xF130` 的 5 個連續 MPU 產生 8 條字幕和 97 個字元。檢測到明確幾何、書寫方向、前景與背景顏色及 2 個 ARIB 外字。該片段沒有 DRCS、同 MPU 字型資源、複雜 Ruby 或無障礙提示，不能用於這些語意的驗收。 |
 | 本地 38.07 GB 巴黎錄影（不再分發） | 192 位元組 M2TS / 私有 PES / 順序 ARIB-TTML | **通用路由迴歸。** 內容探測發現服務 101、PMT `0x0100`、字幕 PID `0x1C00`（`component_tag 0x30`）及獨立疊加字幕 PID `0x1C01`（`0x38`）。XML 具有完整 TTML 名稱空間，但省略元素計時；無效的全零 PES PTS 會被拒絕，並由可感知迴繞的 M2TS 到達時鐘在同一 PID 的下一個檔案處結束每個檔案。完整的預設字幕轉換讀取 38,065,729,536 位元組，並且必須保留 2,715 個字幕區域、28,618 個字元及 0 個解碼器錯誤，輸出須按單調順序持續至 03:11:48。它不得以檔名、服務 ID、節目名稱或固定 PID 值作為路由例外。 |
 | 本地 20.12 GiB BS 錄影（不再分發） | 188 位元組 MPEG-TS / PMT 版本及字幕 PID 轉換 | **動態 PMT 迴歸。** 初始 PMT 僅公開疊加字幕 PID `0x1C12`（`component_tag 0x38`）；後續當前 PMT 新增字幕 PID `0x1201`（`component_tag 0x30`）。檢查必須僅報告 `0x1201`。完整轉換讀取 21,609,477,452 位元組，併產生 18,722 個選中 PES、3,825 個場景、6,679 個區域、70,853 個字元、7 個 DRCS 字形及 0 個解碼器錯誤。原始證據必須僅包含 PID `0x1201`。 |
 | 構造的 PMT 版本轉換 TS | MPEG-TS / B24 字幕與疊加字幕 | 固定大小發現視窗必須在初始僅疊加字幕的 PMT 之後找到較晚的字幕元件；順序解碼必須僅路由選中的邏輯 `service_id + component_tag`，並拒絕疊加字幕 PES。 |
