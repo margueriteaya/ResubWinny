@@ -159,7 +159,7 @@ DRCS 策略按優先順序執行：
 
 Rust 只能依賴專案維護的小型穩定 C ABI，而不是整套 C++ API/bindgen。FFI 邊界重點審計物件生命週期、指標有效期、UTF-8、異常隔離、allocator 和跨平臺構建/ABI 漂移；FFI 呼叫次數不是主要效能風險。
 
-HTML/CSS 結構預覽可顯示文字、區域、時間、樣式概況和 DRCS 佔位。保真預覽必須由 native renderer 輸出 RGBA/PNG/WebP 低頻快照；按 `render_at(time)` 請求或在字幕狀態變化時更新，不能按影片幀率將畫面送入 WebView。
+HTML/CSS 結構預覽可顯示文字、區域、時間、樣式概況和 DRCS 佔位。即時保真預覽由程序內 native renderer 輸出：libmpv 與 Rust 字幕在離屏 FBO 合成，三槽 PBO 讀回後透過 WebView2 SharedBuffer 交給播放器元件內的 Canvas；Canvas 只消費最新影格，不按影片幀率走 Tauri IPC 或 COM。`render_at(time)` 仍用於存檔時間點的有界快照。
 
 主介面應優先完成檔案拖放、服務/字幕軌選擇、輸出格式與模式、任務控制和預覽；現代設計意味著預設操作簡單且底層資訊隨時可檢查。檢查器至少顯示容器型別、service ID、PID/asset ID、語言、PTS 範圍、DRCS 數量、CRC 錯誤、丟包數、不連續點與未支援命令。
 
@@ -183,7 +183,7 @@ TS 188/192/204 包頭和 PAT/PMT 宜手寫小型受限解析；TLV/MMTP 可選 w
 5. B62 原生字型/ruby/豎排/描邊渲染與 M2TS 多樣本差分驗證；**第三階段進行中**；
 6. TLV/MMTP 的真實語料驗證與通用 asset 路由；**等待合法真實 TLV 樣本，當前僅實驗性**。
 
-新的 Rust workspace 已建立 `crates/arib-caption-worker`。其 `inspect` 命令在有界讀取內識別 188-byte MPEG-TS、192-byte M2TS、原始 TLV 與未知輸入。傳統 B24 透過專案擁有的窄 C ABI 呼叫 libaribcaption；bridge 會在釋放 native 物件前把平面、區域、Unicode/PUA 字元、定位、顏色、樣式及 DRCS 程式碼、替代資訊、原始畫素複製為 Rust 場景快照。未知 DRCS 同時寫成同名 `.drcs` 原始畫素/後設資料資產，並以 ASS `\p1` 向量繪圖事件表現，不會輸出 `[外:<hash>]`。完整地上波轉換得到 13,653 個 PES、2,230 個字幕物件、2,736 個區域、29,892 個字元、61 個 DRCS 字形、0 個解碼錯誤。M2TS 路由會發現私有資料 PID、以有界 PES 緩衝重組有效載荷、提取 UTF-8 ARIB-TTML 檔案，並將繼承自 `div` 的時間與 `region` 位置寫入 ASS。隨附的 11.5 GB BS4K 迴歸樣本現得到 422 個 TTML 字幕事件、5,051 個字元、0 個解析警告。受限 TLV 路由同樣可轉換完整 `stpp` 載荷，但前提是它為自包含 UTF-8 TTML 且擁有匹配的 MPT NTP 後設資料；其他 asset 繼續走原始證據路徑。Tauri/Svelte GUI 僅展示狀態、預覽與診斷並轉發 typed API 請求，解析、匯出和預覽資料準備仍由 Worker/後端完成。B62 字幕樣式、ruby、writing mode、資源作用域和有界 PNG/字型證據已接入模型。後端已原生光柵化受支援的 TTML 文字、橫排與跨列豎排 Ruby、保守的字形方向/標點、透明度和受限的直接 `tts:textOutline`，並且不會把 `arib-tt:border` 猜作標準描邊。Windows `libmpv-render` 與原生 Overlay 合成已經接通。資源完整預覽、完整 B62 字形方向/標點/描邊語義、通用 TLV/MMTP 字幕抽出和 macOS/Linux 原生預覽仍是第三階段後續工作。
+新的 Rust workspace 已建立 `crates/arib-caption-worker`。其 `inspect` 命令在有界讀取內識別 188-byte MPEG-TS、192-byte M2TS、原始 TLV 與未知輸入。傳統 B24 透過專案擁有的窄 C ABI 呼叫 libaribcaption；bridge 會在釋放 native 物件前把平面、區域、Unicode/PUA 字元、定位、顏色、樣式及 DRCS 程式碼、替代資訊、原始畫素複製為 Rust 場景快照。未知 DRCS 同時寫成同名 `.drcs` 原始畫素/後設資料資產，並以 ASS `\p1` 向量繪圖事件表現，不會輸出 `[外:<hash>]`。完整地上波轉換得到 13,653 個 PES、2,230 個字幕物件、2,736 個區域、29,892 個字元、61 個 DRCS 字形、0 個解碼錯誤。M2TS 路由會發現私有資料 PID、以有界 PES 緩衝重組有效載荷、提取 UTF-8 ARIB-TTML 檔案，並將繼承自 `div` 的時間與 `region` 位置寫入 ASS。隨附的 11.5 GB BS4K 迴歸樣本現得到 422 個 TTML 字幕事件、5,051 個字元、0 個解析警告。受限 TLV 路由同樣可轉換完整 `stpp` 載荷，但前提是它為自包含 UTF-8 TTML 且擁有匹配的 MPT NTP 後設資料；其他 asset 繼續走原始證據路徑。Tauri/Svelte GUI 僅展示狀態、預覽與診斷並轉發 typed API 請求，解析、匯出和預覽資料準備仍由 Worker/後端完成。B62 字幕樣式、ruby、writing mode、資源作用域和有界 PNG/字型證據已接入模型。後端已原生光柵化受支援的 TTML 文字、橫排與跨列豎排 Ruby、保守的字形方向/標點、透明度和受限的直接 `tts:textOutline`，並且不會把 `arib-tt:border` 猜作標準描邊。Windows `libmpv-render` 與WebView2 SharedBuffer/Canvas 像素桥接已經接通。資源完整預覽、完整 B62 字形方向/標點/描邊語義、通用 TLV/MMTP 字幕抽出和 macOS/Linux 原生預覽仍是第三階段後續工作。
 
 當前模型交付：每個 B24 場景都會拆分為 `RegionInterval`。有界活動區域表只在該區域自身發生變化或消失時關閉它，因此說話人標籤與正文可以擁有獨立、重疊的生命週期。已經關閉的同一區域會被同時寫入保真 ASS、可選 TTML 與 JSONL 存檔記錄。TTML 保留區域時間、位置、範圍、字號、顏色以及帶名稱空間的未解析 DRCS 引用；ASS 繼續以向量 DRCS 字形承擔視覺兜底。Tauri 的完成任務時間軸和診斷視窗直接流式掃描 JSONL，只保留請求頁；直播事件列表只保留後端最近視窗，編輯時間軸使用有界預取區間和追加位元組遊標，不再反覆讀取完整 archive，也不把完整事件歷史送進 WebView。單任務 Worker 可在流式解析邊界協作式暫停、繼續或取消。中斷後 `checkpoint.json` 會記錄檔案大小、mtime、首尾 64 KiB 指紋、軌道和進度上限；恢復會拒絕被替換或截斷的輸入。由於 native B24 與部分 artifact 狀態尚不能序列化，下次啟動仍從錄製檔案的可信起點完整重放，而不會虛假宣稱按位元組續跑。
 
@@ -191,11 +191,11 @@ TS 188/192/204 包頭和 PAT/PMT 宜手寫小型受限解析；TLV/MMTP 可選 w
 
 豎排標點增量（2026-07-25）：原生 B62 預覽只對映 Unicode 明確定義的豎排標點形式，並且僅當捆綁 ARIB 字型含有該字形時使用；否則保留源字元。archive 到 `render_at` 的確定性 PNG 金樣覆蓋該路徑。這不表示已實現拉丁字元旋轉、縱中橫、完整朝向/標點規則或標準 B62 描邊。
 
-原生預覽同步增量（2026-07-25）：`sync_preview_overlay` 將 mpv 播放時間讀取、archive 查詢、原生 RGBA 合成、overlay 寫入/清除與相同字幕平面去重全部保留在 Tauri 後端。Svelte 只低頻呼叫 typed API 並展示結果，不估算媒體時間、不排版字幕；mpv 尚未返回時間時後端明確返回 `awaiting-player-time`，不使用本地時鐘猜測。
+原生預覽同步增量（2026-07-25，2026-09-27 更新）：`sync_preview_overlay` 將 mpv 播放時間讀取、archive 查詢、原生 RGBA 合成、字幕紋理更新/清除與相同字幕平面去重全部保留在 Tauri 後端。Svelte 只低頻呼叫 typed API 並展示結果，不估算媒體時間、不排版字幕；mpv 尚未返回時間時後端明確返回 `awaiting-player-time`，不使用本地時鐘猜測。
 
 播放時間軸增量（2026-07-25）：原生預覽現在持有經過校驗的 `PlaybackTimeMapping`，包括 segment 標識、媒體/專案錨點與有理速率。libmpv 只提供媒體時間，archive 渲染使用對映後的專案時間；PTS 修復、節目邊界與使用者偏移不會再偷偷落入 WebView 邏輯。
 
-libmpv 執行時增量（2026-07-26）：Windows 現由專案程式內載入捆綁的 `libmpv`，不再啟動 `mpv.exe` 或使用 JSON named pipe。完整 render API 可用時，`libmpv-render` 是預設路線：專用 WGL 執行緒獨佔 OpenGL context、libmpv render loop、resize 訊息與後端 BGRA 字幕紋理混合；指定源初始化失敗時才回退到 `libmpv-client-overlay`。能力 API 對每條路由返回 `id`、`available`、`experimental` 與結構化不可用原因；macOS/Linux 會明確返回 `preview.platform_not_implemented`。WebView 不接收影片幀或字幕紋理；`render_preview_at` 與 `sync_preview_overlay` 在後端合成有界 native plane 後交給 libmpv。macOS/Linux 原生預覽後端已延期，不屬於當前 Alpha 驗收範圍。
+libmpv 執行時與畫素橋接增量（2026-09-27）：Windows 在程序內載入專案捆綁的 `libmpv`，不啟動 `mpv.exe` 或使用 JSON named pipe。完整 render API 在隱藏、無父視窗的 offscreen WGL host 上執行；該 host 只提供 OpenGL DC，不承載可見影片視窗。渲染執行緒把 libmpv 影片幀與 Rust 原生字幕合成到離屏 FBO，再用三槽 PBO 讀回 RGBA。Tauri UI STA 建立並發布 WebView2 SharedBuffer：三個畫素槽和一個控制槽；播放器元件內的 Canvas 只消費控制槽標記的最新已就緒槽，並丟棄過期影格，不經逐幀 Tauri IPC 或 COM。視窗移動、版面和 DPI 變化只影響 Canvas 容器版面，影片畫面與播放器外殼保持在同一 WebView 內容層。當前 Windows 路徑沒有可見/子 HWND，也沒有 `libmpv-client-overlay` 或按來源回退。macOS/Linux 原生預覽後端已延期，不屬於當前 Alpha 驗收範圍。
 
 視覺基線校正（2026-07-25）：隨附的 libaribcaption `screenshot0.png` 是專案面向觀眾的電視字幕參考圖。B24 繼續使用 libaribcaption 以已配置的 ARIB 字型、ruby、背景和描邊設定生成 RGBA。B62 以相同的觀眾可見關係為目標；但沒有匹配的 B62 源 payload 與合法參考截圖時，不宣稱畫素級一致，見 `docs/visual-reference.md`。
 
@@ -247,7 +247,7 @@ MPEG-TS 動態 PMT 校正（2026-08-02）：B24 邏輯軌以 `service_id + compo
 
 ## Windows 原生預覽收斂增量（2026-07-26）
 
-Windows 在發現完整 `libmpv` render API 時預設選擇 `libmpv-render`。後端擁有 WGL context、libmpv render loop、resize、影片 viewport、後端 BGRA 字幕紋理和混合；若特定源無法初始化 render worker，則該次預覽回退到 `libmpv-client-overlay`，backend diagnostics 會報告實際路線、回退原因、surface 尺寸和呈現幀率。真實 3840×2160 HEVC `bs4k_test_2.ts` smoke 已驗證啟動、影片幀 present、1920×1080 紋理混合/readback，以及 3840×2160 resize/present。WebView 不接收影片幀或字幕紋理。
+Windows 在發現完整 `libmpv` render API 時使用程序內 `libmpv-render`。隱藏的無父視窗 WGL host 只為渲染執行緒提供 DC；libmpv 與 Rust 字幕在離屏 FBO 中合成，三槽 PBO 負責讀回，WebView2 SharedBuffer 將三個畫素槽和一個控制槽發布到播放器元件。Canvas 在元件內繪製最新已就緒影格，過期影格直接丟棄，因此視窗移動、面板摺疊和 DPI 變化不會再透過頂層影片視窗的位置追蹤。backend diagnostics 報告活動路線、surface 尺寸、呈現幀率和共享槽計數；當前路線不建立可見或子 HWND，也不提供 client overlay fallback。
 
 當前 WGL route 請求 libmpv 的 `hwdec=auto-safe` 策略，允許相容的 copy-back 加速，但不承諾 zero-copy 的 ANGLE/D3D 硬解互操作。`scripts/validate-preview.ps1 -Long` 現已執行帶明確啟動、幀率、完整字幕平面上傳、控制、工作集和退出閾值的 120 秒真實 4K 門檻。2026-07-30 的 `bs4k_test_2.ts` 實測為 `d3d11va-copy`、34.74 present/s、峰值 1526.9 MiB、4K 預熱後增長 111.9 MiB。獨立 2K/8K 效能、DPI 和參考截圖差分仍未完成；macOS/Linux 仍返回 `preview.platform_not_implemented`。
 

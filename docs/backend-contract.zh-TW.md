@@ -39,7 +39,7 @@ Tauri/Svelte UI 是 Rust 後端的客戶端。它不解析 TS/TLV 資料、解�
 | `get_preview_runtime` | 報告發現的 libmpv 執行時以及渲染 API 符號可用性，而不宣告渲染表面存在 |
 | `get_preview_render_diagnostics` | 報告活動的原生路徑和有界渲染執行緒計數器/錯誤；缺少 Worker 時返回穩定的非活動結果 |
 | `render_at` | 返回請求的存檔時間的有界字幕平面快照，而不透過 WebView 傳送影片幀 |
-| `sync_preview_overlay` | 讀取嵌入的 libmpv 時間，渲染有界本機平面，並套用、清除 Windows 覆蓋層或略過重複更新，無需 WebView 計時或佈局 |
+| `sync_preview_overlay` | 讀取程序內 libmpv 時間，渲染有界字幕平面，並更新、清除後端字幕紋理或略過重複更新，無需 WebView 計時或佈局 |
 | `get_playback_time_mapping` / `update_playback_time_mapping` | 獲取或替換本機字幕預覽使用的經過驗證的媒體時間→專案時間段對映 |
 | `get_timeline_window` / `get_timeline_window_filtered` | 流式傳輸有界存檔頁面以供完成的任務瀏覽 |
 | `get_timeline_recent_window_filtered` | 從檔案尾端增量讀取完整的 JSONL 記錄並僅返回最新的有界實時事件頁面 |
@@ -51,7 +51,7 @@ TLV 歸檔匯出還可能包含有界 `asset_evidence` 和 `resource_evidence` �
 
 另有一類有界的 `asset_evidence` 記錄，只標識輸入中已經觀察到的 MPT 信令（`packet_id`、源 TLV 偏移、`asset_type`、描述符標籤，以及所通告的 MPU NTP 值）。它們是將來接入 `subt://` 資源的證據，而不是已解碼的影像或字型位元組。`resource_reference` 記錄攜帶其來源的 `packet_id + mpu_sequence_number` 作用域。數字形式的 `subt://` 索引絕不被當作全域 MPT 包 ID：若存在有界的同一 MPU 子樣本，則關聯標記為 `same-mpu-evidence` 並指向其原始資源記錄；否則顯式保持為 `unresolved`。`dump-tlv` 還會把完整而有界的非 `stpp` MPU/MFU 負載，以帶確定性作用域鍵的 `mmt_asset_payload` 原始證據形式輸出。此類記錄可能帶有 `format_hint`，但它只是有界的二進位制簽名觀察或有界的頭部觀察（不是解碼或渲染宣告），未知的資產語義仍然保持未解析。PNG 尺寸與字型表數量若存在，也僅是結構性元資料。結構完整的小體積 PNG 資源，還可能攜帶一個有上限的 `data:` 預覽值，供將來的本機預覽表面使用；後端仍然不會解碼或信任任意資源 URL。
 
-該快照還帶有 `renderProfile`。它的合約刻意與 libaribcaption 保持相容：使用捆綁的 `Rounded M+ 1m for ARIB` 字族，保留字元單元幾何，把 ruby 維持在 0.5 的相對比例，並從解碼得到的源字元資料中取用背景 alpha 與描邊顏色。已釋出的 libaribcaption 截圖是面向觀看者的視覺參考；其固定的本地基線與審查規則見 `docs/visual-reference.md`。該 profile 的 B24 部分由解碼器支撐。當前的本機 TTML 路徑使用捆綁字型、源前景/背景 RGBA、span 樣式區段、簡單水平 ruby，以及顯式關聯的垂直 ruby，其中包含跨自動分欄的有界延續。複雜的 ruby 分組、完整的垂直排版方向與標準描邊行為，在其本機實現透過測試之前仍只是宣告性元資料；UI 不得用任意 CSS 陰影或固定黑框去模仿它們。`captionOverlayModes` 是一組結構化的後端路徑能力：`id`、`available`、`experimental` 與 `unavailableReasonCode`。在 Windows 上，當發現的執行時匯出完整渲染 API 時，`libmpv-render` 即變為可用；後端預設選擇它，若渲染 Worker 啟動失敗，則按來源回落到 `libmpv-client-overlay`。UI 呈現後端實際採用的路徑，絕不自行選擇渲染器。
+`captionOverlayModes` 是一組結構化的後端能力：`id`、`available`、`experimental` 與 `unavailableReasonCode`。Windows 當前只提供程序內 `libmpv-render`：隱藏、無父視窗的 offscreen WGL host 只提供 OpenGL DC，渲染執行緒把影片與 Rust 字幕合成到 FBO，再經三槽 PBO 讀回。UI 透過 WebView2 SharedBuffer 將畫素槽和控制槽交給播放器元件內 Canvas；UI 只呈現後端實際路線，不自行選擇渲染器。
 
 ## Worker 事件格式
 
@@ -75,8 +75,8 @@ arib-caption-worker render-at output.caption.archive.jsonl 90000
 - 未識別的 TLV/MMTP 資產將作為原始證據保留，不會被猜測。
 - `inspect_source` 返回穩定的 `routeCode`：`mpeg_ts_b24_verified` 由 B24 元件描述符立即驗證。`mpeg_ts_ttml_candidate` 表示在 188 位元組 TS 或 192 位元組 M2TS 中找到了私有 PES PID，並且在轉換期間仍需透過嚴格的 ARIB-TTML XML 校驗。`mpeg_ts_192_ttml_verified` 指的是受釋出門禁約束、已成功校驗的 192 位元組 M2TS/TTML 轉換路徑；有界的初次檢查在尚未見到有效 TTML 文件之前不得宣告該路徑。`tlv_mmtp_experimental` 有意以證據優先，在沒有真實語料之前，不得把它呈現為通用的 BS4K/8K 支援。
 - 目前從檢查點恢復時，會先驗證來源身分，再從可信錄影來源完整重放處理流程，因為原生 B24 解碼器與部分產物狀態無法序列化。
-- 當前的 Windows 影片表面由程序內 `libmpv` 擁有；不使用 `mpv.exe` sidecar 或 JSON 命名管道。在執行時匯出完整渲染 API 的情況下，後端選擇 `libmpv-render`，擁有 WGL 上下文和 BGRA 紋理混合路徑，並且僅在特定啟動失敗時才回退到客戶端覆蓋。它請求 `hwdec=auto-safe`，允許相容的回拷加速，但不承諾零複製 D3D/ANGLE 互操作性。`get_preview_render_diagnostics` 回傳所選路徑、目前表面尺寸、每秒呈現影格數、紋理操作計數、長寬比與要求的解碼器策略；若已載入的來源提供相關資訊，也會回傳 libmpv 實際使用的 `hwdec-current`。長時間 2K/4K/8K 效能測試仍屬於發布品質門檻。
-- `get_preview_capabilities` 把每條路徑報告為 `{ id, available, experimental, unavailableReasonCode }`。它只是一份呈現層合約：WebView 無法提交字幕點陣圖。`render_preview_at` 與 `sync_preview_overlay` 在後端內部合成有界的本機字幕平面，再把它應用到 libmpv 上。非 Windows 構建報告 `preview.platform_not_implemented`；這並不意味著存在本機預覽路徑。
+- 當前的 Windows 影片表面由程序內 `libmpv` 擁有；不使用 `mpv.exe` sidecar、JSON 命名管道、可見/子 HWND 或 client overlay。`libmpv-render` 在隱藏的無父視窗 WGL host 上執行，host 只提供 DC。渲染執行緒把影片和 Rust 字幕合成到離屏 FBO，經三槽 PBO 讀回 RGBA，再由 Tauri UI STA 發布三個畫素 SharedBuffer 槽和一個控制 SharedBuffer 槽。播放器元件內 Canvas 消費控制槽標記的最新影格，過期影格直接丟棄。`get_preview_render_diagnostics` 回傳活動路線、surface 尺寸、每秒呈現影格數、共享槽計數、長寬比、要求的解碼器策略，以及來源提供時的 `hwdec-current`。長時間 2K/4K/8K 效能測試仍屬於發布品質門檻。
+- `get_preview_capabilities` 把當前路線報告為 { id, available, experimental, unavailableReasonCode }。影片和字幕畫素透過 WebView2 SharedBuffer 進入播放器元件內 Canvas；逐幀資料不經過 Tauri 命令、事件或 COM。`render_at` 仍回傳存檔時間點的有界字幕平面快照。非 Windows 構建報告 `preview.platform_not_implemented`。
 - `sync_preview_overlay` 報告 `mediaTimeMs` 和 `projectTimeMs`。它使用 `projectTimeMs` 查詢字幕；預設採用恆等對映，即媒體時間與專案時間一致。PTS 修復、節目邊界與使用者偏移必須透過更新後端對映處理；WebView 不維護第二套時鐘。
 - `trackId` 作為所有發現的 MPEG-TS B24 或 M2TS 資料軌道的經過驗證的 PID 選擇器傳遞。對於 B24，選定的 PID 對應邏輯 `service_id + component_tag` 軌道；順序解碼遵循當前 PAT/PMT 更新，並且可以在同一邏輯軌道的替換 PID 上繼續。檢查報告代表性 `caption_pid`、檢查範圍內探索到的全部 `caption_pids`、元件標籤、PAT/PMT 服務 ID、SDT 服務名稱和 ISO-639 字幕語言。其 `broadcast` 物件還報告可選的 NIT 網路名稱、當前服務 EIT 當前事件名稱和描述以及 TDT/TOT UTC 廣播時間。這輪 SI 檢查以內容為依據，使用單一封包大小的工作緩衝區，最多讀取 64 MiB，並且當所選服務沒有 EIT 時，絕不會用另一服務的節目補齊。缺少欄位意味著錄影在限定檢查範圍內未提供相關資訊；它們不是解析器的猜測。廣泛的 EPG 歷史記錄、CAS 和錄影機後設資料仍然不包含在產品合約中。佇列管理器擁有暫停狀態並向其活動 Worker 傳送協作暫停/恢復控制；空閒暫停仍然會阻止下一個排隊作業的啟動。
 

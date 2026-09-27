@@ -41,7 +41,7 @@ Tauri/Svelte UI は Rust バックエンドのクライアントです。TS/TLV 
 | `get_preview_runtime` |レンダーサーフェスの存在を主張せずに、検出された libmpv ランタイムとレンダー API シンボルの可用性を報告します。 |
 | `get_preview_render_diagnostics` |アクティブなネイティブルートと制限されたレンダリングスレッドのカウンター/エラーを報告します。ワーカーが存在しない場合は、安定した非アクティブな結果が返されます。 |
 | `render_at` | WebView 経由でビデオフレームを送信せずに、要求されたアーカイブ時間の制限付きキャプションプレーンスナップショットを返します。 |
-| `sync_preview_overlay` |埋め込まれた libmpv 時間を読み取り、境界のあるネイティブプレーンをレンダリングし、WebView のタイミングやレイアウトを使用せずに Windows オーバーレイを適用、クリア、または重複排除します。 |
+| `sync_preview_overlay` | プロセス内 libmpv の時刻を読み取り、範囲を限定した字幕プレーンを描画し、WebView 側で時刻計算や配置を行わずにバックエンドの字幕テクスチャを更新、消去、または重複排除します。 |
 | `get_playback_time_mapping` / `update_playback_time_mapping` |ネイティブキャプションプレビューで使用される検証済みのメディア時間 → プロジェクト時間セグメントマッピングを取得または置換します。 |
 | `get_timeline_window` / `get_timeline_window_filtered` |完了したタスクを参照するために、制限されたアーカイブページをストリーミングします。 |
 | `get_timeline_recent_window_filtered` |追記された完全な JSONL レコードを順次読み取り、最新の境界付きライブイベントページのみを返します。 |
@@ -61,7 +61,7 @@ TLV アーカイブには、サイズや件数に上限を設けた `asset_evide
 
 B24 の描画はデコーダーに基づきます。現在のネイティブ TTML 経路は、バンドルしたフォント、元の前景・背景 RGBA、span ごとのスタイル、単純な横書きルビ、明示的に関連付けた縦書きルビに対応しています。縦書きルビは、自動改段をまたぐ場合も上限を設けて継続します。複雑なルビのグループ化、縦書きの全字形方向、標準の縁取り動作は、ネイティブ実装のテストが完了するまでは宣言上のメタデータです。UI が任意の CSS シャドウや固定の黒い枠で代用してはいけません。
 
-`captionOverlayModes` は、バックエンドの各経路の能力を `id`、`available`、`experimental`、`unavailableReasonCode` で表します。Windows では、検出したランタイムが完全な描画 API を公開していれば `libmpv-render` が利用可能になり、バックエンドはこれを既定で選択します。描画 Worker の起動に失敗した場合は、そのソースのプレビューを `libmpv-client-overlay` に切り替えます。UI はバックエンドが実際に使う経路を表示し、レンダラー自体は選択しません。
+`captionOverlayModes` は `id`、`available`、`experimental`、`unavailableReasonCode` を持つ backend capability の配列です。Windows が提供するのはプロセス内 `libmpv-render` だけです。親を持たない hidden な offscreen WGL host は OpenGL DC を提供し、render thread は video と Rust 字幕を FBO に合成して三つの PBO slot から RGBA を readback します。UI は WebView2 SharedBuffer で pixel slot と control slot を player component 内の Canvas に公開し、renderer 自体は選択しません。
 
 ## ワーカーイベントエンベロープ
 
@@ -85,8 +85,8 @@ arib-caption-worker render-at output.caption.archive.jsonl 90000
 - 認識されていない TLV/MMTP アセットは生の証拠として保持され、推測されません。
 - `inspect_source` は安定した `routeCode` を返します。`mpeg_ts_b24_verified` は B24 コンポーネント記述子によって直ちに検証されます。`mpeg_ts_ttml_candidate` は、188 バイト TS または 192 バイト M2TS にプライベート PES PID が見つかったことを示します。変換時には、さらに厳密な ARIB-TTML XML 検証が必要です。`mpeg_ts_192_ttml_verified` は、リリース時の検証対象となる、検証済みの 192 バイト M2TS/TTML 変換経路を示します。初回の範囲を限定した検査では、有効な TTML 文書を確認する前にこの経路を宣言してはいけません。`tlv_mmtp_experimental` は証拠の保持を優先します。実際の録画による検証なしに、汎用の BS4K/8K 対応として表示してはいけません。
 - ネイティブ B24 および部分アーティファクト状態はシリアル化できないため、チェックポイントは現在、信頼できる記録オリジンからソース ID が検証された完全な再生を実行します。
-- 現在の Windows ビデオサーフェスは、インプロセス `libmpv` によって所有されています。`mpv.exe` サイドカーまたは JSON 名前付きパイプは使用されません。ランタイムが完全なレンダリング API をエクスポートする場合、バックエンドは `libmpv-render` を選択し、WGL コンテキストと BGRA テクスチャブレンドパスを所有し、特定の起動が失敗した場合にのみクライアントオーバーレイにフォールバックします。`hwdec=auto-safe` を要求し、互換性のあるコピーバックアクセラレーションを許可しますが、ゼロコピー D3D/ANGLE の相互運用性は保証しません。`get_preview_render_diagnostics` は、選択されたルート、ライブサーフェスの寸法、1 秒あたりの提示数、テクスチャ操作数、アスペクト、要求されたデコーダーポリシー、およびロードされたソースがレポートする libmpv の実際の `hwdec-current` を返します。長時間の 2K/4K/8K プロファイリングは、暗黙の機能ではなく、リリース品質のゲートのままです。
-- `get_preview_capabilities` は各経路を `{ id, available, experimental, unavailableReasonCode }` として報告します。これは表示用の契約であり、WebView から字幕ビットマップを送信することはできません。`render_preview_at` と `sync_preview_overlay` はバックエンド内部でサイズに上限のあるネイティブ字幕平面を合成し、libmpv に適用します。Windows 以外では `preview.platform_not_implemented` を報告します。これはネイティブプレビュー経路が実装済みという意味ではありません。
+- 現在の Windows video surface はプロセス内 `libmpv` が所有します。`mpv.exe` sidecar、JSON named pipe、visible/child HWND、client overlay は使いません。`libmpv-render` は親を持たない hidden WGL host で動き、host の役割は DC の提供だけです。render thread は video と Rust 字幕を offscreen FBO に合成し、三つの PBO slot で RGBA を readback します。Tauri UI STA は三つの pixel SharedBuffer slot と一つの control SharedBuffer slot を公開し、player component 内の Canvas は control slot が示す最新 frame だけを描画して古い frame を破棄します。`get_preview_render_diagnostics` は active route、surface サイズ、present/s、shared slot counter、aspect、要求した decoder policy、source が報告する場合の `hwdec-current` を返します。長時間の 2K/4K/8K profiling は release-quality gate のままです。
+- `get_preview_capabilities` は現在の route を { id, available, experimental, unavailableReasonCode } として返します。video と caption の pixel は WebView2 SharedBuffer で player component 内の Canvas に届き、frame ごとのデータは Tauri command、event、COM を通りません。`render_at` は archive 時刻の bounded caption-plane snapshot を返します。Windows 以外は `preview.platform_not_implemented` を返します。
 - `sync_preview_overlay` は、`mediaTimeMs` と `projectTimeMs` の両方をレポートします。`projectTimeMs` を使用してキャプションをクエリします。既定では両方の時刻が一致しますが、PTS 修復、プログラム境界、およびユーザーオフセットは、WebView に 2 番目のクロックを教えるのではなく、バックエンドマッピングを更新する必要があります。
 - `trackId` は、検出した MPEG-TS B24 または M2TS データトラックの検証済み PID セレクターとして渡します。B24 では、選択した PID を論理トラック `service_id + component_tag` に対応付けます。順次デコードは PAT/PMT の更新に追従し、同じ論理トラックの PID が変更されても継続できます。検査結果は、代表の `caption_pid`、検査範囲内で見つかった `caption_pids`、コンポーネントタグ、PAT/PMT サービス ID、SDT サービス名、ISO-639 字幕言語を報告します。`broadcast` には、取得できた場合に NIT ネットワーク名、選択中のサービスの EIT 現在イベント名と説明、TDT/TOT の UTC 放送時刻も含めます。この SI 検査は内容に基づき、1 パケットの作業バッファで最大 64 MiB を読みます。選択したサービスに EIT がない場合に、別のサービスの番組で補うことはありません。欠落したフィールドは、検査範囲内に情報がなかったことを示します。広範な EPG 履歴、CAS、録画機のメタデータは製品契約の対象外です。キュー管理側が一時停止状態を保持し、実行中の Worker に協調的な一時停止・再開の指示を送ります。待機中に一時停止した場合も、次のジョブの開始を防ぎます。
 
