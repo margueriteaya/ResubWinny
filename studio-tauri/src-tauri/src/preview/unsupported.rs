@@ -34,7 +34,7 @@ pub fn start_preview(
     _: AppHandle,
     _: State<'_, Arc<AppState>>,
     _: String,
-    _: PreviewRect,
+    _: PreviewSurfaceSize,
 ) -> Result<(), String> {
     Err("Native mpv embedding is not implemented for this platform yet.".into())
 }
@@ -42,14 +42,14 @@ pub fn recover_preview(
     _: AppHandle,
     _: State<'_, Arc<AppState>>,
     _: String,
-    _: PreviewRect,
+    _: PreviewSurfaceSize,
     _: Option<f64>,
     _: bool,
     _: f64,
 ) -> Result<(), String> {
     Err("Native mpv recovery is not implemented for this platform yet.".into())
 }
-pub fn resize_preview(_: State<'_, Arc<AppState>>, _: PreviewRect) -> Result<(), String> {
+pub fn resize_preview(_: State<'_, Arc<AppState>>, _: PreviewSurfaceSize) -> Result<(), String> {
     Ok(())
 }
 pub fn stop_preview(_: State<'_, Arc<AppState>>) {}

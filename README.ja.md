@@ -232,14 +232,15 @@ build/cargo/release/bundle/
 ```text
 ResubWinny/
 ├── crates/
-│   └── arib-caption-worker/       # ストリーム解析、パース、字幕モデル、CLI、エクスポーター
-│       ├── src/caption/           # B24、TTML/B62、Ruby セマンティクス
-│       ├── src/transport/         # MPEG-TS、M2TS、実験的な TLV/MMTP
-│       ├── src/exporters/         # ASS、TTML、SRT、WebVTT、archive などの出力
-│       └── src/tests/             # Worker のモジュール別回帰テスト
+│   ├── arib-caption-worker/       # ストリーム解析、パース、字幕モデル、CLI、エクスポーター
+│   │   ├── src/caption/           # B24、TTML/B62、Ruby セマンティクス
+│   │   ├── src/transport/         # MPEG-TS、M2TS、実験的な TLV/MMTP
+│   │   ├── src/exporters/         # ASS、TTML、SRT、WebVTT、archive などの出力
+│   │   └── src/tests/             # Worker のモジュール別回帰テスト
+│   └── caption-semantics/         # Worker とデスクトップバックエンドで共有する放送字幕セマンティクス
 ├── native/
 │   └── aribcaption-bridge/        # libaribcaption の限定的な C ABI ブリッジ
-├── shared/                        # Worker とデスクトップバックエンドで共有する識別ルール
+├── shared/                        # Worker とフロントエンドで共有する形式能力データ
 ├── studio-tauri/
 │   ├── src/                       # Svelte フロントエンド
 │   │   ├── backend/               # 型付き Tauri API とイベントエントリーポイント

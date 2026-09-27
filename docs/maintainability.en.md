@@ -36,7 +36,8 @@ work required before the repository is suitable for a public source release.
 | Worker exporters | The public exporter boundary remains in `exporters/mod.rs`; ASS, TTML, text formats, B24 orchestration, evidence, and Ruby layout live in format-focused modules. |
 | Worker TTML | B62 semantics, strict XML document decoding, and TS/PES scanning are separate `ttml`, `document`, and `scan` modules. |
 | Experimental TLV/MMTP | Base packet/MPU handling, signalling/MPT, evidence writing, and the constrained route are separate modules. |
-| Worker tests | Corpus, TS/M2TS, B24/timeline, TTML, TLV, archive, and synthetic protocol suites own their fixtures in separate files; the full baseline is 146 tests. |
+| Shared caption semantics | `crates/caption-semantics` is an ordinary library both the Worker and the desktop backend depend on: shared code is compiled as a separate dependency instead of being included by path in both crates; public items called by only one side no longer need dead-code allowances. |
+| Worker tests | Corpus, TS/M2TS, B24/timeline, TTML, TLV, archive, and synthetic protocol suites own their fixtures in separate files; the full baseline is 202 tests. |
 | libmpv | Dynamic client ABI/playback and the Windows render worker are separate; render tests are isolated. |
 | Desktop timeline | Public paging/presentation stays in `timeline.rs`; the bounded live-window and append-cursor state is isolated in `timeline/cache.rs`. |
 | Svelte application | Theme/locale preferences, multi-task coordination, DRCS dictionary state, task presentation, and output-format metadata moved into feature controllers. Multi-task, DRCS, and settings views now live under their owning feature directories rather than the source root. |
@@ -72,10 +73,16 @@ teardown; and `recovery-session.ts` owns checkpoint eligibility and replay.
 These sessions project results into Svelte values but do not become a second
 global store.
 
-The largest production files are now Worker `exporters/ass.rs` (about 1,185
-lines), `caption/ruby.rs` (about 1,080), `App.svelte` (about 1,100), Worker
-`caption/ttml.rs` (about 764), desktop `jobs/repository.rs` (about 720), and
-frontend `features/batch/BatchQueue.svelte` (about 632). The exporter, job, and
+`PreviewNavigationSession` coordinates preview tab changes, playback restoration after host layout, and seeking across tabs. It rechecks request validity after waiting for the previous player to stop. UI state remains in the Svelte shell.
+
+`ExportWorkflow` owns export validation and the transition from index cancellation to export, rejecting stale requests after a source change. `BatchTaskSession` opens batch tasks and prevents old archive queries from overwriting new tasks. `OnboardingSession` owns saving, failure handling and retry during onboarding. The shell provides state access and UI event bindings.
+
+The largest production files are now Worker `exporters/ass.rs` (about 1,536
+lines), desktop `timeline.rs` (about 1,443), `App.svelte` (about 1,129), Worker
+`caption/ttml.rs` (about 1,220), `caption/ruby.rs` (about 1,111), frontend
+`features/tasks/TaskTimeline.svelte` (about 895), desktop
+`jobs/repository.rs` (about 763), and frontend
+`features/batch/BatchQueue.svelte` (about 676). The exporter, job, and
 preview entry modules are now small ownership boundaries rather than
 implementation buckets. Further splits should follow ASS event construction,
 ruby association/layout, application session lifecycle, repository concerns,
@@ -110,11 +117,12 @@ with a coordinated frontend contract migration.
 - `scripts/clean.ps1` removes current output plus obsolete root, fuzz, Vite,
   and Tauri output locations. `-Dependencies` also removes `node_modules`.
 - Worker and desktop Clippy run with `-D warnings` in CI.
-- The current verified baseline is 146 Worker tests and 106 passing desktop
-  tests. Four real-recording/archive environment and performance tests remain
+- The current verified baseline is 202 Worker tests, 18 shared caption-semantics
+  tests, and 134 passing desktop tests. Five real-recording/archive environment
+  and performance tests remain
   opt-in because they need a Windows desktop session, a legal recording or
   archive path, and route-specific performance thresholds.
-- The frontend contract check currently covers 58 typed commands, 64 source
+- The frontend contract check currently covers 62 typed commands, 82 source
   files, and four complete built-in locale files; Svelte builds with no
   diagnostics.
 - `scripts/check.ps1` is the single local entry point for formatting, Worker
@@ -166,7 +174,7 @@ with a coordinated frontend contract migration.
   for Signed Stable releases, but not for an explicitly disclosed Unsigned
   Windows Alpha that satisfies the source, hash, provenance, and license gates.
 - Remove claims in architecture documents that no longer match the actual
-  implementation and ensure all three language versions describe the same
+  implementation and ensure all four language versions describe the same
   verified and experimental capability boundaries.
 
 ## Recommended order

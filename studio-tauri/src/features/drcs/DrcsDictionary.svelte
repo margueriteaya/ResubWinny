@@ -7,28 +7,38 @@ import { FileType2, Filter, Grid3X3, Image, Maximize2, Minus, Plus, RotateCcw, S
   type Glyph = { id: string; width: number; height: number; alternativeText: string; image: string }
   type Mapping = { text: string; action: 'image' | 'character' | 'font' }
 
-  export let glyphs: Glyph[] = []
-  export let message = ''
-  export let getMapping: (id: string) => Mapping | undefined
-  export let saveMapping: (id: string, text: string, action: Mapping['action']) => void
-  let selected: Glyph | null = null
-  let search = ''
-  let tab: 'auto' | 'user' = 'auto'
-  let mapping = ''
-  let action: Mapping['action'] = 'image'
-  let status: 'all' | 'mapped' | 'review' = 'all'
-  let zoom = 400
-  let grid = true
+  let {
+    glyphs = [],
+    message = '',
+    getMapping,
+    saveMapping,
+  }: {
+    glyphs?: Glyph[];
+    message?: string;
+    getMapping: (id: string) => Mapping | undefined;
+    saveMapping: (id: string, text: string, action: Mapping['action']) => void;
+  } = $props();
+  let selected: Glyph | null = $state(null)
+  let search = $state('')
+  let tab: 'auto' | 'user' = $state('auto')
+  let mapping = $state('')
+  let action: Mapping['action'] = $state('image')
+  let status: 'all' | 'mapped' | 'review' = $state('all')
+  let zoom = $state(400)
+  let grid = $state(true)
 
-  $: visible = glyphs.filter((glyph) => {
+  const visible = $derived(glyphs.filter((glyph) => {
     const saved = getMapping(glyph.id)
     const needsReview = !saved?.text && (saved?.action ?? 'image') === 'image'
     return (tab === 'auto' || saved)
       && (status === 'all' || (status === 'mapped' ? !needsReview : needsReview))
       && (glyph.id.toLowerCase().includes(search.toLowerCase()) || glyph.alternativeText.includes(search))
+  }))
+  // Keep a selection that still exists in the filtered view.
+  $effect(() => {
+    if (visible.length && (!selected || !visible.some((glyph) => glyph.id === selected?.id))) selectGlyph(visible[0])
+    else if (!visible.length) selected = null
   })
-  $: if (visible.length && (!selected || !visible.some((glyph) => glyph.id === selected?.id))) selectGlyph(visible[0])
-  $: if (!visible.length) selected = null
 
   function selectGlyph(glyph: Glyph) {
     selected = glyph
@@ -93,16 +103,16 @@ import { FileType2, Filter, Grid3X3, Image, Maximize2, Minus, Plus, RotateCcw, S
   .tool-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 10px;border:.5px solid var(--rw-glass-border);border-radius:8px;color:var(--rw-text);background:transparent;font-size:11px}.tool-button:first-of-type{margin-left:auto}
   .dictionary-tools :global(.popup-button){width:152px;margin-top:0}
   .dictionary-content{justify-self:stretch;display:grid;grid-template-columns:minmax(0,1fr) 300px;width:100%;min-height:0;overflow:hidden}.dictionary-content.no-inspector{grid-template-columns:minmax(0,1fr)}.glyph-table{min-width:0;min-height:0;overflow:auto;border-right:1px solid var(--rw-border-subtle);background:var(--rw-content)}
-  .glyph-heading,.glyph-row{display:grid;grid-template-columns:88px minmax(150px,1fr) minmax(108px,.45fr);align-items:center;gap:10px}.glyph-heading{height:32px;padding:0 12px;color:var(--rw-muted);border-bottom:1px solid var(--rw-border-subtle);background:var(--rw-surface-muted);font-size:9px;font-weight:650}
+  .glyph-heading,.glyph-row{display:grid;grid-template-columns:88px minmax(150px,1fr) minmax(108px,.45fr);align-items:center;gap:10px}.glyph-heading{height:32px;padding:0 12px;color:var(--rw-muted);border-bottom:1px solid var(--rw-border-subtle);background:var(--rw-surface-muted);font-size:11px;font-weight:650}
   .glyph-row{width:100%;min-height:70px;padding:6px 12px;color:var(--rw-text);border-bottom:1px solid var(--rw-border-subtle);background:transparent;text-align:left;content-visibility:auto;contain-intrinsic-size:auto 70px}.glyph-row.selected{background:color-mix(in srgb,var(--rw-accent) 10%,var(--rw-content));box-shadow:inset 3px 0 var(--rw-accent)}
   .mini-glyph{display:grid;place-items:center;width:52px;height:52px;border:1px solid var(--rw-border);border-radius:6px;background:#101216}.mini-glyph img{width:48px;height:48px;image-rendering:pixelated}
-  .mapping b,.mapping small,.mapping-status small{display:block}.mapping b{font-size:13px;line-height:17px}.mapping small,.mapping-status small{margin-top:3px;color:var(--rw-muted);font-size:9px;line-height:12px}.mapping-status{position:relative;padding-left:12px;color:var(--rw-text-secondary);font-size:11px}.mapping-status i{position:absolute;left:0;top:4px;width:6px;height:6px;border-radius:50%;background:var(--rw-success)}.mapping-status.needs-review i{background:var(--rw-warning)}
-  .table-footer{display:flex;align-items:center;gap:20px;height:32px;padding:0 12px;color:var(--rw-muted);font-size:9px}
-  .filter-empty{display:grid;place-items:center;align-content:center;min-height:240px;padding:24px;color:var(--rw-muted);text-align:center}.filter-empty b{margin-top:8px;color:var(--rw-text);font-size:13px}.filter-empty p{margin:3px 0 0;font-size:10px;line-height:14px}
-  .dictionary-inspector{min-width:0;min-height:0;padding:14px;overflow:auto;background:var(--rw-surface-muted)}.dictionary-inspector h2{margin:0;font-size:13px;line-height:17px}.dictionary-inspector header p{margin:3px 0 0;color:var(--rw-muted);font-size:10px}
+  .mapping b,.mapping small,.mapping-status small{display:block}.mapping b{font-size:13px;line-height:17px}.mapping small,.mapping-status small{margin-top:3px;color:var(--rw-muted);font-size:11px;line-height:14px}.mapping-status{position:relative;padding-left:12px;color:var(--rw-text-secondary);font-size:11px}.mapping-status i{position:absolute;left:0;top:4px;width:6px;height:6px;border-radius:50%;background:var(--rw-success)}.mapping-status.needs-review i{background:var(--rw-warning)}
+  .table-footer{display:flex;align-items:center;gap:20px;height:32px;padding:0 12px;color:var(--rw-muted);font-size:11px}
+  .filter-empty{display:grid;place-items:center;align-content:center;min-height:240px;padding:24px;color:var(--rw-muted);text-align:center}.filter-empty b{margin-top:8px;color:var(--rw-text);font-size:13px}.filter-empty p{margin:3px 0 0;font-size:11px;line-height:14px}
+  .dictionary-inspector{min-width:0;min-height:0;padding:14px;overflow:auto;background:var(--rw-surface-muted)}.dictionary-inspector h2{margin:0;font-size:13px;line-height:17px}.dictionary-inspector header p{margin:3px 0 0;color:var(--rw-muted);font-size:11px}
   .large-glyph{display:grid;place-items:center;aspect-ratio:1;margin-top:12px;overflow:hidden;border:1px solid var(--rw-border);border-radius:7px;background-color:#101216;background-image:linear-gradient(#2a2f35 1px,transparent 1px),linear-gradient(90deg,#2a2f35 1px,transparent 1px);background-size:11px 11px}.large-glyph.no-grid{background-image:none}.large-glyph img{width:76%;height:76%;image-rendering:pixelated}
-  .zoom-row{display:flex;align-items:center;gap:5px;margin:8px 0 16px}.zoom-row button{display:grid;place-items:center;width:28px;height:28px;padding:0;border:.5px solid var(--rw-glass-border);border-radius:14px;color:var(--rw-text-secondary);background:transparent;box-shadow:var(--rw-control-shadow);backdrop-filter:blur(14px) saturate(1.26);-webkit-backdrop-filter:blur(14px) saturate(1.26)}.zoom-row button.selected{color:#fff;border-color:var(--rw-accent);background:var(--rw-accent)}.zoom-row b{padding:0 5px;font-size:10px}.zoom-row span{flex:1}
-  .dictionary-inspector>label{display:block;color:var(--rw-text);font-size:10px;font-weight:600}.dictionary-inspector input[type="text"]{width:100%;margin-top:6px;padding:0 8px;font-size:11px}.mapping-hint{display:block;margin-top:6px;color:var(--rw-muted);font-size:9px;line-height:13px}.dictionary-inspector fieldset{margin:16px 0;padding:0;border:0}.dictionary-inspector legend{margin-bottom:7px;color:var(--rw-text);font-size:10px;font-weight:650}
+  .zoom-row{display:flex;align-items:center;gap:5px;margin:8px 0 16px}.zoom-row button{display:grid;place-items:center;width:28px;height:28px;padding:0;border:.5px solid var(--rw-glass-border);border-radius:14px;color:var(--rw-text-secondary);background:transparent;box-shadow:var(--rw-control-shadow);backdrop-filter:blur(14px) saturate(1.26);-webkit-backdrop-filter:blur(14px) saturate(1.26)}.zoom-row button.selected{color:#fff;border-color:var(--rw-accent);background:var(--rw-accent)}.zoom-row b{padding:0 5px;font-size:11px}.zoom-row span{flex:1}
+  .dictionary-inspector>label{display:block;color:var(--rw-text);font-size:11px;font-weight:600}.dictionary-inspector input[type="text"]{width:100%;margin-top:6px;padding:0 8px;font-size:11px}.mapping-hint{display:block;margin-top:6px;color:var(--rw-muted);font-size:11px;line-height:14px}.dictionary-inspector fieldset{margin:16px 0;padding:0;border:0}.dictionary-inspector legend{margin-bottom:7px;color:var(--rw-text);font-size:11px;font-weight:650}
   .mapping-actions :global(.mac-segmented){width:100%}.mapping-actions :global(.mac-segmented button){min-width:0;flex:1 1 0;padding-inline:4px}
   .save-mapping,.reset{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;height:32px;padding:0;border-radius:7px;font-size:11px}.save-mapping{color:#fff;background:var(--rw-accent)}.reset{margin-top:7px;color:var(--rw-text);border:.5px solid var(--rw-glass-border);background:transparent;box-shadow:var(--rw-control-shadow)}
   .dictionary-empty{display:grid;place-items:center;gap:8px;min-height:0;color:var(--rw-muted);text-align:center}.dictionary-empty h2,.dictionary-empty p{margin:0}.dictionary-empty h2{color:var(--rw-text);font-size:15px}

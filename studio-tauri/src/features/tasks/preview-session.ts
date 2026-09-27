@@ -2,12 +2,13 @@ import {
   backend,
   type PlaybackTimeMapping,
   type PreviewCommand,
-  type PreviewRect,
+  type PreviewSurfaceSize,
 } from "../../backend";
 import {
   NativePreviewController,
   type PreviewCallbacks,
 } from "./native-preview-controller";
+import { VolumeCommandQueue } from "./player-volume";
 import {
   mediaTimeMs,
   mediaToProjectTime,
@@ -68,33 +69,40 @@ export class PreviewSession {
   private seekRunning = false;
   private activeSeekPromise: Promise<void> | null = null;
   private pendingSeek: PendingProjectSeek | null = null;
-  private resizeFrame = 0;
   private resizeInFlight = false;
   private resizePending = false;
+  private readonly volumeQueue: VolumeCommandQueue;
   private pageGeneration = 0;
   private resumeMediaTimeMs: MediaTimeMs | null = null;
 
   constructor(
     private readonly host: () => HTMLDivElement | null,
     private readonly bindings: PreviewSessionBindings,
-  ) {}
+  ) {
+    this.volumeQueue = new VolumeCommandQueue({
+      send: (volume) => this.bindings.desktopRuntime() && this.bindings.running()
+        ? this.controller.setVolume(volume)
+        : Promise.resolve(),
+      onError: this.bindings.onError,
+      schedule: (callback) => requestAnimationFrame(callback),
+      cancel: (handle) => cancelAnimationFrame(handle),
+    });
+  }
 
   isRunning() { return this.controller.isRunning(); }
   currentIntent() { return this.seekIntent; }
   isCurrentIntent(intent: number) { return intent === this.seekIntent; }
   whenStopped() { return this.stopPromise; }
 
-  private rect(): PreviewRect {
+  private rect(): PreviewSurfaceSize {
     const element = this.host();
     if (!element) throw new Error("Native preview host is not mounted.");
     const bounds = element.getBoundingClientRect();
     const scale = window.devicePixelRatio;
-    return {
-      x: Math.round(bounds.left * scale),
-      y: Math.round(bounds.top * scale),
-      width: Math.round(bounds.width * scale),
-      height: Math.round(bounds.height * scale),
-    };
+    const width = Math.max(32, Math.round(bounds.width * scale));
+    const height = Math.max(32, Math.round(bounds.height * scale));
+    const fit = Math.min(1, 1920 / width, 1080 / height, Math.sqrt((1920 * 1080) / (width * height)));
+    return { width: Math.max(32, Math.round(width * fit)), height: Math.max(32, Math.round(height * fit)) };
   }
 
   start(source: string, setMapping: (mapping: PlaybackTimeMapping) => void, callbacks: PreviewCallbacks) {
@@ -104,19 +112,14 @@ export class PreviewSession {
   resize() { return this.controller.resize(this.rect()); }
   stop(callbacks: Pick<PreviewCallbacks, "onNotice">) { return this.controller.stop(callbacks); }
   dispose() {
-    if (this.resizeFrame) cancelAnimationFrame(this.resizeFrame);
-    this.resizeFrame = 0;
     this.resizePending = false;
+    this.volumeQueue.dispose();
     return this.controller.dispose();
   }
 
   queueResize() {
     this.resizePending = true;
-    if (this.resizeFrame || this.resizeInFlight) return;
-    this.resizeFrame = requestAnimationFrame(() => {
-      this.resizeFrame = 0;
-      void this.flushResize();
-    });
+    if (!this.resizeInFlight) void this.flushResize();
   }
 
   private async flushResize() {
@@ -183,7 +186,7 @@ export class PreviewSession {
       if (this.bindings.desktopRuntime()) await this.stop(callbacks);
     } finally {
       // A failed IPC acknowledgement cannot leave the UI attached to the
-      // previous page's native child surface.
+      // previous page's shared Canvas frame stream.
       this.bindings.setRunning(false);
       this.bindings.setPaused(true);
     }
@@ -221,13 +224,8 @@ export class PreviewSession {
     }
   }
 
-  async setVolume(volume: number) {
-    if (!this.bindings.desktopRuntime() || !this.bindings.running()) return;
-    try {
-      await this.controller.setVolume(volume);
-    } catch (reason) {
-      this.bindings.onError(reason);
-    }
+  setVolume(volume: number) {
+    this.volumeQueue.enqueue(volume);
   }
 
   queueStop(stop: () => Promise<void>) {

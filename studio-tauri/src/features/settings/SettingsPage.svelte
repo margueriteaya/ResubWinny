@@ -10,35 +10,45 @@
   import LicensesPanel from './LicensesPanel.svelte'
 
   type Panel = 'general' | 'typography' | 'output' | 'playback' | 'about' | 'licenses'
-  export let saveCaptionFont: (font: string) => void = () => {}
-  export let onSettingsSaved: (settings: AppSettings) => void | Promise<void> = () => {}
-  export let onSettingsPreview: (settings: AppSettings) => void | Promise<void> = () => {}
-  export let persistSettings: (settings: AppSettings) => Promise<AppSettings | null> = async (settings) => settings
-  export let onError: (reason: unknown) => void = () => {}
-  export let onShowOnboarding: () => void = () => {}
+  let {
+    saveCaptionFont = () => {},
+    onSettingsSaved = () => {},
+    onSettingsPreview = () => {},
+    persistSettings = async (settings) => settings,
+    onError = () => {},
+    onShowOnboarding = () => {},
+    panel = $bindable('general'),
+  }: {
+    saveCaptionFont?: (font: string) => void;
+    onSettingsSaved?: (settings: AppSettings) => void | Promise<void>;
+    onSettingsPreview?: (settings: AppSettings) => void | Promise<void>;
+    persistSettings?: (settings: AppSettings) => Promise<AppSettings | null>;
+    onError?: (reason: unknown) => void;
+    onShowOnboarding?: () => void;
+    panel?: Panel;
+  } = $props();
   const defaults: AppSettings = { uiFont: 'system', captionFont: 'arib', defaultFormat: 'ASS', userMode: 'normie', exportPreferences: { formats: ['ASS'], preservation: { position: true, color: true, ruby: true, drcs: true, gaiji: true, accessibility: true } }, locale: 'system', theme: 'system', workspaceLayout: { sourceWidth: 240, outputWidth: 300, sourceCollapsed: false, outputCollapsed: false }, onboardingVersion: 0 }
-  let preferences: AppSettings = { ...defaults }
-  let preferencesReady = !isDesktopRuntime()
-  export let panel: Panel = 'general'
-  let persistenceState: 'idle' | 'saving' | 'saved' | 'error' = 'idle'
-  let persistenceRevision = 0
-  let savedTimer = 0
-  let previewRuntime: PreviewRuntime | null = null
-  let installedLocales = availableLocales()
-  let languageRefreshBusy = false
-  let languageError = ''
-  $: languageOptions = [
+  let preferences: AppSettings = $state({ ...defaults })
+  let preferencesReady = $state(!isDesktopRuntime())
+  let persistenceState: 'idle' | 'saving' | 'saved' | 'error' = $state('idle')
+  let persistenceRevision = $state(0)
+  let savedTimer = $state(0)
+  let previewRuntime: PreviewRuntime | null = $state(null)
+  let installedLocales = $state(availableLocales())
+  let languageRefreshBusy = $state(false)
+  let languageError = $state('')
+  const languageOptions = $derived([
     { value: 'system', label: t('settings.languageSystem') },
     ...installedLocales.map((pack) => ({ value: pack.locale, label: `${pack.name} (${pack.locale})` })),
-  ]
-  $: categoryOptions = [
+  ])
+  const categoryOptions = $derived([
     { value: 'general', label: t('settings.general') },
     { value: 'typography', label: t('settings.typography') },
     { value: 'output', label: t('settings.output') },
     { value: 'playback', label: t('settings.playbackAndRuntime') },
     { value: 'about', label: t('settings.about') },
     { value: 'licenses', label: t('settings.licenses') },
-  ]
+  ])
 
   function applyFont() {
     const font = preferences.uiFont === 'system'
@@ -199,7 +209,7 @@
   .settings-nav{position:sticky;top:0;display:grid;align-content:start;gap:2px;height:max-content;padding:6px;border:.5px solid var(--rw-glass-border);border-radius:10px;background:var(--rw-glass);box-shadow:var(--rw-control-shadow);backdrop-filter:blur(18px) saturate(1.18);-webkit-backdrop-filter:blur(18px) saturate(1.18)}
   .settings-nav button{display:flex;align-items:center;gap:9px;min-height:36px;padding:0 10px;border:0;border-radius:7px;color:var(--rw-text-secondary);background:transparent;font-size:12px;text-align:left;transition:color var(--rw-motion-responsive) var(--rw-ease-out),background-color var(--rw-motion-responsive) var(--rw-ease-out),box-shadow var(--rw-motion-responsive) var(--rw-ease-out)}
   .settings-nav button.selected{color:var(--rw-text);background:color-mix(in srgb,var(--rw-text) 10%,transparent);box-shadow:inset 0 .5px rgba(255,255,255,.48)}
-  .settings-nav button :global(svg){width:16px;height:16px;flex:0 0 16px;color:var(--rw-accent);stroke-width:1.8}.compact-category{display:none}
+  .settings-nav button :global(svg){width:16px;height:16px;flex:0 0 16px;color:currentColor;stroke-width:1.8}.compact-category{display:none}
   .settings-nav-spacer{height:8px;margin:2px 4px 0;border-top:1px solid var(--rw-border-subtle)}
   .settings-content{min-width:0;background:var(--rw-content)}
   .settings-panel{animation:settings-panel-reveal var(--rw-motion-fast) var(--rw-ease-out) both}
@@ -210,12 +220,12 @@
   .setting-copy h3{margin:0;font-size:13px;line-height:17px;font-weight:650}.setting-copy p{margin:4px 0 0}.setting-control{min-width:0;align-self:start}.setting-control :global(.popup-button){width:100%}
   .language-row{display:grid;grid-template-columns:minmax(0,1fr) 36px;gap:6px;align-items:center}.language-row :global(.popup-button){margin-top:0}
   .icon-button{display:grid;place-items:center;width:36px;height:36px;min-height:36px;padding:0;border:.5px solid var(--rw-glass-border);border-radius:18px;color:var(--rw-text-secondary);background:transparent}
-  .control-hint{margin:7px 0 0;color:var(--rw-muted);font-size:10px;line-height:14px}.settings-error{margin:7px 0 0;color:#c24848;font-size:11px;line-height:15px}
+  .control-hint{margin:7px 0 0;color:var(--rw-muted);font-size:11px;line-height:14px}.settings-error{margin:7px 0 0;color:#c24848;font-size:11px;line-height:15px}
   .font-preview,.caption-sample{margin-top:10px;padding:11px 12px;border:1px solid var(--rw-border);border-radius:7px;background:var(--rw-content);font-size:12px;line-height:18px}
-  .font-preview small{color:var(--rw-muted);font-size:10px}.caption-sample{display:flex;justify-content:space-between;align-items:center;gap:16px;color:#fff;background:#17191d}
-  .caption-sample span{font-family:"Rounded M+ 1m for ARIB","Hiragino Sans","Yu Gothic UI",sans-serif;font-size:18px}.caption-sample b{color:#a9b2bd;font-size:10px;text-align:right}
-  .runtime-status{display:grid;gap:7px;margin:0}.runtime-status div{display:grid;grid-template-columns:112px minmax(0,1fr);gap:10px}.runtime-status dt{color:var(--rw-muted);font-size:10px}.runtime-status dd{margin:0;color:var(--rw-warning);font-size:10px;line-height:14px;word-break:break-word}.runtime-status dd.available{color:var(--rw-success)}
-  footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-height:49px;padding:9px 0}footer>span{margin-right:auto;color:var(--rw-muted);font-size:10px;line-height:14px}footer>span.error{color:#c24848}.reset{display:flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border:.5px solid var(--rw-glass-border);border-radius:8px;color:var(--rw-text);background:transparent;box-shadow:var(--rw-control-shadow);font-size:11px}
+  .font-preview small{color:var(--rw-muted);font-size:11px}.caption-sample{display:flex;justify-content:space-between;align-items:center;gap:16px;color:#fff;background:#17191d}
+  .caption-sample span{font-family:"Rounded M+ 1m for ARIB","Hiragino Sans","Yu Gothic UI",sans-serif;font-size:18px}.caption-sample b{color:#a9b2bd;font-size:11px;text-align:right}
+  .runtime-status{display:grid;gap:7px;margin:0}.runtime-status div{display:grid;grid-template-columns:112px minmax(0,1fr);gap:10px}.runtime-status dt{color:var(--rw-muted);font-size:11px}.runtime-status dd{margin:0;color:var(--rw-warning);font-size:11px;line-height:14px;word-break:break-word}.runtime-status dd.available{color:var(--rw-success)}
+  footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-height:49px;padding:9px 0}footer>span{margin-right:auto;color:var(--rw-muted);font-size:11px;line-height:14px}footer>span.error{color:#c24848}.reset{display:flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border:.5px solid var(--rw-glass-border);border-radius:8px;color:var(--rw-text);background:transparent;box-shadow:var(--rw-control-shadow);font-size:11px}
   .theme-control :global(.mac-segmented){width:100%}
   @keyframes settings-panel-reveal{from{opacity:0}to{opacity:1}}
   @media(prefers-reduced-motion:reduce){.settings-panel{animation:none}}
