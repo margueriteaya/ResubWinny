@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 360
     steps:
       - name: Checkout ResubWinny
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Read the canonical dependency pins
         id: pins
@@ -69,7 +69,7 @@ jobs:
 
       - name: Restore reusable libmpv build state
         id: libmpv-cache
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             build/libmpv/toolchain/build64
@@ -153,7 +153,7 @@ jobs:
 
       - name: Upload failed build diagnostics
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: libmpv-build-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
@@ -165,7 +165,7 @@ jobs:
       - name: Save reusable libmpv build state
         if: ${{ always() }}
         continue-on-error: true
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             build/libmpv/toolchain/build64
@@ -245,7 +245,7 @@ jobs:
             -OutputDirectory build/libmpv/corresponding-source
 
       - name: Upload binary and source as one release candidate
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: libmpv-lgpl-windows-x86_64-release-candidate
           if-no-files-found: error
