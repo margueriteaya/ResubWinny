@@ -540,7 +540,7 @@ fn exports_drcs_alternative_text_for_positioned_and_grouped_text_targets() {
         let ass = fs::read_to_string(&output).expect("read");
         assert!(ass.contains("字"));
         assert!(!ass.contains("\\p1"));
-        let srt = write_srt_from_ass(&output, true)
+        let srt = write_srt_from_ass(&output, &output, true)
             .expect("SRT")
             .expect("path");
         assert!(fs::read_to_string(&srt).expect("text").contains("字"));
@@ -784,6 +784,81 @@ fn unpositioned_b24_group_orders_fragments_by_source_rows_and_writes_one_cue() {
     assert!(ass.contains("\\fs72"));
     assert!(!ass.contains("(寛太)"));
     assert!(!ass.contains("\\pos("));
+    fs::remove_file(output).expect("cleanup");
+}
+
+#[test]
+fn b24_flat_groups_merge_interleaved_exact_timings_after_active_regions_close() {
+    let output = std::env::temp_dir().join(format!(
+        "resubwinny-b24-flat-buffer-{}.ass",
+        std::process::id()
+    ));
+    let mut exact = scene_intervals(&scene_with_text_regions(
+        100,
+        &[(200, 100, "A"), (100, 100, "C")],
+    ));
+    for interval in &mut exact {
+        interval.begin_ms = 100;
+        interval.end_ms = 1_000;
+        interval.wait_duration_ms = 900;
+    }
+    let mut other = scene_intervals(&scene_with_text_regions(100, &[(100, 200, "B")]))
+        .pop()
+        .expect("other interval");
+    other.begin_ms = 100;
+    other.end_ms = 2_000;
+    other.wait_duration_ms = 1_900;
+    let mut pending = BTreeMap::new();
+    pending
+        .entry((100, 1_000))
+        .or_insert_with(Vec::new)
+        .push(exact.remove(0));
+    pending
+        .entry((100, 2_000))
+        .or_insert_with(Vec::new)
+        .push(other);
+    pending
+        .entry((100, 1_000))
+        .or_insert_with(Vec::new)
+        .push(exact.remove(0));
+    let held = pending
+        .get(&(100, 1_000))
+        .and_then(|intervals| intervals.first())
+        .cloned()
+        .expect("held interval");
+    let mut active = HashMap::new();
+    active.insert(held.key(), held);
+    let options = ConversionOptions {
+        preserve_position: false,
+        ..ConversionOptions::default()
+    };
+    let mut writer = BufWriter::new(File::create(&output).expect("output"));
+    let mut editable_writer = None;
+    flush_b24_flat_groups(
+        &mut writer,
+        &mut editable_writer,
+        &mut pending,
+        &active,
+        false,
+        &options,
+    )
+    .expect("flush ready groups");
+    assert!(pending.contains_key(&(100, 1_000)));
+    assert!(!pending.contains_key(&(100, 2_000)));
+    active.clear();
+    flush_b24_flat_groups(
+        &mut writer,
+        &mut editable_writer,
+        &mut pending,
+        &active,
+        true,
+        &options,
+    )
+    .expect("flush remaining groups");
+    writer.flush().expect("flush output");
+    let ass = fs::read_to_string(&output).expect("ASS text");
+    assert_eq!(ass.matches("Dialogue: ").count(), 2);
+    assert!(ass.contains("CA"));
     fs::remove_file(output).expect("cleanup");
 }
 

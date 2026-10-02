@@ -598,7 +598,7 @@ fn webvtt_compatibility_export_writes_cues_from_ass_dialogue() {
         "[Events]\nDialogue: 0,0:00:01.20,0:00:02.34,Default,,0,0,0,,{\\pos(10,20)}字幕\\N次行\n",
     )
     .expect("ASS fixture");
-    let vtt = write_webvtt_from_ass(&ass, false)
+    let vtt = write_webvtt_from_ass(&ass, &ass, false)
         .expect("export WebVTT")
         .expect("WebVTT path");
     let text = fs::read_to_string(&vtt).expect("read WebVTT");
@@ -631,7 +631,7 @@ fn srt_compatibility_export_writes_plain_numbered_cues() {
         "[Events]\nDialogue: 0,0:00:01.20,0:00:02.34,Default,,0,0,0,,{\\pos(10,20)}字幕\\N次行\n",
     )
     .expect("ASS fixture");
-    let srt = write_srt_from_ass(&ass, false)
+    let srt = write_srt_from_ass(&ass, &ass, false)
         .expect("export SRT")
         .expect("SRT path");
     let text = fs::read_to_string(&srt).expect("read SRT");
@@ -659,7 +659,7 @@ fn no_ass_selection_keeps_only_requested_compatibility_output() {
         ..ConversionOptions::default()
     };
     let (kept_ass, font_directory, srt, webvtt) =
-        finalize_ass_outputs(&ass, &options).expect("finalize selected outputs");
+        finalize_ass_outputs(&ass, None, &options).expect("finalize selected outputs");
     assert!(kept_ass.is_none());
     assert!(font_directory.is_none());
     assert!(webvtt.is_none());
@@ -667,6 +667,55 @@ fn no_ass_selection_keeps_only_requested_compatibility_output() {
     let srt = srt.expect("SRT retained");
     assert!(srt.exists());
     fs::remove_file(srt).expect("cleanup SRT");
+}
+
+#[test]
+fn compatibility_outputs_use_the_editable_ass_stream_and_remove_it() {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let ass = std::env::temp_dir().join(format!("arib-faithful-{stamp}.ass"));
+    let editable = std::env::temp_dir().join(format!("arib-editable-{stamp}.ass.part"));
+    fs::write(
+        &ass,
+        "[Events]\nDialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,上\nDialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,下\n",
+    )
+    .expect("faithful ASS fixture");
+    fs::write(
+        &editable,
+        "[Events]\nDialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,上\\N下\n",
+    )
+    .expect("editable ASS fixture");
+    let options = ConversionOptions {
+        srt: true,
+        webvtt: true,
+        ..ConversionOptions::default()
+    };
+    let (kept_ass, _, srt, webvtt) =
+        finalize_ass_outputs(&ass, Some(&editable), &options).expect("finalize outputs");
+    assert_eq!(kept_ass.as_deref(), Some(ass.as_path()));
+    assert!(!editable.exists());
+    let srt = srt.expect("SRT output");
+    let webvtt = webvtt.expect("WebVTT output");
+    assert_eq!(
+        fs::read_to_string(&srt)
+            .expect("SRT")
+            .matches(" --> ")
+            .count(),
+        1
+    );
+    assert_eq!(
+        fs::read_to_string(&webvtt)
+            .expect("WebVTT")
+            .matches(" --> ")
+            .count(),
+        1
+    );
+    assert!(fs::read_to_string(&srt).expect("SRT").contains("上\n下"));
+    fs::remove_file(ass).expect("cleanup ASS");
+    fs::remove_file(srt).expect("cleanup SRT");
+    fs::remove_file(webvtt).expect("cleanup WebVTT");
 }
 
 #[path = "tests/corpus.rs"]

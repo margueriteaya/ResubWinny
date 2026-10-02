@@ -274,3 +274,11 @@ ARIB-TTML 背景與描邊語意修正（2026-09-02）：字幕模型保留最終
 ## Vendored libaribtlv TLV 後端（2026-09-02）
 
 `libaribtlv` feature 將固定版本的 libaribtlv 0.6.1 與其私有 Zlib 1.3.2 靜態建置在專案自有窄 C ABI 後。它接管實驗性 TLV→B62 TTML 掃描，但仍以 1 MiB 有界串流輸入和 evidence-first 為約束：callback 資料在越過 ABI 前複製，audio/video 與 ARIB-HTML5 application resource 不收集，只有 compression type 0 的 self-contained TTML 可進入 strict XML 解析；EXI、unknown format、non-self-contained 或 malformed payload 僅 archive/report。native normalized PTS、actual MPT presentation NTP、MPU/MMTP sequence 與 discontinuity 都是獨立的 optional evidence，缺少時不偽造。該實作不整合 `tlvdemux` player/MSE code，也不將 TLV/MMTP 提升為已驗證的通用 BS4K/8K support。
+
+## 可編輯字幕的同時段合併（2026-10-02）
+
+Worker 以完全相同的開始與結束時間作為合併鍵，為 SRT、WebVTT 和關閉位置保留後的 ASS 產生單一可編輯字幕。B24 區域依畫面由上到下、同一列由左到右排列；ARIB-TTML 橫排使用相同順序，`vertical-rl` 由右向左排列各欄，`vertical-lr` 由左向右排列各欄，欄內皆由上到下讀取。只有時間重疊的字幕仍保有各自的時間範圍。
+
+B24 合併緩衝會等待具有相同固定結束時間的活動區域關閉，再一次寫出完整字幕。ARIB-TTML 會先收集相同開始時間的字幕，再依完整的開始與結束時間分組，因此交錯出現的相同時間組不會被拆開。獨立 Ruby 區域會參與對應關係解析，但不會在平面文字中重複正文。
+
+保留位置的 ASS、TTML 與 JSONL 封存仍逐區域寫出。SRT 與 WebVTT 使用獨立的暫存平面 ASS 串流，因此合併結果不受 ASS 位置保留選項影響；暫存串流會在完成、失敗或取消後清除。

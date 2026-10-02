@@ -251,6 +251,14 @@ Windows 在发现完整 `libmpv` render API 时使用进程内 `libmpv-render`�
 
 当前 WGL route 请求 libmpv 的 `hwdec=auto-safe` 策略，允许兼容的 copy-back 加速，但不承诺 zero-copy 的 ANGLE/D3D 硬解互操作。`scripts/validate-preview.ps1 -Long` 现已执行带明确启动、帧率、完整字幕平面上传、控制、工作集和退出阈值的 120 秒真实 4K 门槛。2026-07-30 的 `bs4k_test_2.ts` 实测为 `d3d11va-copy`、34.74 present/s、峰值 1526.9 MiB、4K 预热后增长 111.9 MiB。独立 2K/8K 性能、DPI 和参考截图差分仍未完成；macOS/Linux 仍返回 `preview.platform_not_implemented`。
 
+## 可编辑字幕的同时段合并（2026-10-02）
+
+Worker 以完全相同的开始与结束时间作为合并键，为 SRT、WebVTT 和关闭位置保留后的 ASS 生成单条可编辑字幕。B24 区域按画面从上到下、同一行从左到右排列；ARIB-TTML 横排使用相同顺序，`vertical-rl` 从右向左排列各列，`vertical-lr` 从左向右排列各列，列内均从上到下读取。仅有时间交集的字幕保持各自的时间范围。
+
+B24 的合并缓冲会等待具有同一固定结束时间的活动区域关闭，再一次写出完整字幕。ARIB-TTML 会先收集同一开始时间的字幕，再按完整的开始和结束时间分组，因此交错出现的同一时间组不会被拆开。独立 Ruby 区域参与对应关系解析，但不会在平面文本中重复正文。
+
+保留位置的 ASS、TTML 和 JSONL 存档继续逐区域写出。SRT 与 WebVTT 使用单独的临时平面 ASS 流，因此它们的合并结果不受 ASS 位置保留选项影响；临时流在完成、失败或取消后清理。
+
 ## ASS 保真校正（2026-07-29）
 
 B24 ASS 导出器现在先将解码来源画布归一化到 ASS 的 1920×1080 play resolution，再同比变换每个可见字符的位置、字号、横向比例、描边和 DRCS 几何；逐字符颜色、粗体、斜体和下划线保持不变。Ruby 使用换算后的广播字符格坐标并置于 layer 1。ARIB-TTML 路线保留安全的行内 span 样式，将明确关联的 Ruby 分层输出；注释未指定字号时使用基字的 0.5 倍。依照 TTML 文字排版语义及审查过的参考实现，B62 双维字号只取第二维作为 ASS 字高，letter spacing 仅通过 ASS 原生 spacing 指令应用一次。导出器不再横向拉伸字体，也不以项目自制的逐字符网格替代 libass shaping。独立 Ruby region 根据来源几何关系匹配基字 region，并以 ASS 标准 `an8+pos` 居中到被注音范围的实际渲染字形中心。正文保持为一个完整 Dialogue event，既不拆分也不移动；仅用同捆字体的 libass-compatible advance 与 ink bounds 修正 Ruby 锚点。单字和多个汉字使用同一范围中点规则，上置、下置均可识别；多行字幕会先选择与 Ruby 垂直距离最近的来源行，再映射水平覆盖范围。FFmpeg/libass 像素测试覆盖单字上置以及下方一行的多字下置，最终水平中心误差超过 3px 即失败，并逐像素比较加入 Ruby 前后的正文画面不发生变化。相同时段字幕只缓冲到 timing 变化为止，仍满足流式内存边界。

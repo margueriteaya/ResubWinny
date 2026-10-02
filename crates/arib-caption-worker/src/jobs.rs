@@ -1,18 +1,32 @@
 use crate::*;
 use std::cell::RefCell;
 
+fn create_editable_ass_writer(
+    output: &Path,
+    options: &ConversionOptions,
+) -> io::Result<(Option<PathBuf>, Option<BufWriter<File>>)> {
+    if !options.preserve_position || (!options.srt && !options.webvtt) {
+        return Ok((None, None));
+    }
+    let path = output.with_extension("editable.ass.part");
+    let mut writer = BufWriter::new(File::create(&path)?);
+    write_ass_header(&mut writer)?;
+    Ok((Some(path), Some(writer)))
+}
+
 fn queue_ass_ttml_caption(
     writer: &mut BufWriter<File>,
     pending: &mut Vec<TtmlCaption>,
     semantic_state: &mut crate::caption_features::CaptionSequenceState,
     archive_writer: &mut Option<BufWriter<File>>,
     ttml_writer: &mut Option<BufWriter<File>>,
+    editable_writer: &mut Option<BufWriter<File>>,
     options: &ConversionOptions,
     caption: TtmlCaption,
 ) -> io::Result<()> {
     let same_group = pending
         .first()
-        .is_none_or(|first| first.start_ms == caption.start_ms && first.end_ms == caption.end_ms);
+        .is_none_or(|first| first.start_ms == caption.start_ms);
     if !same_group {
         flush_ass_ttml_group(
             writer,
@@ -20,6 +34,7 @@ fn queue_ass_ttml_caption(
             semantic_state,
             archive_writer,
             ttml_writer,
+            editable_writer,
             options,
         )?;
     }
@@ -33,20 +48,36 @@ fn flush_ass_ttml_group(
     semantic_state: &mut crate::caption_features::CaptionSequenceState,
     archive_writer: &mut Option<BufWriter<File>>,
     ttml_writer: &mut Option<BufWriter<File>>,
+    editable_writer: &mut Option<BufWriter<File>>,
     options: &ConversionOptions,
 ) -> io::Result<()> {
-    annotate_ttml_group_semantics_with_state(pending, semantic_state);
-    associate_standalone_ttml_ruby(pending);
-    for caption in pending.iter() {
-        if let Some(archive_writer) = archive_writer.as_mut() {
-            write_caption_archive_record(archive_writer, CaptionCueRef::AribTtml(caption))?;
+    let mut groups = BTreeMap::<(i64, i64), Vec<TtmlCaption>>::new();
+    for caption in pending.drain(..) {
+        groups
+            .entry((caption.start_ms, caption.end_ms))
+            .or_default()
+            .push(caption);
+    }
+    for mut captions in groups.into_values() {
+        annotate_ttml_group_semantics_with_state(&mut captions, semantic_state);
+        associate_standalone_ttml_ruby(&mut captions);
+        for caption in &captions {
+            if let Some(archive_writer) = archive_writer.as_mut() {
+                write_caption_archive_record(archive_writer, CaptionCueRef::AribTtml(caption))?;
+            }
+            if let Some(ttml_writer) = ttml_writer.as_mut() {
+                write_ttml_caption(ttml_writer, caption, options)?;
+            }
         }
-        if let Some(ttml_writer) = ttml_writer.as_mut() {
-            write_ttml_caption(ttml_writer, caption, options)?;
+        if options.preserve_position {
+            write_ass_ttml_group(writer, &captions, options)?;
+            if let Some(editable_writer) = editable_writer.as_mut() {
+                write_ass_ttml_flat_group(editable_writer, &captions, options)?;
+            }
+        } else {
+            write_ass_ttml_flat_group(writer, &captions, options)?;
         }
     }
-    write_ass_ttml_group(writer, pending, options)?;
-    pending.clear();
     Ok(())
 }
 
@@ -211,6 +242,7 @@ where
         None => None,
     };
     write_ass_header(&mut writer)?;
+    let (editable_temporary, mut editable_writer) = create_editable_ass_writer(output, &options)?;
     let mut pending_ass = Vec::new();
     let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
     let scan = match packetisation {
@@ -225,6 +257,7 @@ where
                     &mut semantic_state,
                     &mut archive_writer,
                     &mut ttml_writer,
+                    &mut editable_writer,
                     &options,
                     caption,
                 )?;
@@ -250,6 +283,7 @@ where
                     &mut semantic_state,
                     &mut archive_writer,
                     &mut ttml_writer,
+                    &mut editable_writer,
                     &options,
                     caption,
                 )?;
@@ -281,6 +315,9 @@ where
             if let Some(path) = &raw_temporary {
                 let _ = fs::remove_file(path);
             }
+            if let Some(path) = &editable_temporary {
+                let _ = fs::remove_file(path);
+            }
             return Err(error);
         }
     };
@@ -290,8 +327,12 @@ where
         &mut semantic_state,
         &mut archive_writer,
         &mut ttml_writer,
+        &mut editable_writer,
         &options,
     )?;
+    if let Some(editable_writer) = editable_writer.as_mut() {
+        editable_writer.flush()?;
+    }
     writer.flush()?;
     publish_file(&temporary, output, options.overwrite)?;
     if let (Some(mut ttml_writer), Some(ttml), Some(ttml_temporary)) =
@@ -314,7 +355,8 @@ where
         raw_writer.flush()?;
         publish_file(raw_temporary, raw, options.overwrite)?;
     }
-    let (ass, font_directory, srt, webvtt) = finalize_ass_outputs(output, &options)?;
+    let (ass, font_directory, srt, webvtt) =
+        finalize_ass_outputs(output, editable_temporary.as_deref(), &options)?;
     let primary = ass
         .as_ref()
         .or(ttml.as_ref())
@@ -407,6 +449,7 @@ where
     let report_b62 = RefCell::new(BTreeMap::<String, B62DrcsReportGlyph>::new());
     let report_b62_bytes = RefCell::new(0_usize);
     write_ass_header(&mut writer)?;
+    let (editable_temporary, mut editable_writer) = create_editable_ass_writer(output, &options)?;
     let mut pending_ass = Vec::new();
     let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
     let mut feature_summary = CaptionFeatureSummary::default();
@@ -516,6 +559,7 @@ where
                 &mut semantic_state,
                 &mut archive,
                 &mut ttml_writer,
+                &mut editable_writer,
                 &options,
                 caption,
             )?;
@@ -573,6 +617,9 @@ where
             if let Some(path) = &raw_temporary {
                 let _ = fs::remove_file(path);
             }
+            if let Some(path) = &editable_temporary {
+                let _ = fs::remove_file(path);
+            }
             return Err(error);
         }
     };
@@ -584,6 +631,7 @@ where
             &mut semantic_state,
             &mut archive,
             &mut ttml_writer,
+            &mut editable_writer,
             &options,
         )?;
     }
@@ -597,6 +645,9 @@ where
     } else {
         None
     };
+    if let Some(editable_writer) = editable_writer.as_mut() {
+        editable_writer.flush()?;
+    }
     writer.flush()?;
     publish_file(&temporary, output, options.overwrite)?;
     if let (Some(mut ttml_writer), Some(ttml), Some(ttml_temporary)) =
@@ -621,7 +672,8 @@ where
         raw_writer.flush()?;
         publish_file(raw_temporary, raw, options.overwrite)?;
     }
-    let (ass, font_directory, srt, webvtt) = finalize_ass_outputs(output, &options)?;
+    let (ass, font_directory, srt, webvtt) =
+        finalize_ass_outputs(output, editable_temporary.as_deref(), &options)?;
     let primary = ass
         .as_ref()
         .or(ttml.as_ref())

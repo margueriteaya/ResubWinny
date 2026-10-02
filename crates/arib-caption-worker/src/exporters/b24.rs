@@ -1,5 +1,41 @@
 use super::*;
 
+fn b24_interval_end(interval: &RegionInterval) -> Option<i64> {
+    (interval.wait_duration_ms > 0 && interval.wait_duration_ms != i64::MAX)
+        .then(|| interval.begin_ms.saturating_add(interval.wait_duration_ms))
+}
+
+pub(crate) fn flush_b24_flat_groups(
+    writer: &mut BufWriter<File>,
+    editable_writer: &mut Option<BufWriter<File>>,
+    pending: &mut BTreeMap<(i64, i64), Vec<RegionInterval>>,
+    active: &HashMap<RegionKey, RegionInterval>,
+    flush_all: bool,
+    options: &ConversionOptions,
+) -> io::Result<()> {
+    let ready = pending
+        .keys()
+        .copied()
+        .filter(|timing| {
+            flush_all
+                || !active.values().any(|interval| {
+                    interval.begin_ms == timing.0 && b24_interval_end(interval) == Some(timing.1)
+                })
+        })
+        .collect::<Vec<_>>();
+    for timing in ready {
+        let intervals = pending.remove(&timing).unwrap_or_default();
+        if options.preserve_position {
+            if let Some(editable_writer) = editable_writer.as_mut() {
+                write_ass_interval_group(editable_writer, &intervals, options)?;
+            }
+        } else {
+            write_ass_interval_group(writer, &intervals, options)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn convert_b24_with_options_and_cancel<F, C>(
     path: &Path,
     output: &Path,
@@ -73,6 +109,16 @@ where
         None => None,
     };
     write_ass_header(&mut writer)?;
+    let editable_temporary = (options.preserve_position && (options.srt || options.webvtt))
+        .then(|| output.with_extension("editable.ass.part"));
+    let mut editable_writer = match &editable_temporary {
+        Some(path) => {
+            let mut writer = BufWriter::new(File::create(path)?);
+            write_ass_header(&mut writer)?;
+            Some(writer)
+        }
+        None => None,
+    };
     // Keep only the currently visible regions.  A full recording can be hundreds of
     // gigabytes long, while this state stays bounded by a single caption plane.
     let mut active_regions = HashMap::new();
@@ -81,7 +127,7 @@ where
     let mut report_drcs = BTreeMap::new();
     let mut report_drcs_bytes = 0_usize;
     let mut have_drcs = false;
-    let mut pending_unpositioned = Vec::<RegionInterval>::new();
+    let mut pending_flat = BTreeMap::<(i64, i64), Vec<RegionInterval>>::new();
     let mut semantic_state = crate::caption_features::CaptionSequenceState::default();
     let mut last_scene_pid = track.caption_pid;
     let summary = match scan_b24(
@@ -125,15 +171,12 @@ where
                 interval.source_pid = Some(source_pid);
                 if options.preserve_position {
                     write_ass_interval(&mut writer, &interval, &options)?;
-                } else {
-                    let same_timing = pending_unpositioned.first().is_none_or(|first| {
-                        first.begin_ms == interval.begin_ms && first.end_ms == interval.end_ms
-                    });
-                    if !same_timing {
-                        write_ass_interval_group(&mut writer, &pending_unpositioned, &options)?;
-                        pending_unpositioned.clear();
-                    }
-                    pending_unpositioned.push(interval.clone());
+                }
+                if !options.preserve_position || editable_writer.is_some() {
+                    pending_flat
+                        .entry((interval.begin_ms, interval.end_ms))
+                        .or_default()
+                        .push(interval.clone());
                 }
                 if let Some(ttml_writer) = &mut ttml_writer {
                     write_ttml_interval(ttml_writer, &interval, &options)?;
@@ -142,6 +185,14 @@ where
                     write_caption_archive_record(archive_writer, CaptionCueRef::B24(&interval))?;
                 }
             }
+            flush_b24_flat_groups(
+                &mut writer,
+                &mut editable_writer,
+                &mut pending_flat,
+                &active_regions,
+                false,
+                &options,
+            )?;
             Ok(())
         },
         |summary| progress(summary),
@@ -168,6 +219,9 @@ where
             if let Some(path) = &raw_temporary {
                 let _ = fs::remove_file(path);
             }
+            if let Some(path) = &editable_temporary {
+                let _ = fs::remove_file(path);
+            }
             if options.drcs_report
                 && !report_drcs.is_empty()
                 && write_drcs_report(output, path, &drcs_directory, &report_drcs, true)?.is_some()
@@ -177,17 +231,16 @@ where
             return Err(error);
         }
     };
-    if !options.preserve_position && !pending_unpositioned.is_empty() {
-        write_ass_interval_group(&mut writer, &pending_unpositioned, &options)?;
-        pending_unpositioned.clear();
-    }
-    let mut final_intervals = Vec::new();
     for mut interval in finish_scene_intervals(&mut active_regions, final_scene_end) {
         interval.source_pid = Some(last_scene_pid);
         if options.preserve_position {
             write_ass_interval(&mut writer, &interval, &options)?;
-        } else {
-            final_intervals.push(interval.clone());
+        }
+        if !options.preserve_position || editable_writer.is_some() {
+            pending_flat
+                .entry((interval.begin_ms, interval.end_ms))
+                .or_default()
+                .push(interval.clone());
         }
         if let Some(ttml_writer) = &mut ttml_writer {
             write_ttml_interval(ttml_writer, &interval, &options)?;
@@ -196,9 +249,14 @@ where
             write_caption_archive_record(archive_writer, CaptionCueRef::B24(&interval))?;
         }
     }
-    if !options.preserve_position {
-        write_ass_interval_group(&mut writer, &final_intervals, &options)?;
-    }
+    flush_b24_flat_groups(
+        &mut writer,
+        &mut editable_writer,
+        &mut pending_flat,
+        &active_regions,
+        true,
+        &options,
+    )?;
     let drcs_report = if options.drcs_report {
         write_drcs_report(
             output,
@@ -210,6 +268,9 @@ where
     } else {
         None
     };
+    if let Some(editable_writer) = editable_writer.as_mut() {
+        editable_writer.flush()?;
+    }
     writer.flush()?;
     publish_file(&temporary, output, options.overwrite)?;
     if let (Some(mut ttml_writer), Some(ttml), Some(ttml_temporary)) =
@@ -232,7 +293,8 @@ where
         raw_writer.flush()?;
         publish_file(raw_temporary, raw, options.overwrite)?;
     }
-    let (ass, font_directory, srt, webvtt) = finalize_ass_outputs(output, &options)?;
+    let (ass, font_directory, srt, webvtt) =
+        finalize_ass_outputs(output, editable_temporary.as_deref(), &options)?;
     let primary = ass
         .as_ref()
         .or(ttml.as_ref())

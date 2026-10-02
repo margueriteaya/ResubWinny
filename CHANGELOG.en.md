@@ -4,6 +4,14 @@
 
 This project remains in early Alpha. Releases may contain breaking changes.
 
+## [Unreleased]
+
+### Caption export
+
+- SRT, WebVTT, and ASS exports with position preservation disabled now merge caption regions whose start and end times are exactly equal into one editable cue.
+- Merged text follows visual reading order: horizontal text runs top to bottom and left to right; `vertical-rl` runs from the rightmost column to the left, with each column read top to bottom; `vertical-lr` runs from the leftmost column to the right, with each column read top to bottom.
+- When positioned ASS is exported together with SRT or WebVTT, the text formats use an internal flattened caption stream. Positioned ASS, TTML, and JSONL archives continue to preserve separate region structure.
+
 ## [0.2.3-alpha.1] - 2026-09-03
 
 ### Workspace and onboarding

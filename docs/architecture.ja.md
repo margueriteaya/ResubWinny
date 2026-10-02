@@ -259,3 +259,11 @@ ARIB-TTML background/outline 修正（2026-09-02）：caption model は有効な
 ## Vendored libaribtlv TLV backend（2026-09-02）
 
 `libaribtlv` feature は固定した libaribtlv 0.6.1 と private Zlib 1.3.2 を project-owned narrow C ABI の背後で static build します。experimental な TLV→B62 TTML scan を担いますが、1 MiB の bounded streaming と evidence-first contract を維持します。callback data は ABI を越える前に copy し、audio、video、ARIB-HTML5 application resource は collect せず、self-contained な compression type 0 の TTML だけを strict XML parser に渡します。EXI、unknown format、non-self-contained、malformed payload は archive/report のみです。native normalized PTS、actual MPT presentation NTP、MPU/MMTP sequence、discontinuity はそれぞれ optional evidence であり、存在しない値を作りません。この実装は `tlvdemux` の player/MSE code を統合せず、TLV/MMTP を検証済みの汎用 BS4K/8K support に昇格させません。
+
+## 編集用字幕の同一時間帯マージ（2026-10-02）
+
+Worker は開始時刻と終了時刻が完全に一致する字幕を一つのグループとして扱い、SRT、WebVTT、位置保持を無効にした ASS に一つの編集用字幕として出力します。B24 の region は画面上の上から下、同じ行では左から右の順に並べます。横書きの ARIB-TTML も同じ順序です。`vertical-rl` は列を右から左、`vertical-lr` は左から右に並べ、各列の中は上から下に読みます。時間が一部重なるだけの字幕は別の時間範囲として扱います。
+
+B24 のマージ用バッファーは、同じ固定終了時刻を持つ active region が閉じるまで待ってから、字幕全体を出力します。ARIB-TTML は開始時刻が同じ字幕を先に集め、その後で開始時刻と終了時刻の組ごとに分けます。このため、入力中で交互に現れる同一時間帯の字幕も分断されません。独立した Ruby region は対応関係の解決に使い、平面化した本文には注釈文字を重ねて出力しません。
+
+位置付き ASS、TTML、JSONL archive は region ごとの構造を保ちます。SRT と WebVTT は一時的な平面 ASS ストリームから生成するため、ASS の位置保持設定にかかわらず同じマージ結果になります。一時ストリームは完了時、失敗時、キャンセル時に削除します。

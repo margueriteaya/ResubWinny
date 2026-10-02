@@ -71,6 +71,173 @@ pub(crate) fn write_ass_ttml_group(
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+enum FlatTtmlWritingMode {
+    Horizontal,
+    VerticalLr,
+    VerticalRl,
+}
+
+struct FlatTtmlFragment {
+    source_index: usize,
+    primary: i32,
+    secondary: i32,
+    primary_extent: i32,
+    body: String,
+}
+
+fn flat_ttml_writing_mode(caption: &TtmlCaption) -> FlatTtmlWritingMode {
+    match caption.style.writing_mode.as_deref() {
+        Some("vertical-lr" | "tblr") => FlatTtmlWritingMode::VerticalLr,
+        Some("vertical-rl" | "tbrl") => FlatTtmlWritingMode::VerticalRl,
+        _ => FlatTtmlWritingMode::Horizontal,
+    }
+}
+
+fn flat_ttml_body(caption: &TtmlCaption, options: &ConversionOptions) -> Option<String> {
+    let filtered_text = export_ttml_text(
+        &caption.text,
+        &caption.style,
+        caption.source.as_ref(),
+        &caption.resolved_accessibility_ranges,
+        caption.broadcast_semantics_resolved,
+        options,
+    );
+    if filtered_text.is_empty() {
+        return None;
+    }
+    let fallback_size = caption
+        .style
+        .font_size
+        .as_deref()
+        .and_then(ass_font_size_from_ttml)
+        .unwrap_or(42);
+    let mut runs = caption
+        .rich_body
+        .as_deref()
+        .and_then(|body| filter_ttml_caption_preserved_body(body, caption, options))
+        .map(|body| parse_ass_inline_runs(&body, &caption.style))
+        .unwrap_or_default();
+    for run in &mut runs {
+        run.text = export_ttml_text(
+            &run.text,
+            &run.style,
+            caption.source.as_ref(),
+            &[],
+            caption.broadcast_semantics_resolved,
+            options,
+        );
+    }
+    runs.retain(|run| !run.text.is_empty());
+    if runs.is_empty() {
+        if caption.rich_body.is_some() {
+            return None;
+        }
+        runs.push(AssInlineRun {
+            text: filtered_text,
+            style: caption.style.clone(),
+            ..AssInlineRun::default()
+        });
+    }
+    Some(
+        runs.iter()
+            .map(|run| {
+                format!(
+                    "{{{}}}{}",
+                    ass_ttml_style_tags(&run.style, fallback_size, options.preserve_color),
+                    ass_escape(&run.text)
+                )
+            })
+            .collect(),
+    )
+}
+
+pub(crate) fn write_ass_ttml_flat_group(
+    writer: &mut BufWriter<File>,
+    captions: &[TtmlCaption],
+    options: &ConversionOptions,
+) -> io::Result<()> {
+    let Some(first) = captions.first() else {
+        return Ok(());
+    };
+    let mode = captions
+        .iter()
+        .enumerate()
+        .find(|(caption_index, caption)| {
+            !caption.ruby_bindings.iter().any(|binding| {
+                binding.resolver == RubyBindingResolver::SourceGeometry
+                    && binding.base_caption_index != *caption_index
+            })
+        })
+        .map(|(_, caption)| flat_ttml_writing_mode(caption))
+        .unwrap_or(FlatTtmlWritingMode::Horizontal);
+    let mut fragments = captions
+        .iter()
+        .enumerate()
+        .filter_map(|(source_index, caption)| {
+            let standalone_ruby = caption.ruby_bindings.iter().any(|binding| {
+                binding.resolver == RubyBindingResolver::SourceGeometry
+                    && binding.base_caption_index != source_index
+            });
+            if standalone_ruby {
+                return None;
+            }
+            let body = flat_ttml_body(caption, options)?;
+            let (primary, secondary, primary_extent) = match mode {
+                FlatTtmlWritingMode::Horizontal => {
+                    (caption.y, caption.x, caption.height.unwrap_or(42).max(1))
+                }
+                FlatTtmlWritingMode::VerticalLr | FlatTtmlWritingMode::VerticalRl => {
+                    (caption.x, caption.y, caption.width.unwrap_or(42).max(1))
+                }
+            };
+            Some(FlatTtmlFragment {
+                source_index,
+                primary,
+                secondary,
+                primary_extent,
+                body,
+            })
+        })
+        .collect::<Vec<_>>();
+    if fragments.is_empty() {
+        return Ok(());
+    }
+    fragments.sort_by_key(|fragment| (fragment.primary, fragment.secondary, fragment.source_index));
+    let mut rows: Vec<(i32, i32, Vec<FlatTtmlFragment>)> = Vec::new();
+    for fragment in fragments {
+        let row = rows.iter_mut().find(|(primary, extent, _)| {
+            (fragment.primary - *primary).abs() <= fragment.primary_extent.min(*extent).max(1) / 2
+        });
+        if let Some((_, extent, cells)) = row {
+            *extent = (*extent).max(fragment.primary_extent);
+            cells.push(fragment);
+        } else {
+            rows.push((fragment.primary, fragment.primary_extent, vec![fragment]));
+        }
+    }
+    rows.sort_by(|left, right| match mode {
+        FlatTtmlWritingMode::VerticalRl => right.0.cmp(&left.0),
+        FlatTtmlWritingMode::Horizontal | FlatTtmlWritingMode::VerticalLr => left.0.cmp(&right.0),
+    });
+    let mut body = String::from(r"{\an2}");
+    for (row_index, (_, _, cells)) in rows.iter_mut().enumerate() {
+        cells.sort_by_key(|fragment| (fragment.secondary, fragment.source_index));
+        if row_index > 0 {
+            body.push_str(r"\N");
+        }
+        for fragment in cells {
+            body.push_str(&fragment.body);
+        }
+    }
+    writeln!(
+        writer,
+        "Dialogue: 0,{},{},Default,,0,0,0,,{body}",
+        ass_time(first.start_ms),
+        ass_time(first.end_ms),
+    )
+}
+
 fn write_ass_standalone_ruby(
     writer: &mut BufWriter<File>,
     caption: &TtmlCaption,

@@ -1,7 +1,11 @@
 use super::*;
 
-pub(crate) fn write_webvtt_from_ass(ass: &Path, overwrite: bool) -> io::Result<Option<PathBuf>> {
-    let vtt = ass.with_extension("vtt");
+pub(crate) fn write_webvtt_from_ass(
+    ass: &Path,
+    output: &Path,
+    overwrite: bool,
+) -> io::Result<Option<PathBuf>> {
+    let vtt = output.with_extension("vtt");
     if vtt.exists() && !overwrite {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
@@ -34,8 +38,12 @@ pub(crate) fn write_webvtt_from_ass(ass: &Path, overwrite: bool) -> io::Result<O
     Ok(Some(vtt))
 }
 
-pub(crate) fn write_srt_from_ass(ass: &Path, overwrite: bool) -> io::Result<Option<PathBuf>> {
-    let srt = ass.with_extension("srt");
+pub(crate) fn write_srt_from_ass(
+    ass: &Path,
+    output: &Path,
+    overwrite: bool,
+) -> io::Result<Option<PathBuf>> {
+    let srt = output.with_extension("srt");
     if srt.exists() && !overwrite {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
@@ -133,26 +141,34 @@ type AssOutputPaths = (
 
 pub(crate) fn finalize_ass_outputs(
     output: &Path,
+    editable_ass: Option<&Path>,
     options: &ConversionOptions,
 ) -> io::Result<AssOutputPaths> {
-    let srt = options
-        .srt
-        .then(|| write_srt_from_ass(output, options.overwrite))
-        .transpose()?
-        .flatten();
-    let webvtt = options
-        .webvtt
-        .then(|| write_webvtt_from_ass(output, options.overwrite))
-        .transpose()?
-        .flatten();
-    if options.keep_ass {
-        let font_directory = options
-            .preserve_gaiji
-            .then(|| write_ass_font_directory(output, options.overwrite))
-            .transpose()?;
-        Ok((Some(output.to_path_buf()), font_directory, srt, webvtt))
-    } else {
-        fs::remove_file(output)?;
-        Ok((None, None, srt, webvtt))
+    let text_source = editable_ass.unwrap_or(output);
+    let result = (|| {
+        let srt = options
+            .srt
+            .then(|| write_srt_from_ass(text_source, output, options.overwrite))
+            .transpose()?
+            .flatten();
+        let webvtt = options
+            .webvtt
+            .then(|| write_webvtt_from_ass(text_source, output, options.overwrite))
+            .transpose()?
+            .flatten();
+        if options.keep_ass {
+            let font_directory = options
+                .preserve_gaiji
+                .then(|| write_ass_font_directory(output, options.overwrite))
+                .transpose()?;
+            Ok((Some(output.to_path_buf()), font_directory, srt, webvtt))
+        } else {
+            fs::remove_file(output)?;
+            Ok((None, None, srt, webvtt))
+        }
+    })();
+    if let Some(editable_ass) = editable_ass {
+        let _ = fs::remove_file(editable_ass);
     }
+    result
 }

@@ -422,6 +422,72 @@ fn b62_caption_group_pairs_and_filters_cross_fragment_delimiters() {
 }
 
 #[test]
+fn flat_b62_group_merges_horizontal_regions_in_visual_reading_order() {
+    let captions = parse_ttml_captions(
+        r#"<tt xmlns:tts='http://www.w3.org/ns/ttml#styling'>
+          <head><layout>
+            <region xml:id='right' tts:origin='600px 100px' tts:extent='300px 60px'/>
+            <region xml:id='bottom' tts:origin='100px 220px' tts:extent='800px 60px'/>
+            <region xml:id='left' tts:origin='100px 100px' tts:extent='300px 60px'/>
+          </layout></head>
+          <body><div>
+            <p begin='1s' end='2s' region='right'>乙</p>
+            <p begin='1s' end='2s' region='bottom'>丙</p>
+            <p begin='1s' end='2s' region='left'>甲</p>
+          </div></body>
+        </tt>"#,
+        0,
+    );
+    let output = std::env::temp_dir().join(format!(
+        "resubwinny-flat-b62-horizontal-{}.ass",
+        std::process::id()
+    ));
+    let mut writer = BufWriter::new(File::create(&output).expect("output"));
+    write_ass_ttml_flat_group(&mut writer, &captions, &ConversionOptions::default())
+        .expect("flat group");
+    writer.flush().expect("flush");
+    drop(writer);
+    let ass = fs::read_to_string(&output).expect("ASS text");
+    assert_eq!(ass.matches("Dialogue: ").count(), 1);
+    let plain = ass_to_webvtt_text(ass.splitn(10, ',').nth(9).expect("dialogue text"));
+    assert_eq!(plain.trim(), "甲乙\n丙");
+    fs::remove_file(output).expect("cleanup");
+}
+
+#[test]
+fn flat_b62_group_follows_vertical_column_progression() {
+    for (writing_mode, expected) in [("vertical-rl", r"右\N左"), ("vertical-lr", r"左\N右")] {
+        let xml = format!(
+            r#"<tt xmlns:tts='http://www.w3.org/ns/ttml#styling'>
+              <head><layout>
+                <region xml:id='left' tts:origin='300px 100px' tts:extent='80px 500px' tts:writingMode='{writing_mode}'/>
+                <region xml:id='right' tts:origin='700px 100px' tts:extent='80px 500px' tts:writingMode='{writing_mode}'/>
+              </layout></head>
+              <body><div>
+                <p begin='1s' end='2s' region='left'>左</p>
+                <p begin='1s' end='2s' region='right'>右</p>
+              </div></body>
+            </tt>"#
+        );
+        let captions = parse_ttml_captions(&xml, 0);
+        let output = std::env::temp_dir().join(format!(
+            "resubwinny-flat-b62-{writing_mode}-{}.ass",
+            std::process::id()
+        ));
+        let mut writer = BufWriter::new(File::create(&output).expect("output"));
+        write_ass_ttml_flat_group(&mut writer, &captions, &ConversionOptions::default())
+            .expect("flat group");
+        writer.flush().expect("flush");
+        drop(writer);
+        let ass = fs::read_to_string(&output).expect("ASS text");
+        assert_eq!(ass.matches("Dialogue: ").count(), 1);
+        let plain = ass_to_webvtt_text(ass.splitn(10, ',').nth(9).expect("dialogue text"));
+        assert_eq!(plain.trim(), expected.replace(r"\N", "\n"));
+        fs::remove_file(output).expect("cleanup");
+    }
+}
+
+#[test]
 fn b62_caption_group_quote_state_preserves_title_parentheses() {
     let mut captions = parse_ttml_captions(
         r#"<tt><body><div>
@@ -633,10 +699,10 @@ fn scoped_b62_mapping_changes_ass_ttml_srt_and_webvtt_output() {
     write_ttml_caption(&mut ttml_writer, &caption, &options).expect("TTML caption");
     write_ttml_footer(&mut ttml_writer).expect("TTML footer");
     ttml_writer.flush().expect("TTML flush");
-    let srt = write_srt_from_ass(&ass, true)
+    let srt = write_srt_from_ass(&ass, &ass, true)
         .expect("SRT")
         .expect("SRT path");
-    let vtt = write_webvtt_from_ass(&ass, true)
+    let vtt = write_webvtt_from_ass(&ass, &ass, true)
         .expect("WebVTT")
         .expect("WebVTT path");
 

@@ -372,3 +372,11 @@ reported only. Native normalised PTS, actual MPT presentation NTP, MPU/MMTP
 sequence numbers, and discontinuities are separate optional evidence; absent
 values are never fabricated. This does not integrate `tlvdemux` player/MSE code
 or promote TLV/MMTP to validated general BS4K/8K support.
+
+## Same-range merging for editable captions (2026-10-02)
+
+The worker uses an exact start-and-end time pair as the merge key for SRT, WebVTT, and ASS exports with position preservation disabled. B24 regions follow visual reading order from top to bottom and from left to right within a row. Horizontal ARIB-TTML uses the same order. `vertical-rl` orders columns from right to left, while `vertical-lr` orders them from left to right; both read each column from top to bottom. Cues that only overlap in time retain separate ranges.
+
+The B24 merge buffer waits for active regions with the same fixed end time to close before writing the complete cue. ARIB-TTML first collects captions with the same start time and then groups them by the complete start-and-end pair, so interleaved entries with one timing pair stay together. Standalone ruby regions take part in binding resolution without repeating their annotation text in the flattened cue.
+
+Positioned ASS, TTML, and JSONL archives continue to write individual regions. SRT and WebVTT read from a separate temporary flattened ASS stream, so their merged text does not depend on the ASS position-preservation option. The temporary stream is removed after completion, failure, or cancellation.
