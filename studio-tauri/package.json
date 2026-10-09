@@ -21,7 +21,7 @@
     "@lucide/svelte": "^1.47.0",
     "@tabler/icons-svelte": "^3.48.0",
     "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/plugin-dialog": "^2.7.3",
+    "@tauri-apps/plugin-dialog": "^2.8.0",
     "macos-traffic-lights": "^1.1.0",
     "svelte": "^5.55.7"
   },
