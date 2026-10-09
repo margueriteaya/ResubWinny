@@ -23,7 +23,7 @@
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.3",
     "macos-traffic-lights": "^1.1.0",
-    "svelte": "^5.55.7"
+    "svelte": "^5.57.1"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
