@@ -153,7 +153,7 @@ jobs:
 
       - name: Upload failed build diagnostics
         if: ${{ failure() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: libmpv-build-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
@@ -245,7 +245,7 @@ jobs:
             -OutputDirectory build/libmpv/corresponding-source
 
       - name: Upload binary and source as one release candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: libmpv-lgpl-windows-x86_64-release-candidate
           if-no-files-found: error
